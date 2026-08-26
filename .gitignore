@@ -80,3 +80,7 @@ skills-lock.json
 # dataconnect generated files
 .dataconnect
 
+# Root raw video files
+/*.mp4
+
+
