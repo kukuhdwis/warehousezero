@@ -1,8 +1,13 @@
 # 📦 WarehouseZero — Modern Warehouse Management System (WMS)
 
+[ 🇬🇧 English Version ](./readme.md) | [ 🇮🇩 Bahasa Indonesia ](./README.id.md)
+
+---
+
 **WarehouseZero** is a modern, responsive, and lightweight Warehouse Management System built with **React 19**, **Vite**, **Tailwind CSS**, and **Google Firebase**. It is designed to streamline multi-branch inventory tracking, stock movements (Stock In / Stock Out), barcode & QR scanning, and role-based operational workflows.
 
 ---
+
 
 ## 🌟 Key Features
 
@@ -153,6 +158,8 @@ warehousezero/
 ├── .gitignore                  # Git ignore rules
 ├── firebase.json               # Firebase Hosting configuration
 ├── package.json                # Dependencies & scripts
+├── README.id.md                # Project documentation (Bahasa Indonesia)
+├── readme.md                   # Project documentation (English)
 ├── tailwind.config.js          # Tailwind styling configuration
 └── vite.config.js              # Vite bundler configuration
 ```
