@@ -131,6 +131,18 @@ export default function Sidebar({
           <LogOut className="w-3.5 h-3.5" />
           <span>Keluar / Logout</span>
         </button>
+
+        <p className="text-[10px] text-slate-400 text-center pt-0.5">
+          Created by{' '}
+          <a
+            href="https://kukuhdwisaputra.site"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sky-600 hover:text-sky-700 hover:underline font-medium"
+          >
+            kukuhdwisaputra.site
+          </a>
+        </p>
       </div>
 
     </aside>

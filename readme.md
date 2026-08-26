@@ -167,6 +167,13 @@ warehousezero/
 
 ---
 
+## 👨‍💻 Author
+
+Developed by **[kukuhdwisaputra.site](https://kukuhdwisaputra.site)**.
+
+---
+
 ## 📄 License
 
 This project is open source and available under the [MIT License](LICENSE).
+

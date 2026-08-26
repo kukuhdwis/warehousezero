@@ -168,6 +168,13 @@ warehousezero/
 
 ---
 
+## 👨‍💻 Pengembang
+
+Dikembangkan oleh **[kukuhdwisaputra.site](https://kukuhdwisaputra.site)**.
+
+---
+
 ## 📄 Lisensi
 
 Proyek ini berlisensi terbuka di bawah [Lisensi MIT](LICENSE).
+

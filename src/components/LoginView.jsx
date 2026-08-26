@@ -167,10 +167,21 @@ export default function LoginView({ onLoginSuccess }) {
             </button>
           </form>
 
-          {/* Footer Copyright */}
-          <div className="pt-6 border-t border-slate-800/80 text-center">
+          {/* Footer Copyright & Author Credit */}
+          <div className="pt-6 border-t border-slate-800/80 text-center space-y-1">
             <p className="text-xs text-slate-500">
               © {new Date().getFullYear()} NDK Warehouse. Seluruh hak cipta dilindungi.
+            </p>
+            <p className="text-[11px] text-slate-500">
+              Dikembangkan oleh{' '}
+              <a 
+                href="https://kukuhdwisaputra.site" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-sky-400 hover:text-sky-300 hover:underline transition font-medium"
+              >
+                kukuhdwisaputra.site
+              </a>
             </p>
           </div>
 
