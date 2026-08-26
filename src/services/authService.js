@@ -1,4 +1,4 @@
-// Authentication service for WarehouseZero WMS
+// Authentication service for NDK Warehouse WMS
 import { fetchUsers } from './dataService';
 
 const STORAGE_KEY = 'wms_user';

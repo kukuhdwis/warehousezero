@@ -1,12 +1,12 @@
-# 📦 WarehouseZero — Modern Warehouse Management System (WMS)
-![alt text](image.png)
-![alt text](image-1.png)
-![alt text](image-2.png)
+# 📦 NDK Warehouse — Modern Warehouse Management System (WMS)
+![Preview 1](image.png)
+![Preview 2](image-1.png)
+![Preview 3](image-2.png)
 [ 🇬🇧 English Version ](./readme.md) | [ 🇮🇩 Bahasa Indonesia ](./README.id.md)
 
 ---
 
-**WarehouseZero** is a modern, responsive, and lightweight Warehouse Management System built with **React 19**, **Vite**, **Tailwind CSS**, and **Google Firebase**. It is designed to streamline multi-branch inventory tracking, stock movements (Stock In / Stock Out), barcode & QR scanning, and role-based operational workflows.
+**NDK Warehouse** is a modern, responsive, and lightweight Warehouse Management System built with **React 19**, **Vite**, **Tailwind CSS**, and **Google Firebase**. It is designed to streamline multi-branch inventory tracking, stock movements (Stock In / Stock Out), barcode & QR scanning, and role-based operational workflows.
 
 ---
 

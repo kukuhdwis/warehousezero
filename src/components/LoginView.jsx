@@ -58,7 +58,7 @@ export default function LoginView({ onLoginSuccess }) {
           </div>
           <div>
             <span className="font-extrabold text-lg sm:text-xl tracking-tight text-white">
-              Warehouse<span className="text-sky-400">Zero</span>
+              NDK <span className="text-sky-400">Warehouse</span>
             </span>
             <p className="text-[11px] text-slate-400 font-medium">Warehouse Management System</p>
           </div>
@@ -170,7 +170,7 @@ export default function LoginView({ onLoginSuccess }) {
           {/* Footer Copyright */}
           <div className="pt-6 border-t border-slate-800/80 text-center">
             <p className="text-xs text-slate-500">
-              © {new Date().getFullYear()} WarehouseZero. Seluruh hak cipta dilindungi.
+              © {new Date().getFullYear()} NDK Warehouse. Seluruh hak cipta dilindungi.
             </p>
           </div>
 
