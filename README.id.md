@@ -1,8 +1,13 @@
 # 📦 WarehouseZero — Sistem Manajemen Gudang Modern (WMS)
 
+![Preview 1](image.png)
+![Preview 2](image-1.png)
+![Preview 3](image-2.png)
+
 [ 🇬🇧 English Version ](./readme.md) | [ 🇮🇩 Bahasa Indonesia ](./README.id.md)
 
 ---
+
 
 **WarehouseZero** adalah Sistem Manajemen Gudang (*Warehouse Management System* / WMS) modern, responsif, dan ringan yang dibangun menggunakan **React 19**, **Vite**, **Tailwind CSS**, dan **Google Firebase**. Dirancang untuk menyederhanakan pelacakan inventaris multi-cabang, pergerakan stok (Barang Masuk / Barang Keluar), pencetakan & pemindaian barcode/QR, serta kontrol hak akses berbasis peran (*Role-Based Access Control*).
 

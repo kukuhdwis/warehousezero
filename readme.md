@@ -1,5 +1,7 @@
 # 📦 WarehouseZero — Modern Warehouse Management System (WMS)
-
+![alt text](image.png)
+![alt text](image-1.png)
+![alt text](image-2.png)
 [ 🇬🇧 English Version ](./readme.md) | [ 🇮🇩 Bahasa Indonesia ](./README.id.md)
 
 ---
