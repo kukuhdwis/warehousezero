@@ -1,0 +1,850 @@
+import React, { useState } from 'react';
+import { 
+  Users, 
+  UserPlus, 
+  ShieldCheck, 
+  UserCheck, 
+  Building2, 
+  Search, 
+  Edit3, 
+  Trash2, 
+  Lock, 
+  Mail, 
+  Phone, 
+  CheckCircle2, 
+  AlertCircle, 
+  X, 
+  Eye, 
+  EyeOff, 
+  ShieldAlert
+} from 'lucide-react';
+
+export default function UserManagement({ 
+  currentUser, 
+  users = [], 
+  branches = [], 
+  onCreateUser, 
+  onUpdateUser, 
+  onDeleteUser 
+}) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('ALL');
+  const [branchFilter, setBranchFilter] = useState('ALL');
+  
+  // Modal states
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [deleteConfirmUser, setDeleteConfirmUser] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Form State
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'STAFF_BRANCH',
+    branchId: '',
+    branchName: '',
+    phone: '',
+    status: 'ACTIVE'
+  });
+
+  const [formError, setFormError] = useState('');
+
+  // Stats calculation
+  const totalUsers = users.length;
+  const adminCount = users.filter(u => u.role === 'ADMIN').length;
+  const staffCount = users.filter(u => u.role === 'STAFF_BRANCH').length;
+  const activeCount = users.filter(u => u.status !== 'INACTIVE').length;
+
+  // Helper to dynamically get branch name
+  const getBranchDisplayName = (user) => {
+    if (!user) return '-';
+    if (user.role === 'ADMIN' || user.branchId === 'ALL' || !user.branchId) {
+      return 'Pusat (Semua Cabang)';
+    }
+    const found = branches.find(b => b.id === user.branchId);
+    return found ? found.name : (user.branchName || user.branchId);
+  };
+
+  // Filtered Users
+  const filteredUsers = users.filter(user => {
+    const branchName = getBranchDisplayName(user);
+    const matchesSearch = 
+      (user.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (user.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      branchName.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesRole = roleFilter === 'ALL' || user.role === roleFilter;
+    const matchesBranch = branchFilter === 'ALL' || user.branchId === branchFilter;
+
+    return matchesSearch && matchesRole && matchesBranch;
+  });
+
+  const handleOpenAddModal = () => {
+    setEditingUser(null);
+    const defaultBranch = branches[0];
+    setFormData({
+      name: '',
+      email: '',
+      password: '',
+      role: 'STAFF_BRANCH',
+      branchId: defaultBranch ? defaultBranch.id : 'ALL',
+      branchName: defaultBranch ? defaultBranch.name : 'Pusat (Semua Cabang)',
+      phone: '',
+      status: 'ACTIVE'
+    });
+    setFormError('');
+    setShowPassword(false);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (user) => {
+    setEditingUser(user);
+    const matchedBranch = branches.find(b => b.id === user.branchId);
+    setFormData({
+      name: user.name || '',
+      email: user.email || '',
+      password: user.password || '',
+      role: user.role || 'STAFF_BRANCH',
+      branchId: user.branchId || (branches[0]?.id || 'ALL'),
+      branchName: matchedBranch ? matchedBranch.name : (user.branchName || 'Pusat (Semua Cabang)'),
+      phone: user.phone || '',
+      status: user.status || 'ACTIVE'
+    });
+    setFormError('');
+    setShowPassword(false);
+    setIsModalOpen(true);
+  };
+
+  const handleBranchChange = (branchId) => {
+    if (branchId === 'ALL' || !branchId) {
+      setFormData(prev => ({
+        ...prev,
+        branchId: 'ALL',
+        branchName: 'Pusat (Semua Cabang)'
+      }));
+    } else {
+      const selected = branches.find(b => b.id === branchId);
+      setFormData(prev => ({
+        ...prev,
+        branchId,
+        branchName: selected ? selected.name : branchId
+      }));
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setFormError('');
+
+    if (!formData.name.trim() || !formData.email.trim()) {
+      setFormError('Nama lengkap dan email wajib diisi.');
+      return;
+    }
+
+    if (!editingUser && !formData.password.trim()) {
+      setFormError('Kata sandi wajib diisi untuk pengguna baru.');
+      return;
+    }
+
+    // Check email uniqueness among other users
+    const existing = users.find(
+      u => u.email.toLowerCase() === formData.email.toLowerCase().trim() && (!editingUser || u.id !== editingUser.id)
+    );
+    if (existing) {
+      setFormError('Alamat email sudah digunakan oleh akun lain.');
+      return;
+    }
+
+    // Strictly resolve correct branchName from current branch list
+    let finalBranchId = formData.branchId;
+    let finalBranchName = 'Pusat (Semua Cabang)';
+
+    if (formData.role === 'ADMIN') {
+      finalBranchId = 'ALL';
+      finalBranchName = 'Pusat (Semua Cabang)';
+    } else {
+      const matched = branches.find(b => b.id === finalBranchId);
+      if (matched) {
+        finalBranchName = matched.name;
+      } else if (branches.length > 0) {
+        finalBranchId = branches[0].id;
+        finalBranchName = branches[0].name;
+      }
+    }
+
+    const payload = {
+      ...formData,
+      branchId: finalBranchId,
+      branchName: finalBranchName
+    };
+
+    try {
+      if (editingUser) {
+        await onUpdateUser(editingUser.id, payload);
+      } else {
+        await onCreateUser(payload);
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      setFormError(err.message || 'Gagal menyimpan data pengguna.');
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmUser) return;
+    try {
+      await onDeleteUser(deleteConfirmUser.id);
+      setDeleteConfirmUser(null);
+    } catch (err) {
+      alert('Gagal menghapus pengguna: ' + err.message);
+    }
+  };
+
+  return (
+    <div className="space-y-4 sm:space-y-6">
+      
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Manajemen Pengguna</h2>
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-sky-100 text-sky-800 border border-sky-200">
+              Admin
+            </span>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+            Kelola akun administrator, staff gudang, dan penugasan cabang.
+          </p>
+        </div>
+
+        <button
+          onClick={handleOpenAddModal}
+          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-semibold text-sm shadow-md shadow-sky-600/20 transition active:scale-98 cursor-pointer"
+        >
+          <UserPlus className="w-4 h-4" />
+          <span>Tambah Pengguna Baru</span>
+        </button>
+      </div>
+
+      {/* KPI Stats Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
+        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Total User</p>
+            <h3 className="text-lg sm:text-2xl font-bold text-slate-900 mt-0.5 sm:mt-1">{totalUsers} <span className="text-[10px] sm:text-xs font-normal text-slate-500">Akun</span></h3>
+          </div>
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0">
+            <Users className="w-5 h-5 sm:w-6 sm:h-6" />
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Admin</p>
+            <h3 className="text-lg sm:text-2xl font-bold text-sky-600 mt-0.5 sm:mt-1">{adminCount} <span className="text-[10px] sm:text-xs font-normal text-sky-700/80">Admin</span></h3>
+          </div>
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center flex-shrink-0">
+            <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Staff</p>
+            <h3 className="text-lg sm:text-2xl font-bold text-emerald-600 mt-0.5 sm:mt-1">{staffCount} <span className="text-[10px] sm:text-xs font-normal text-emerald-700/80">Staff</span></h3>
+          </div>
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+            <UserCheck className="w-5 h-5 sm:w-6 sm:h-6" />
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Akun Aktif</p>
+            <h3 className="text-lg sm:text-2xl font-bold text-indigo-600 mt-0.5 sm:mt-1">{activeCount} <span className="text-[10px] sm:text-xs font-normal text-indigo-700/80">Aktif</span></h3>
+          </div>
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
+            <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
+          </div>
+        </div>
+      </div>
+
+      {/* Filter and Search Bar */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row gap-2.5 sm:gap-3 items-stretch sm:items-center justify-between">
+        
+        {/* Search Input */}
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Cari nama, email, atau cabang..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
+          />
+        </div>
+
+        {/* Role & Branch Filters */}
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:ring-2 focus:ring-sky-500 focus:outline-none"
+          >
+            <option value="ALL">Semua Peran</option>
+            <option value="ADMIN">Administrator</option>
+            <option value="STAFF_BRANCH">Staff</option>
+          </select>
+
+          <select
+            value={branchFilter}
+            onChange={(e) => setBranchFilter(e.target.value)}
+            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:ring-2 focus:ring-sky-500 focus:outline-none"
+          >
+            <option value="ALL">Semua Cabang</option>
+            {branches.map(b => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* MOBILE USER CARDS VIEW (Optimized for Smartphone) */}
+      <div className="block md:hidden space-y-3">
+        {filteredUsers.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-400">
+            <Users className="w-10 h-10 mx-auto mb-2 opacity-40" />
+            <p className="font-semibold text-slate-600 text-sm">Tidak ada data pengguna ditemukan</p>
+          </div>
+        ) : (
+          filteredUsers.map((user) => {
+            const isAdmin = user.role === 'ADMIN';
+            const isCurrent = currentUser?.email?.toLowerCase() === user.email?.toLowerCase();
+            const displayBranch = getBranchDisplayName(user);
+            const initials = (user.name || user.email || 'U')
+              .split(' ')
+              .map(n => n[0])
+              .slice(0, 2)
+              .join('')
+              .toUpperCase();
+
+            return (
+              <div key={user.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                
+                {/* Header: Avatar, Name, Role badge */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2.5">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shadow-xs flex-shrink-0 mt-0.5 ${
+                      isAdmin 
+                        ? 'bg-sky-100 text-sky-700 border border-sky-200' 
+                        : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                    }`}>
+                      {initials}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="font-bold text-slate-900 text-sm leading-snug">{user.name}</h4>
+                        {isCurrent && (
+                          <span className="text-[9px] px-1.5 py-0.2 bg-blue-50 text-blue-700 border border-blue-200 rounded font-bold">
+                            Anda
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                        <Mail className="w-3 h-3" /> {user.email}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    {isAdmin ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
+                        <ShieldCheck className="w-3 h-3" /> Admin
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <UserCheck className="w-3 h-3" /> Staff
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Details: Branch & Phone */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-2 border-t border-slate-100 text-xs">
+                  <div className="flex items-center gap-1.5 text-slate-700">
+                    <Building2 className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                    <span className="font-medium truncate">{displayBranch}</span>
+                  </div>
+                  {user.phone && (
+                    <div className="flex items-center gap-1.5 text-slate-600">
+                      <Phone className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                      <a href={`tel:${user.phone}`} className="text-sky-600 hover:underline">{user.phone}</a>
+                    </div>
+                  )}
+                </div>
+
+                {/* Mobile Action Buttons */}
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    onClick={() => handleOpenEditModal(user)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded-xl text-xs font-semibold transition"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Ubah User</span>
+                  </button>
+
+                  <button
+                    onClick={() => setDeleteConfirmUser(user)}
+                    disabled={isCurrent}
+                    className={`p-2 rounded-xl text-xs transition ${
+                      isCurrent 
+                        ? 'bg-slate-100 text-slate-300 cursor-not-allowed' 
+                        : 'bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer'
+                    }`}
+                    title={isCurrent ? "Tidak dapat menghapus akun aktif" : "Hapus Pengguna"}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* DESKTOP TABLE VIEW (Screens >= md) */}
+      <div className="hidden md:block bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase border-b border-slate-200">
+              <tr>
+                <th className="px-6 py-3.5">Pengguna / User</th>
+                <th className="px-4 py-3.5">Peran (Role)</th>
+                <th className="px-4 py-3.5">Penugasan Cabang</th>
+                <th className="px-4 py-3.5">Kontak / Telepon</th>
+                <th className="px-4 py-3.5">Status</th>
+                <th className="px-6 py-3.5 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                    <Users className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                    <p className="font-medium text-slate-600">Tidak ada data pengguna ditemukan.</p>
+                    <p className="text-xs text-slate-400 mt-1">Coba sesuaikan kata kunci pencarian atau filter peran.</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredUsers.map((user) => {
+                  const isAdmin = user.role === 'ADMIN';
+                  const isCurrent = currentUser?.email?.toLowerCase() === user.email?.toLowerCase();
+                  const displayBranch = getBranchDisplayName(user);
+                  const initials = (user.name || user.email || 'U')
+                    .split(' ')
+                    .map(n => n[0])
+                    .slice(0, 2)
+                    .join('')
+                    .toUpperCase();
+
+                  return (
+                    <tr key={user.id} className="hover:bg-slate-50/80 transition">
+                      
+                      {/* Name & Email */}
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shadow-xs ${
+                            isAdmin 
+                              ? 'bg-sky-100 text-sky-700 border border-sky-200' 
+                              : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                          }`}>
+                            {initials}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-slate-900">{user.name}</span>
+                              {isCurrent && (
+                                <span className="text-[10px] px-1.5 py-0.2 bg-blue-50 text-blue-700 border border-blue-200 rounded font-medium">
+                                  Anda
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                              <Mail className="w-3 h-3" /> {user.email}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Role Badge */}
+                      <td className="px-4 py-4">
+                        {isAdmin ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            Administrator
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <UserCheck className="w-3.5 h-3.5" />
+                            Staff
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Branch Badge */}
+                      <td className="px-4 py-4">
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 rounded-lg text-xs font-medium text-slate-700">
+                          <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                          <span>{displayBranch}</span>
+                        </div>
+                      </td>
+
+                      {/* Phone */}
+                      <td className="px-4 py-4 text-xs text-slate-600">
+                        {user.phone ? (
+                          <span className="flex items-center gap-1">
+                            <Phone className="w-3 h-3 text-slate-400" /> {user.phone}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic">-</span>
+                        )}
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-4 py-4">
+                        {user.status === 'INACTIVE' ? (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                            Nonaktif
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Aktif
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Action Buttons */}
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => handleOpenEditModal(user)}
+                            className="p-1.5 text-slate-500 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition cursor-pointer"
+                            title="Ubah Pengguna"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          
+                          <button
+                            onClick={() => setDeleteConfirmUser(user)}
+                            disabled={isCurrent}
+                            className={`p-1.5 rounded-lg transition ${
+                              isCurrent 
+                                ? 'text-slate-300 cursor-not-allowed' 
+                                : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50 cursor-pointer'
+                            }`}
+                            title={isCurrent ? "Tidak dapat menghapus akun aktif" : "Hapus Pengguna"}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ADD / EDIT USER MODAL (Bottom Sheet Responsive) */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100 animate-in slide-in-from-bottom sm:zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+            
+            {/* Modal Header */}
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex-shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center">
+                  <UserPlus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-800 text-base">
+                    {editingUser ? 'Perbarui Data Pengguna' : 'Tambah Pengguna Baru'}
+                  </h3>
+                  <p className="text-xs text-slate-400">Atur kredensial dan hak akses sistem.</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 text-sm overflow-y-auto flex-1">
+              
+              {formError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{formError}</span>
+                </div>
+              )}
+
+              {/* Nama Lengkap */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                  Nama Lengkap *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: Siti Aminah"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
+                />
+              </div>
+
+              {/* Email & Password Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Email Pengguna *
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="email"
+                      required
+                      placeholder="staff@perusahaan.com"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Kata Sandi {editingUser ? '(Opsional)' : '*'}
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder={editingUser ? 'Biarkan jika tidak diubah' : 'Min. 4 karakter'}
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      className="w-full pl-9 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Role Selection */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                  Peran / Hak Akses *
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  
+                  <label className={`
+                    border rounded-xl p-3 flex items-start gap-2.5 cursor-pointer transition
+                    ${formData.role === 'ADMIN' 
+                      ? 'border-sky-500 bg-sky-50/60 ring-2 ring-sky-500/20' 
+                      : 'border-slate-200 hover:bg-slate-50'}
+                  `}>
+                    <input
+                      type="radio"
+                      name="role"
+                      value="ADMIN"
+                      checked={formData.role === 'ADMIN'}
+                      onChange={() => {
+                        setFormData({ 
+                          ...formData, 
+                          role: 'ADMIN',
+                          branchId: 'ALL',
+                          branchName: 'Pusat (Semua Cabang)'
+                        });
+                      }}
+                      className="mt-0.5 text-sky-600 focus:ring-sky-500"
+                    />
+                    <div>
+                      <div className="font-semibold text-slate-900 text-xs flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5 text-sky-600" />
+                        Administrator
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Akses penuh semua cabang.</p>
+                    </div>
+                  </label>
+
+                  <label className={`
+                    border rounded-xl p-3 flex items-start gap-2.5 cursor-pointer transition
+                    ${formData.role === 'STAFF_BRANCH' 
+                      ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/20' 
+                      : 'border-slate-200 hover:bg-slate-50'}
+                  `}>
+                    <input
+                      type="radio"
+                      name="role"
+                      value="STAFF_BRANCH"
+                      checked={formData.role === 'STAFF_BRANCH'}
+                      onChange={() => {
+                        const defaultBranch = branches[0];
+                        setFormData({ 
+                          ...formData, 
+                          role: 'STAFF_BRANCH',
+                          branchId: defaultBranch ? defaultBranch.id : '',
+                          branchName: defaultBranch ? defaultBranch.name : 'Cabang Khusus'
+                        });
+                      }}
+                      className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <div>
+                      <div className="font-semibold text-slate-900 text-xs flex items-center gap-1">
+                        <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        Staff
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Akses khusus cabang terpilih.</p>
+                    </div>
+                  </label>
+
+                </div>
+              </div>
+
+              {/* Branch Assignment */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                  Penugasan Cabang Gudang *
+                </label>
+                <div className="relative">
+                  <Building2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <select
+                    disabled={formData.role === 'ADMIN'}
+                    value={formData.role === 'ADMIN' ? 'ALL' : (formData.branchId || '')}
+                    onChange={(e) => handleBranchChange(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 transition"
+                  >
+                    {formData.role === 'ADMIN' ? (
+                      <option value="ALL">Pusat (Semua Cabang / Global Access)</option>
+                    ) : (
+                      <>
+                        {branches.length === 0 ? (
+                          <option value="">Belum ada cabang terdaftar (Buat cabang dulu)</option>
+                        ) : (
+                          branches.map(b => (
+                            <option key={b.id} value={b.id}>
+                              {b.name}
+                            </option>
+                          ))
+                        )}
+                      </>
+                    )}
+                  </select>
+                </div>
+              </div>
+
+              {/* Phone & Status Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    No. WhatsApp / HP
+                  </label>
+                  <div className="relative">
+                    <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="0812-3456-7890"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Status Akun
+                  </label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
+                  >
+                    <option value="ACTIVE">Aktif (Dapat Login)</option>
+                    <option value="INACTIVE">Nonaktif (Diblokir)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Modal Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl text-sm transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl text-sm shadow-md shadow-sky-600/20 transition cursor-pointer"
+                >
+                  {editingUser ? 'Simpan Perubahan' : 'Buat Akun Pengguna'}
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {deleteConfirmUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-100 p-6 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <ShieldAlert className="w-6 h-6" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-base font-bold text-slate-900">Hapus Akun Pengguna?</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Apakah Anda yakin ingin menghapus akun <strong>{deleteConfirmUser.name}</strong> ({deleteConfirmUser.email})?
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                onClick={() => setDeleteConfirmUser(null)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer"
+              >
+                Batalkan
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-md shadow-rose-600/20 transition cursor-pointer"
+              >
+                Ya, Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
