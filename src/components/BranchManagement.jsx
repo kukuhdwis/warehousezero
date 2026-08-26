@@ -15,6 +15,7 @@ import {
   Warehouse,
   Users
 } from 'lucide-react';
+import GlobalSuccessModal from './GlobalSuccessModal';
 
 export default function BranchManagement({ 
   currentUser, 
@@ -32,6 +33,7 @@ export default function BranchManagement({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState(null);
   const [deleteConfirmBranch, setDeleteConfirmBranch] = useState(null);
+  const [successModal, setSuccessModal] = useState(null);
 
   // Form State - Only the 5 essential fields requested
   const [formData, setFormData] = useState({
@@ -111,6 +113,18 @@ export default function BranchManagement({
         });
       }
       setIsModalOpen(false);
+
+      setSuccessModal({
+        title: editingBranch ? "Data Cabang Berhasil Diperbarui!" : "Cabang Baru Berhasil Didaftarkan!",
+        message: editingBranch 
+          ? "Perubahan data cabang telah berhasil disimpan ke database." 
+          : "Cabang gudang baru telah resmi terdaftar dan siap untuk operasional mutasi inventaris.",
+        details: [
+          { label: "Nama Cabang", value: formData.name },
+          { label: "PIC Penanggung Jawab", value: formData.pic || '-' },
+          { label: "Status Operasional", value: formData.status === 'ACTIVE' ? 'Aktif' : 'Non-Aktif', highlight: true }
+        ]
+      });
     } catch (err) {
       setFormError(err.message || 'Gagal menyimpan data cabang.');
     }
@@ -626,6 +640,16 @@ export default function BranchManagement({
           </div>
         </div>
       )}
+
+      {/* UNIVERSAL SUCCESS POP-UP MODAL */}
+      <GlobalSuccessModal
+        isOpen={Boolean(successModal)}
+        onClose={() => setSuccessModal(null)}
+        title={successModal?.title}
+        message={successModal?.message}
+        details={successModal?.details}
+        buttonText={successModal?.buttonText || "✓ Selesai & Tutup"}
+      />
 
     </div>
   );

@@ -54,8 +54,9 @@ export default function BarcodeModal({ product, onClose }) {
 
         <div className="p-6 text-center" id="printable-barcode-area">
           <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 flex flex-col items-center justify-center">
-            <h4 className="font-bold text-slate-900 text-lg mb-1">{product.name}</h4>
-            <p className="text-xs font-mono text-slate-500 mb-4">SKU: {product.sku} | Rak: {product.location}</p>
+            <h4 className="font-bold text-slate-900 text-lg mb-0.5">{product.name}</h4>
+            <p className="text-xs font-semibold text-indigo-600 mb-1">Merk: {product.brand || 'NDK Packaging'}</p>
+            <p className="text-xs font-mono text-slate-500 mb-4">SKU: {product.sku} | Unit: {product.unit || 'Pcs'}</p>
             
             <canvas ref={canvasRef} className="max-w-full bg-white p-2 rounded shadow-sm" />
           </div>

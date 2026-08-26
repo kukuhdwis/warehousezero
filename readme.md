@@ -1,45 +1,79 @@
-# 📦 NDK Warehouse — Modern Warehouse Management System (WMS)
+# 📦 NDK Warehouse — Modern Warehouse Management System (WMS) V3.0 (Zero-Trust Backend)
+
 ![Preview 1](image.png)
 ![Preview 2](image-1.png)
 ![Preview 3](image-2.png)
+
 [ 🇬🇧 English Version ](./readme.md) | [ 🇮🇩 Bahasa Indonesia ](./README.id.md)
 
 ---
 
-**NDK Warehouse** is a modern, responsive, and lightweight Warehouse Management System built with **React 19**, **Vite**, **Tailwind CSS**, and **Google Firebase**. It is designed to streamline multi-branch inventory tracking, stock movements (Stock In / Stock Out), barcode & QR scanning, and role-based operational workflows.
+**NDK Warehouse (WarehouseZero)** is a modern, enterprise-ready Warehouse Management System (WMS) designed around a **Zero-Trust Backend Mutation Architecture**, built using **React 19**, **Vite**, **Tailwind CSS**, **Google Firebase Firestore V3.0**, and **Firebase Cloud Functions (TypeScript)**.
+
+It ensures end-to-end data integrity by restricting client write privileges, ensuring atomic stock decrement/increment on the backend, safeguarding private cost/margin pricing, preventing fraudulent sales transactions, and enforcing automated credit limit and overdue accounts receivable guards.
 
 ---
 
+## 🏗️ Architecture Principle: Zero-Trust Backend Mutation
+
+```text
+┌──────────────────────────────────────────────────────────────────────────────────────────┐
+│                                CLIENT TIER (Web / POS / Mobile)                          │
+│   • Staff & Central HQ only possess isolated READ permissions (Scoped Queries).          │
+│   • Clients are STRICTLY FORBIDDEN from direct `updateDoc()`, `setDoc()`, or `addDoc()` │
+│     to sensitive collections (`branch_stocks`, `sales_transactions`, `invoices`).        │
+└────────────────────────────────────────────┬─────────────────────────────────────────────┘
+                                             │ (HTTPS Callable with Auth Token)
+                                             ▼
+┌──────────────────────────────────────────────────────────────────────────────────────────┐
+│                         CLOUD FUNCTIONS TIER (Firebase Admin SDK)                        │
+│   1. `processPOSSale()`           -> Stock Validation + Atomic Decrement + Record Sale   │
+│   2. `processCustomBundlingSale()`-> Component Validation + Atomic Decrement + Record    │
+│   3. `confirmTransferReceipt()`   -> State Machine Validation + Branch Stock Increment   │
+│   4. `createStockTransfer()`      -> Overdue Receivables Check + Credit Limit Guard      │
+│   5. `setUserRoleAndBranch()`     -> Custom Claims + Immediate Refresh Token Revocation  │
+│   6. `updateBranchCreditLimit()`  -> Admin Only + Write to Immutable Audit Log           │
+└────────────────────────────────────────────┬─────────────────────────────────────────────┘
+                                             │ (Admin SDK Bypass Rules)
+                                             ▼
+┌──────────────────────────────────────────────────────────────────────────────────────────┐
+│                                   DATABASE TIER (Firestore)                              │
+│   • `/branch_stocks`          -> `allow write: if false;` (Tamper-proof from client)     │
+│   • `/sales_transactions`     -> `allow write: if false;` (Prevents forged receipts)     │
+│   • `/product_pricings`       -> `allow write: if false;` (HPP & Margins isolated)       │
+│   • `/invoices`               -> `allow write: if false;` (Anti-tamper debt records)     │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
 
 ## 🌟 Key Features
 
-### 🏢 1. Multi-Branch & Central Monitoring
-- **Central HQ & Branch Management**: Add and manage multiple warehouse locations with unique branch codes, addresses, and PIC assignments.
-- **Real-Time Branch Monitoring**: High-level overview of total inventory value, low-stock warnings, and transaction activities per branch.
-- **Branch Data Scoping**: Staff members automatically access and manage stock restricted to their assigned branch.
+### 🔐 1. Bulletproof Firestore Security Rules V3.0
+- **Locked Stock Mutation**: `/branch_stocks` and `/sales_transactions` enforce `allow write: if false;`, eliminating client-side tampering.
+- **Private Pricing Isolation**: `/product_pricings` (COGS/HPP, distributor price, reseller price) is segregated from public product catalogs.
+- **Scoped Read Access**: Branch users can only view data, inventory, and stock transfers belonging to their assigned branch.
 
-### 📦 2. Comprehensive Inventory Management
-- **Product Catalog**: Track SKUs, barcodes, categories, purchase/selling prices, minimum stock alerts, and current stock quantities.
-- **Barcode & QR Code Generation**: Built-in barcode/QR renderer using `bwip-js` with one-click printable labels.
-- **Live Camera Scanner**: Integrated camera barcode & QR scanner powered by `html5-qrcode` for rapid item lookup.
+### ⚡ 2. Core Cloud Functions (Atomic Mutator Engine)
+1. **`processPOSSale`**: Validates stock availability, runs atomic decrement (`runTransaction`), and records sales receipts.
+2. **`confirmTransferReceipt`**: Strict state machine (`IN_TRANSIT` ➔ `RECEIVED`), atomic recipient branch stock increment, and delivery order closure.
+3. **`setUserRoleAndBranch`**: Assigns custom claims (`role`, `branch_id`, `branch_type`), invalidates stale session tokens via `revokeRefreshTokens()`, and syncs user profiles.
+4. **`updateBranchCreditLimit`**: Modifies credit limits and writes immutable audit logs to `/credit_limit_audit_logs`.
+5. **`createStockTransfer`**:
+   - **Overdue Accounts Receivable Guard**: Rejects stock transfers if the destination branch has overdue unpaid invoices.
+   - **Multi-tier Pricing Valuation**: Dynamically resolves pricing by branch tier (`DISTRIBUTOR`, `RESELLER`, `INTERNAL`).
+   - **Credit Ceiling Guard**: Enforces credit limits for non-cash terms.
+   - **Atomic Central Warehouse Decrement**: Deducts central stock and creates stock transfer DO + accounts receivable invoice in one transaction.
 
-### 🔄 3. Stock In & Stock Out Operations
-- **Stock In (Barang Masuk)**: Record incoming goods from suppliers or central warehouse with automatic stock increments.
-- **Stock Out (Barang Keluar)**: Process shipments and sales with real-time stock deduction and prevention of negative inventory.
-- **Audit Logging**: Every movement records timestamp, operator name, quantity, branch, and notes.
+### 🏢 3. Multi-Branch & Central Monitoring
+- Real-time stock valuation, credit limit monitoring, and accounts receivable tracking.
+- Branch partner tiers: `INTERNAL`, `DISTRIBUTOR`, `RESELLER`.
+- Payment terms: `CASH`, `TEMPO_7_HARI`, `TEMPO_14_HARI`, `TEMPO_30_HARI`.
 
-### 📊 4. Transaction History & CSV Export
-- **Historical Audit Trail**: Searchable, filterable list of all inbound and outbound transactions.
-- **One-Click Export**: Export inventory lists and transaction histories directly into CSV format.
-
-### 👥 5. Role-Based Access Control (RBAC)
-- **Administrator (`ADMIN`)**: Full access to global analytics, branch management, user creation, and configuration settings.
-- **Branch Staff (`STAFF_BRANCH`)**: Streamlined operational interface focused on day-to-day stock entry, dispatch, and local inventory.
-
-### ☁️ 6. Hybrid Cloud & Offline Architecture
-- **Google Firebase Firestore**: Real-time cloud synchronization across devices.
-- **Local Storage Fallback**: Runs smoothly without configuration using local browser storage for instant demos or offline usage.
-- **In-App Cloud Connector**: Connect your Firebase project directly from the web interface without touching code.
+### 📦 4. Product Catalog, Barcode & Camera Scanner
+- Built-in barcode and QR Code renderer powered by `bwip-js`.
+- Integrated live camera barcode/QR scanner powered by `html5-qrcode`.
+- One-click CSV export for inventory and transaction records.
 
 ---
 
@@ -50,6 +84,7 @@
 | **Frontend Framework** | [React 19](https://react.dev/) + [Vite 6](https://vitejs.dev/) |
 | **Styling & UI** | [Tailwind CSS 3](https://tailwindcss.com/) + [Lucide React](https://lucide.dev/) |
 | **Database & Cloud** | [Google Firebase v11](https://firebase.google.com/) (Firestore Cloud Database) |
+| **Cloud Functions** | [Firebase Functions v5](https://firebase.google.com/docs/functions) + TypeScript |
 | **Barcode Engine** | [bwip-js](https://github.com/metafloor/bwip-js) |
 | **Camera QR/Barcode Scanner** | [html5-qrcode](https://github.com/mebjas/html5-qrcode) |
 
@@ -57,117 +92,128 @@
 
 ## 🚀 Getting Started
 
-### Prerequisites
-- [Node.js](https://nodejs.org/) (version 18+ recommended)
-- [npm](https://www.npmjs.com/) or [yarn](https://yarnpkg.com/)
-
 ### 1. Installation
-Clone the repository and install the dependencies:
 
 ```bash
+# Clone the repository
 git clone https://github.com/kukuhdwis/warehousezero.git
 cd warehousezero
+
+# Install frontend dependencies
 npm install
+
+# Install Cloud Functions backend dependencies
+cd functions
+npm install
+cd ..
 ```
 
-### 2. Development Server
-Start the local development server:
+### 2. Running Local Development Server
 
 ```bash
 npm run dev
 ```
 
-Open your browser and navigate to `http://localhost:5173`.
+Open your browser at `http://localhost:5173`.
 
 ### 3. Production Build
-To create an optimized production build:
 
 ```bash
+# Build frontend web bundle
 npm run build
-npm run preview
+
+# Compile Cloud Functions (TypeScript)
+cd functions
+npm run build
+cd ..
 ```
 
 ---
 
-## ⚙️ Google Firebase Setup (Optional)
+## 🚀 Deployment to Google Firebase
 
-To enable persistent cloud database synchronization across multiple devices:
+To deploy Security Rules, Cloud Functions, and Hosting:
 
-### Option A: Via In-App Settings Modal (Easiest)
-1. Open the application in your browser.
-2. Click the **"Google Firebase Platform"** or Database icon in the top navigation bar.
-3. Paste your Firebase Web App configuration keys from the [Firebase Console](https://console.firebase.google.com/).
-4. Click **"Simpan & Hubungkan Firebase"**.
+```bash
+# 1. Login to Firebase CLI
+npx firebase-tools login
 
-### Option B: Via Environment Variables
-1. Create a `.env` file in the project root:
-   ```bash
-   cp .env.example .env
-   ```
-2. Fill in your credentials:
-   ```env
-   VITE_FIREBASE_API_KEY=AIzaSy...
-   VITE_FIREBASE_AUTH_DOMAIN=your-project-id.firebaseapp.com
-   VITE_FIREBASE_PROJECT_ID=your-project-id
-   VITE_FIREBASE_STORAGE_BUCKET=your-project-id.appspot.com
-   VITE_FIREBASE_MESSAGING_SENDER_ID=1234567890
-   VITE_FIREBASE_APP_ID=1:1234567890:web:abcdef
-   ```
+# 2. Select your Firebase project
+npx firebase-tools use <your-project-id>
+
+# 3. Deploy Firestore Rules and Cloud Functions
+npx firebase-tools deploy --only firestore:rules,functions
+
+# 4. Deploy Web Hosting
+npx firebase-tools deploy --only hosting
+```
 
 ---
 
 ## 🔐 Default Demo Login Credentials
 
-For local simulation and fresh setups, the default root administrator credentials are:
+For local simulation and fresh setups, two default accounts are available:
 
+### 1. 🛡️ Super Administrator Account
 - **Email**: `admin@perusahaan.com`
 - **Password**: `admin`
-- **Role**: `Administrator (Pusat)`
+- **Role**: `Administrator` (Full system access: User & Branch management, Global monitoring, Inbound & Outbound)
+
+### 2. 🏢 Central Warehouse Staff Account
+- **Email**: `staffpusat@perusahaan.com`
+- **Password**: `staff`
+- **Role**: `Staff Pusat` (Multi-branch monitoring, Inbound & Outbound, Global transactions, **Strictly no access to User & Branch management**)
+
 
 ---
 
-## 📁 Project Structure
+## 📁 Directory Structure
 
 ```text
 warehousezero/
+├── firestore.rules             # Bulletproof Firestore Security Rules V3.0
+├── firebase.json               # Firebase Hosting, Functions & Firestore config
+├── functions/                  # Cloud Functions Backend (TypeScript)
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── src/
+│       └── index.ts            # Atomic Mutator Engine (processPOSSale, confirmTransferReceipt, etc.)
 ├── public/                     # Static assets
 ├── src/
 │   ├── components/             # UI Components
 │   │   ├── BarcodeModal.jsx    # Barcode/QR generator modal
-│   │   ├── BottomNav.jsx       # Mobile bottom navigation bar
-│   │   ├── BranchManagement.jsx# Branch CRUD & assignment
-│   │   ├── BranchMonitoring.jsx# Central branch overview
-│   │   ├── Dashboard.jsx       # Main KPI metrics & stats
-│   │   ├── FirebaseSettingsModal.jsx # Cloud setup dialog
-│   │   ├── LoginView.jsx       # Authentication screen
-│   │   ├── Navbar.jsx          # Top application bar
-│   │   ├── ProductManagement.jsx # Inventory catalog
+│   │   ├── BottomNav.jsx       # Mobile bottom navigation
+│   │   ├── BranchManagement.jsx# Branch CRUD & credit limits
+│   │   ├── BranchMonitoring.jsx# Centralized branch analytics & AR tracking
+│   │   ├── Dashboard.jsx       # Core KPI metrics
+│   │   ├── FirebaseSettingsModal.jsx # Cloud connector dialog
+│   │   ├── LoginView.jsx       # Authentication page
+│   │   ├── Navbar.jsx          # Top navigation bar
+│   │   ├── ProductManagement.jsx # Catalog & public pricing
 │   │   ├── ScannerModal.jsx    # Live camera scanner
-│   │   ├── Sidebar.jsx         # Navigation sidebar
-│   │   ├── StockIn.jsx         # Inbound stock workflow
-│   │   ├── StockOut.jsx        # Outbound stock workflow
+│   │   ├── Sidebar.jsx         # Sidebar navigation
+│   │   ├── StockIn.jsx         # Stock in workflow
+│   │   ├── StockOut.jsx        # Stock out workflow
 │   │   ├── TransactionHistory.jsx # Movement audit logs
 │   │   └── UserManagement.jsx  # Staff & RBAC management
 │   ├── services/
-│   │   ├── authService.js      # Session & authentication handler
+│   │   ├── authService.js      # Session & token refresh listener
+│   │   ├── cloudFunctionsService.js # HTTPS Callable Cloud Functions client
 │   │   ├── dataService.js      # Data storage & CRUD services
-│   │   └── firebase.js         # Firebase client initialization
-│   ├── App.jsx                 # Root layout & route state
-│   ├── index.css               # Global styling & Tailwind directives
-│   └── main.jsx                # App entry point
-├── .env.example                # Environment variables template
-├── .gitignore                  # Git ignore rules
-├── firebase.json               # Firebase Hosting configuration
-├── package.json                # Dependencies & scripts
-├── README.id.md                # Project documentation (Bahasa Indonesia)
-├── readme.md                   # Project documentation (English)
-├── tailwind.config.js          # Tailwind styling configuration
-└── vite.config.js              # Vite bundler configuration
+│   │   └── firebase.js         # Firebase App, DB, Auth & Functions initialization
+│   ├── App.jsx                 # Main application layout
+│   ├── index.css               # Global CSS & Tailwind imports
+│   └── main.jsx                # React root entrypoint
+├── package.json                # Frontend package configuration
+├── README.id.md                # Indonesian Documentation
+├── readme.md                   # English Documentation
+├── tailwind.config.js          # Tailwind CSS theme configuration
+└── vite.config.js              # Vite configuration
 ```
 
 ---
 
-## 👨‍💻 Author
+## 👨‍💻 Developer
 
 Developed by **[kukuhdwisaputra.site](https://kukuhdwisaputra.site)**.
 
@@ -175,5 +221,4 @@ Developed by **[kukuhdwisaputra.site](https://kukuhdwisaputra.site)**.
 
 ## 📄 License
 
-This project is open source and available under the [MIT License](LICENSE).
-
+This project is open source under the [MIT License](LICENSE).

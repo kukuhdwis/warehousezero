@@ -20,6 +20,7 @@ export default function Sidebar({
   onLogout 
 }) {
   const isAdmin = currentUser?.role === 'ADMIN';
+  const isStaffPusat = currentUser?.role === 'STAFF_PUSAT' || currentUser?.role === 'PUSAT';
 
   const operationalItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -67,6 +68,34 @@ export default function Sidebar({
           </nav>
         </div>
 
+        {/* Staff Pusat Monitoring Section */}
+        {isStaffPusat && !isAdmin && (
+          <div>
+            <div className="px-3 flex items-center justify-between mb-2">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600">
+                Monitoring Pusat
+              </p>
+              <span className="text-[9px] px-1.5 py-0.2 bg-amber-100 text-amber-800 font-bold rounded">
+                PUSAT
+              </span>
+            </div>
+            <nav className="space-y-1">
+              <button
+                onClick={() => setActiveTab('monitoring')}
+                className={`
+                  w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition cursor-pointer
+                  ${activeTab === 'monitoring' 
+                    ? 'bg-amber-50 text-amber-800 font-semibold shadow-2xs' 
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}
+                `}
+              >
+                <Eye className={`w-4 h-4 ${activeTab === 'monitoring' ? 'text-amber-600' : 'text-amber-500'}`} />
+                <span>Monitoring Cabang</span>
+              </button>
+            </nav>
+          </div>
+        )}
+
         {/* Admin Management Section */}
         {isAdmin && (
           <div>
@@ -111,9 +140,11 @@ export default function Sidebar({
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
               isAdmin 
                 ? 'bg-sky-100 text-sky-700' 
-                : 'bg-emerald-100 text-emerald-700'
+                : isStaffPusat
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-emerald-100 text-emerald-700'
             }`}>
-              {isAdmin ? <ShieldCheck className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+              {isAdmin ? <ShieldCheck className="w-4 h-4" /> : isStaffPusat ? <Eye className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-bold text-slate-800 truncate">{currentUser.name}</p>

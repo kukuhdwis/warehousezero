@@ -79,26 +79,28 @@ export default function BottomNav({
                 </div>
               </button>
 
+              {(isAdmin || currentUser?.role === 'STAFF_PUSAT' || currentUser?.role === 'PUSAT') && (
+                <button
+                  onClick={() => {
+                    setActiveTab('monitoring');
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-medium text-sm transition ${
+                    activeTab === 'monitoring' ? 'bg-amber-50 text-amber-700 font-semibold' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
+                    <Eye className="w-5 h-5" />
+                  </div>
+                  <div className="text-left flex-1">
+                    <p className="font-semibold text-sm">Monitoring Cabang</p>
+                    <p className="text-xs text-slate-400">Transparansi inventaris tiap cabang & staff</p>
+                  </div>
+                </button>
+              )}
+
               {isAdmin && (
                 <>
-                  <button
-                    onClick={() => {
-                      setActiveTab('monitoring');
-                      setIsMoreMenuOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-medium text-sm transition ${
-                      activeTab === 'monitoring' ? 'bg-amber-50 text-amber-700 font-semibold' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
-                      <Eye className="w-5 h-5" />
-                    </div>
-                    <div className="text-left flex-1">
-                      <p className="font-semibold text-sm">Monitoring Cabang</p>
-                      <p className="text-xs text-slate-400">Transparansi inventaris tiap cabang & staff</p>
-                    </div>
-                  </button>
-
                   <button
                     onClick={() => {
                       setActiveTab('users');
@@ -143,9 +145,13 @@ export default function BottomNav({
               {currentUser && (
                 <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm ${
-                    isAdmin ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'
+                    isAdmin 
+                      ? 'bg-sky-100 text-sky-700' 
+                      : (currentUser?.role === 'STAFF_PUSAT' || currentUser?.role === 'PUSAT')
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-emerald-100 text-emerald-700'
                   }`}>
-                    {isAdmin ? <ShieldCheck className="w-5 h-5" /> : <UserCheck className="w-5 h-5" />}
+                    {isAdmin ? <ShieldCheck className="w-5 h-5" /> : (currentUser?.role === 'STAFF_PUSAT' || currentUser?.role === 'PUSAT') ? <Eye className="w-5 h-5" /> : <UserCheck className="w-5 h-5" />}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-bold text-slate-900 truncate">{currentUser.name}</p>

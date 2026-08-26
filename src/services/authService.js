@@ -1,5 +1,7 @@
 // Authentication service for NDK Warehouse WMS
 import { fetchUsers } from './dataService';
+import { auth } from './firebase';
+import { onIdTokenChanged } from 'firebase/auth';
 
 const STORAGE_KEY = 'wms_user';
 
@@ -44,3 +46,28 @@ export const logoutUser = async () => {
   await new Promise((resolve) => setTimeout(resolve, 200));
   localStorage.removeItem(STORAGE_KEY);
 };
+
+/**
+ * Setup Real-time ID Token and Role Claims synchronization listener
+ * Detects role revocation / claims update and forces fresh token retrieval
+ */
+export const setupAuthTokenListener = (onClaimsChanged) => {
+  if (!auth) return () => {};
+
+  const unsubscribe = onIdTokenChanged(auth, async (user) => {
+    if (user) {
+      try {
+        const idTokenResult = await user.getIdTokenResult(true); // Force Refresh = true
+        console.log("Active Custom Claims:", idTokenResult.claims);
+        if (onClaimsChanged && typeof onClaimsChanged === 'function') {
+          onClaimsChanged(idTokenResult.claims, user);
+        }
+      } catch (err) {
+        console.error("Error refreshing ID token claims:", err);
+      }
+    }
+  });
+
+  return unsubscribe;
+};
+

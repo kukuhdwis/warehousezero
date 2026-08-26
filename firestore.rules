@@ -1,0 +1,119 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ==========================================
+    // HELPER FUNCTIONS (AUTHENTICATION & ROLES)
+    // ==========================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.role == 'admin';
+    }
+    function isPusat() {
+      return isAuthenticated() && request.auth.token.role == 'pusat';
+    }
+    function isCabang() {
+      return isAuthenticated() && request.auth.token.role == 'cabang';
+    }
+    function isSpecificCabang(branchId) {
+      return isCabang() && request.auth.token.branch_id == branchId;
+    }
+
+    // ==========================================
+    // 1. MASTER BRAND, KATEGORI & PRODUK PUBLIK
+    // ==========================================
+    match /brands/{brandId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Katalog Produk Publik (Hanya berisi harga retail_price, SKU, dan Spek Fisik)
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin() && 
+                   request.resource.data.retail_price is number && 
+                   request.resource.data.retail_price > 0 &&
+                   request.resource.data.unit == 'PCS';
+    }
+
+    // ==========================================
+    // 2. HARGA INTERNAL (HPP, DISTRIBUTOR, RESELLER)
+    // ==========================================
+    match /product_pricings/{productId} {
+      // Konsumen publik TIDAK BISA membaca
+      allow read: if isAdmin() || isPusat() || isCabang();
+      allow write: if isAdmin() && 
+                   request.resource.data.cost_price > 0 &&
+                   request.resource.data.distributor_price >= request.resource.data.cost_price &&
+                   request.resource.data.reseller_price >= request.resource.data.distributor_price;
+    }
+
+    // ==========================================
+    // 3. MASTER CABANG & AUDIT LOG LIMIT PIUTANG
+    // ==========================================
+    match /branches/{branchId} {
+      allow read: if isAdmin() || isPusat() || isSpecificCabang(branchId);
+      allow write: if isAdmin(); // Perubahan credit_limit wajib lewat Admin
+    }
+
+    match /credit_limit_audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false; // Hanya diisi oleh Cloud Function
+    }
+
+    // ==========================================
+    // 4. STOK CABANG (ZERO-TRUST: WRITE DITUTUP TOTAL)
+    // ==========================================
+    match /branch_stocks/{stockId} {
+      // Scoped Read: Cabang hanya bisa membaca stok miliknya sendiri
+      allow read: if isAdmin() || isPusat() || 
+                  (isCabang() && resource.data.branch_id == request.auth.token.branch_id);
+      // Client TIDAK BISA melakukan write/update manual sama sekali!
+      allow write: if false; 
+    }
+
+    // ==========================================
+    // 5. TRANSAKSI PENJUALAN & BUNDLING (WRITE DITUTUP)
+    // ==========================================
+    match /sales_transactions/{transactionId} {
+      allow read: if isAdmin() || 
+                  (isPusat() && resource.data.origin == 'PUSAT') || 
+                  (isCabang() && resource.data.branch_id == request.auth.token.branch_id);
+      // Mencegah nota penjualan fiktif dari client
+      allow write: if false; 
+    }
+
+    // ==========================================
+    // 6. SURAT JALAN & MUTASI TRANSFER STOK
+    // ==========================================
+    match /stock_transfers/{transferId} {
+      allow read: if isAdmin() || isPusat() || 
+                  (isCabang() && resource.data.to_branch_id == request.auth.token.branch_id);
+      // Dibuat dan dikonfirmasi HANYA lewat Cloud Functions
+      allow write: if false; 
+    }
+
+    // ==========================================
+    // 7. INVOICE PIUTANG CABANG (RECEIVABLES)
+    // ==========================================
+    match /invoices/{invoiceId} {
+      allow read: if isAdmin() || isPusat() || 
+                  (isCabang() && resource.data.branch_id == request.auth.token.branch_id);
+      allow write: if false; // Mutasi saldo & pembayaran hanya via Server
+    }
+
+    // ==========================================
+    // 8. USER PROFILES
+    // ==========================================
+    match /user_profiles/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin() || isPusat());
+      allow write: if isAdmin();
+    }
+  }
+}

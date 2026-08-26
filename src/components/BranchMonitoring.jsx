@@ -22,7 +22,9 @@ import {
   ArrowLeft,
   Filter,
   Layers,
-  Inbox
+  Inbox,
+  Check,
+  Ban
 } from 'lucide-react';
 import { exportToCSV } from '../services/dataService';
 
@@ -30,6 +32,7 @@ export default function BranchMonitoring({
   currentUser, 
   branches = [], 
   products = [], 
+  branchInventories = [],
   transactions = [], 
   users = [] 
 }) {
@@ -47,19 +50,20 @@ export default function BranchMonitoring({
     ? users.filter(u => u.branchId === selectedBranch.id)
     : users;
 
-  // Products belonging to the selected branch (or all)
-  const branchProducts = products.filter(p => {
+  // Branch Inventories belonging to selected branch (or all)
+  const branchInventoryItems = branchInventories.filter(bi => {
     if (selectedBranchId === 'ALL') return true;
-    return p.branchId === selectedBranchId;
+    return bi.branchId === selectedBranchId;
   });
 
-  // Filter products by search & stock status
-  const filteredProducts = branchProducts.filter(p => {
+  // Filter items by search & stock status
+  const filteredInventories = branchInventoryItems.filter(item => {
     const matchesSearch = 
-      (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.sku || '').toLowerCase().includes(searchTerm.toLowerCase());
+      (item.productName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.sku || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.brand || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-    const isLow = (Number(p.currentStock) || 0) <= (Number(p.minStock) || 0);
+    const isLow = (Number(item.stockQuantity) || 0) <= (Number(item.minStock) || 5);
     const matchesStock = 
       stockFilter === 'ALL' ||
       (stockFilter === 'LOW' && isLow) ||
@@ -76,26 +80,35 @@ export default function BranchMonitoring({
   });
 
   // Statistics Calculation
-  const totalSKU = filteredProducts.length;
-  const totalUnits = filteredProducts.reduce((acc, p) => acc + (Number(p.currentStock) || 0), 0);
-  const lowStockItems = filteredProducts.filter(p => (Number(p.currentStock) || 0) <= (Number(p.minStock) || 0));
-  const totalValuation = filteredProducts.reduce((acc, p) => acc + ((Number(p.currentStock) || 0) * (Number(p.price) || 0)), 0);
+  const totalSKU = filteredInventories.filter(bi => bi.status === 'APPROVED').length;
+  const totalUnits = filteredInventories
+    .filter(bi => bi.status === 'APPROVED')
+    .reduce((acc, bi) => acc + (Number(bi.stockQuantity) || 0), 0);
+  const lowStockItems = filteredInventories.filter(
+    bi => bi.status === 'APPROVED' && (Number(bi.stockQuantity) || 0) <= (Number(bi.minStock) || 5)
+  );
+  const totalValuation = filteredInventories
+    .filter(bi => bi.status === 'APPROVED')
+    .reduce((acc, bi) => acc + ((Number(bi.stockQuantity) || 0) * (Number(bi.price) || 0)), 0);
 
   // Export report for current view
   const handleExportCSV = () => {
     const branchLabel = selectedBranch ? selectedBranch.name.replace(/\s+/g, '-') : 'Semua-Cabang';
-    const reportData = filteredProducts.map(p => {
-      const branchName = branches.find(b => b.id === p.branchId)?.name || p.branchName || 'Pusat';
+    const reportData = filteredInventories.map(item => {
+      const branchName = branches.find(b => b.id === item.branchId)?.name || item.branchName || 'Cabang';
       return {
         Cabang: branchName,
-        SKU: p.sku,
-        Nama_Produk: p.name,
-        Kuantitas_Stok: p.currentStock,
-        Satuan: p.unit || 'Pcs',
-        Harga_Satuan: p.price,
-        Total_Nilai_Stok: (Number(p.currentStock) || 0) * (Number(p.price) || 0),
-        Stok_Minimum: p.minStock,
-        Status: (Number(p.currentStock) || 0) <= (Number(p.minStock) || 0) ? 'Perlu Restock' : 'Aman'
+        SKU: item.sku,
+        Nama_Produk: item.productName,
+        Merk: item.brand || 'Generic',
+        Kuantitas_Stok: item.stockQuantity,
+        Satuan: item.unit || 'Pcs',
+        Harga_Satuan: item.price,
+        Total_Nilai_Stok: (Number(item.stockQuantity) || 0) * (Number(item.price) || 0),
+        Status_Validasi: item.status,
+        Disetujui_Oleh: item.approvedBy || '-',
+        Stok_Minimum: item.minStock || 5,
+        Status_Stok: (Number(item.stockQuantity) || 0) <= (Number(item.minStock) || 5) ? 'Perlu Restock' : 'Aman'
       };
     });
 
@@ -104,7 +117,7 @@ export default function BranchMonitoring({
 
   // ==========================================
   // VIEW 1: DEDICATED BRANCH WAREHOUSE VIEW
-  // (Triggered when Admin clicks on a branch)
+  // (Triggered when Admin/Staff clicks on a branch)
   // ==========================================
   if (selectedBranch) {
     return (
@@ -119,7 +132,7 @@ export default function BranchMonitoring({
               setSearchTerm('');
               setStockFilter('ALL');
             }}
-            className="inline-flex items-center gap-2 px-3 py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition cursor-pointer shadow-2xs"
+            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 transition cursor-pointer shadow-2xs"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Kembali ke Ringkasan Semua Cabang</span>
@@ -127,10 +140,10 @@ export default function BranchMonitoring({
 
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold shadow-xs transition"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Export CSV</span>
+            <span>Export CSV Cabang</span>
           </button>
         </div>
 
@@ -148,168 +161,96 @@ export default function BranchMonitoring({
                     <h2 className="text-xl sm:text-2xl font-bold tracking-tight">
                       Gudang {selectedBranch.name}
                     </h2>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                       {selectedBranch.status || 'Aktif'}
                     </span>
                   </div>
-
-                  {selectedBranch.address && (
-                    <p className="text-xs text-slate-300 flex items-center gap-1.5 mt-1">
-                      <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-slate-400" />
-                      <span>{selectedBranch.address}</span>
-                    </p>
-                  )}
+                  
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-300 mt-2">
+                    <span className="flex items-center gap-1">
+                      <User className="w-3.5 h-3.5 text-sky-400" />
+                      PIC: <strong className="text-white">{selectedBranch.pic || '-'}</strong>
+                    </span>
+                    {selectedBranch.phone && (
+                      <span className="flex items-center gap-1">
+                        <Phone className="w-3.5 h-3.5 text-sky-400" />
+                        {selectedBranch.phone}
+                      </span>
+                    )}
+                    {selectedBranch.address && (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5 text-sky-400" />
+                        {selectedBranch.address}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Branch PIC & Hotline Info */}
-              <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-xl p-3 text-xs space-y-1 sm:min-w-[200px]">
-                <div className="flex items-center justify-between text-slate-300 text-[11px]">
-                  <span>Kepala Gudang (PIC):</span>
-                  <strong className="text-white">{selectedBranch.pic || '-'}</strong>
-                </div>
-                <div className="flex items-center justify-between text-slate-300 text-[11px]">
-                  <span>Hotline / Kontak:</span>
-                  {selectedBranch.phone ? (
-                    <a 
-                      href={`tel:${selectedBranch.phone}`}
-                      className="text-sky-300 hover:underline font-semibold flex items-center gap-1"
-                    >
-                      <Phone className="w-3 h-3" />
-                      {selectedBranch.phone}
-                    </a>
-                  ) : (
-                    <span className="text-slate-400">-</span>
-                  )}
-                </div>
+              {/* Staff Registered Badge */}
+              <div className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-xl p-3 text-right flex-shrink-0">
+                <span className="text-[10px] text-slate-300 uppercase block font-semibold">Petugas Bertugas</span>
+                <span className="text-lg font-bold text-white">
+                  {branchStaffList.length} <span className="text-xs font-normal text-slate-300">Staff</span>
+                </span>
               </div>
 
             </div>
           </div>
 
-          {/* Staff Accounts Operating in this Branch */}
-          <div className="p-4 bg-slate-50/70 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-sky-600 flex-shrink-0" />
-              <span className="text-xs font-bold text-slate-700">Akun Petugas / Staff ({branchStaffList.length}):</span>
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-slate-100 border-t border-slate-100 bg-slate-50/60">
+            <div className="p-4 text-center">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase block">Total Produk Aktif</span>
+              <span className="text-lg font-bold text-slate-800 mt-0.5 block">{totalSKU} SKU</span>
             </div>
-
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                onClick={() => setSelectedStaffName('ALL')}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                  selectedStaffName === 'ALL'
-                    ? 'bg-slate-900 text-white shadow-2xs'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                Semua Petugas
-              </button>
-
-              {branchStaffList.map(staff => (
-                <button
-                  key={staff.id}
-                  onClick={() => setSelectedStaffName(staff.name)}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
-                    selectedStaffName === staff.name
-                      ? 'bg-sky-600 text-white shadow-2xs'
-                      : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  <User className="w-3 h-3" />
-                  <span>{staff.name}</span>
-                </button>
-              ))}
-
-              {branchStaffList.length === 0 && (
-                <span className="text-xs text-slate-400 italic">Belum ada akun staff yang ditugaskan ke cabang ini.</span>
-              )}
+            <div className="p-4 text-center">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase block">Total Fisik Stok</span>
+              <span className="text-lg font-bold text-slate-800 mt-0.5 block">{totalUnits.toLocaleString('id-ID')} Pcs</span>
+            </div>
+            <div className="p-4 text-center">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase block">Stok Menipis</span>
+              <span className={`text-lg font-bold mt-0.5 block ${lowStockItems.length > 0 ? 'text-rose-600' : 'text-slate-800'}`}>
+                {lowStockItems.length} Item
+              </span>
+            </div>
+            <div className="p-4 text-center">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase block">Total Valuasi Stok</span>
+              <span className="text-lg font-bold text-emerald-600 mt-0.5 block">
+                Rp {totalValuation.toLocaleString('id-ID')}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Branch Real-time KPI Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
-          
-          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-semibold text-slate-400 uppercase">Total SKU</p>
-              <div className="w-8 h-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center">
-                <Package className="w-4 h-4" />
-              </div>
-            </div>
-            <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">
-              {totalSKU} <span className="text-xs font-normal text-slate-400">Item</span>
-            </h3>
-            <p className="text-[10px] text-slate-400 mt-0.5">Jenis produk terdaftar di gudang</p>
-          </div>
-
-          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-semibold text-slate-400 uppercase">Total Unit Stok</p>
-              <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                <Boxes className="w-4 h-4" />
-              </div>
-            </div>
-            <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">
-              {totalUnits.toLocaleString('id-ID')} <span className="text-xs font-normal text-slate-400">Pcs</span>
-            </h3>
-            <p className="text-[10px] text-slate-400 mt-0.5">Fisik barang siap distribusi</p>
-          </div>
-
-          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-semibold text-slate-400 uppercase">Stok Menipis</p>
-              <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                <AlertTriangle className="w-4 h-4" />
-              </div>
-            </div>
-            <h3 className="text-xl sm:text-2xl font-bold text-amber-600 mt-1">
-              {lowStockItems.length} <span className="text-xs font-normal text-amber-700/80">Item</span>
-            </h3>
-            <p className="text-[10px] text-slate-400 mt-0.5">Mendekati / di bawah batas min</p>
-          </div>
-
-          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-semibold text-slate-400 uppercase">Valuasi Aset</p>
-              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                <TrendingUp className="w-4 h-4" />
-              </div>
-            </div>
-            <h3 className="text-lg sm:text-xl font-bold text-emerald-600 mt-1 truncate">
-              Rp {totalValuation.toLocaleString('id-ID')}
-            </h3>
-            <p className="text-[10px] text-slate-400 mt-0.5">Estimasi nilai total persediaan</p>
-          </div>
-
-        </div>
-
-        {/* TAMPILAN MENYELURUH ISI GUDANG CABANG */}
+        {/* ========================================== */}
+        {/* SECTION A: INVENTORY PRODUCTS IN BRANCH    */}
+        {/* ========================================== */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 sm:p-6 space-y-4">
-          
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Layers className="w-4 h-4 text-sky-600" />
-                <span>Katalog Inventaris Isi Gudang {selectedBranch.name}</span>
+              <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                <Boxes className="w-5 h-5 text-sky-600" />
+                <span>Daftar Stok Fisik Barang di {selectedBranch.name}</span>
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">Daftar menyeluruh seluruh stok barang fisik yang tersimpan di lokasi cabang ini.</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Stok fisik yang telah diajukan cabang dan diverifikasi/disetujui oleh Kantor Pusat.
+              </p>
             </div>
 
             {/* Filter Tabs */}
             <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl text-xs font-medium self-start sm:self-auto">
               <button
                 onClick={() => setStockFilter('ALL')}
-                className={`px-3 py-1.5 rounded-lg transition ${
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
                   stockFilter === 'ALL' ? 'bg-white text-slate-900 font-bold shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Semua ({branchProducts.length})
+                Semua ({branchInventoryItems.length})
               </button>
               <button
                 onClick={() => setStockFilter('LOW')}
-                className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1 ${
+                className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1 cursor-pointer ${
                   stockFilter === 'LOW' ? 'bg-rose-600 text-white font-bold shadow-2xs' : 'text-rose-600 hover:text-rose-700'
                 }`}
               >
@@ -318,11 +259,11 @@ export default function BranchMonitoring({
               </button>
               <button
                 onClick={() => setStockFilter('SAFE')}
-                className={`px-3 py-1.5 rounded-lg transition ${
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
                   stockFilter === 'SAFE' ? 'bg-emerald-600 text-white font-bold shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Aman ({branchProducts.length - lowStockItems.length})
+                Aman ({branchInventoryItems.length - lowStockItems.length})
               </button>
             </div>
           </div>
@@ -332,7 +273,7 @@ export default function BranchMonitoring({
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder={`Cari nama barang atau SKU di ${selectedBranch.name}...`}
+              placeholder={`Cari nama barang, merk, atau SKU di ${selectedBranch.name}...`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 transition"
@@ -340,7 +281,7 @@ export default function BranchMonitoring({
           </div>
 
           {/* EMPTY STATE IF NO ITEMS YET */}
-          {filteredProducts.length === 0 ? (
+          {filteredInventories.length === 0 ? (
             <div className="p-8 sm:p-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 space-y-3">
               <div className="w-14 h-14 rounded-2xl bg-sky-50 text-sky-500 border border-sky-100 flex items-center justify-center mx-auto">
                 <Inbox className="w-7 h-7" />
@@ -348,7 +289,7 @@ export default function BranchMonitoring({
               <div className="max-w-sm mx-auto">
                 <h4 className="font-bold text-slate-800 text-sm sm:text-base">Gudang Cabang Ini Belum Memiliki Data Barang</h4>
                 <p className="text-xs text-slate-400 mt-1">
-                  Inventaris barang akan otomatis terdata secara real-time saat Anda atau staf cabang menambahkan produk baru atau memproses transaksi barang masuk.
+                  Inventaris barang akan otomatis terdata secara real-time saat staf cabang mengajukan inventaris produk dan telah disetujui oleh Pusat.
                 </p>
               </div>
             </div>
@@ -356,28 +297,38 @@ export default function BranchMonitoring({
             <>
               {/* MOBILE CARDS (Smartphone View) */}
               <div className="block md:hidden space-y-2.5">
-                {filteredProducts.map((p) => {
-                  const isLow = (Number(p.currentStock) || 0) <= (Number(p.minStock) || 0);
-                  const lineValuation = (Number(p.currentStock) || 0) * (Number(p.price) || 0);
+                {filteredInventories.map((item) => {
+                  const isLow = (Number(item.stockQuantity) || 0) <= (Number(item.minStock) || 5);
+                  const lineValuation = (Number(item.stockQuantity) || 0) * (Number(item.price) || 0);
+                  const isApproved = item.status === 'APPROVED';
 
                   return (
-                    <div key={p.id} className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2.5">
+                    <div key={item.id} className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2.5">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <h4 className="font-bold text-slate-900 text-xs sm:text-sm">{p.name}</h4>
-                          <p className="text-[10px] font-mono text-slate-400 mt-0.5">SKU: {p.sku}</p>
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="font-bold text-slate-900 text-xs sm:text-sm">{item.productName}</h4>
+                            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700">
+                              {item.brand || 'Generic'}
+                            </span>
+                          </div>
+                          <p className="text-[10px] font-mono text-slate-400 mt-0.5">SKU: {item.sku}</p>
                         </div>
                         <span className={`px-2.5 py-1 rounded-xl text-xs font-bold ${
-                          isLow ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'
+                          !isApproved 
+                            ? 'bg-amber-100 text-amber-800' 
+                            : isLow 
+                              ? 'bg-rose-100 text-rose-700' 
+                              : 'bg-emerald-100 text-emerald-700'
                         }`}>
-                          {p.currentStock} {p.unit || 'Pcs'}
+                          {item.stockQuantity} {item.unit || 'Pcs'}
                         </span>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200/60 text-[11px]">
                         <div>
                           <span className="text-slate-400">Harga Satuan:</span>
-                          <p className="font-semibold text-slate-800">Rp {(Number(p.price) || 0).toLocaleString('id-ID')}</p>
+                          <p className="font-semibold text-slate-800">Rp {(Number(item.price) || 0).toLocaleString('id-ID')}</p>
                         </div>
                         <div>
                           <span className="text-slate-400">Total Nilai:</span>
@@ -385,10 +336,10 @@ export default function BranchMonitoring({
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 text-[10px] text-slate-400">
-                        <span>Batas Min: {p.minStock || 0} {p.unit || 'Pcs'}</span>
-                        <span className={`font-semibold ${isLow ? 'text-rose-600' : 'text-emerald-600'}`}>
-                          {isLow ? '⚠️ Butuh Restock' : '✓ Stok Aman'}
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 text-[10px]">
+                        <span className="text-slate-400">Status: {item.status}</span>
+                        <span className={`font-semibold ${isApproved ? (isLow ? 'text-rose-600' : 'text-emerald-600') : 'text-amber-600'}`}>
+                          {isApproved ? (isLow ? '⚠️ Butuh Restock' : '✓ Stok Aktif') : '⏳ Menunggu Validasi'}
                         </span>
                       </div>
                     </div>
@@ -401,51 +352,63 @@ export default function BranchMonitoring({
                 <table className="w-full text-left text-sm">
                   <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase border-b border-slate-200">
                     <tr>
-                      <th className="px-5 py-3">Nama Produk & SKU</th>
+                      <th className="px-5 py-3">Nama Produk & Merk</th>
+                      <th className="px-4 py-3">SKU</th>
                       <th className="px-4 py-3 text-right">Harga Unit</th>
                       <th className="px-4 py-3 text-center">Stok Fisik</th>
-                      <th className="px-4 py-3 text-center">Batas Min</th>
                       <th className="px-4 py-3 text-right">Total Nilai (Rp)</th>
-                      <th className="px-5 py-3 text-center">Status</th>
+                      <th className="px-5 py-3 text-center">Status Validasi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredProducts.map((prod) => {
-                      const isLow = (Number(prod.currentStock) || 0) <= (Number(prod.minStock) || 0);
-                      const lineVal = (Number(prod.currentStock) || 0) * (Number(prod.price) || 0);
+                    {filteredInventories.map((item) => {
+                      const isLow = (Number(item.stockQuantity) || 0) <= (Number(item.minStock) || 5);
+                      const lineVal = (Number(item.stockQuantity) || 0) * (Number(item.price) || 0);
+                      const isApproved = item.status === 'APPROVED';
 
                       return (
-                        <tr key={prod.id} className="hover:bg-slate-50/80 transition">
+                        <tr key={item.id} className="hover:bg-slate-50/80 transition">
                           <td className="px-5 py-3.5 font-medium text-slate-900">
-                            <div>{prod.name}</div>
-                            <div className="text-xs text-slate-400 font-mono">{prod.sku}</div>
+                            <div className="flex items-center gap-2">
+                              <span>{item.productName}</span>
+                              <span className="px-2 py-0.2 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700">
+                                {item.brand || 'Generic'}
+                              </span>
+                            </div>
                           </td>
+                          <td className="px-4 py-3.5 text-xs text-slate-400 font-mono">{item.sku}</td>
                           <td className="px-4 py-3.5 text-right text-slate-700 text-xs font-medium">
-                            Rp {(Number(prod.price) || 0).toLocaleString('id-ID')}
+                            Rp {(Number(item.price) || 0).toLocaleString('id-ID')}
                           </td>
                           <td className="px-4 py-3.5 text-center">
                             <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                              isLow ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'
+                              !isApproved 
+                                ? 'bg-amber-100 text-amber-800' 
+                                : isLow 
+                                  ? 'bg-rose-100 text-rose-700' 
+                                  : 'bg-emerald-100 text-emerald-700'
                             }`}>
-                              {prod.currentStock} {prod.unit || 'Pcs'}
+                              {item.stockQuantity} {item.unit || 'Pcs'}
                             </span>
-                          </td>
-                          <td className="px-4 py-3.5 text-center text-xs text-slate-500">
-                            {prod.minStock || 0} {prod.unit || 'Pcs'}
                           </td>
                           <td className="px-4 py-3.5 text-right font-bold text-slate-900 text-xs">
                             Rp {lineVal.toLocaleString('id-ID')}
                           </td>
                           <td className="px-5 py-3.5 text-center">
-                            {isLow ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                <AlertTriangle className="w-3 h-3" />
-                                Restock
+                            {isApproved ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <Check className="w-3 h-3" />
+                                Aktif (Disetujui)
+                              </span>
+                            ) : item.status === 'PENDING_APPROVAL' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse">
+                                <Clock className="w-3 h-3" />
+                                Menunggu Validasi
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700">
-                                <CheckCircle2 className="w-3 h-3" />
-                                Aman
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                <Ban className="w-3 h-3" />
+                                Ditolak
                               </span>
                             )}
                           </td>
@@ -457,50 +420,73 @@ export default function BranchMonitoring({
               </div>
             </>
           )}
-
         </div>
 
-        {/* LOG TRANSAKSI MUTASI STOK KHUSUS CABANG INI */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 sm:p-6 space-y-3">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-sky-600" />
-              <h3 className="font-bold text-slate-900 text-sm">
-                Log Mutasi Stok Terkini ({selectedBranch.name})
+        {/* ========================================== */}
+        {/* SECTION B: MUTATION HISTORY & STAFF LOG    */}
+        {/* ========================================== */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 sm:p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                <Clock className="w-5 h-5 text-sky-600" />
+                <span>Log Riwayat Mutasi & Transaksi di {selectedBranch.name}</span>
               </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Pencatatan real-time seluruh arus barang masuk dan keluar di cabang ini.
+              </p>
             </div>
-            <span className="text-xs text-slate-400">
-              {branchTransactions.length} Transaksi Tercatat
-            </span>
+
+            {/* Staff Filter Dropdown */}
+            {branchStaffList.length > 0 && (
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-slate-500">Filter Staff:</label>
+                <select
+                  value={selectedStaffName}
+                  onChange={(e) => setSelectedStaffName(e.target.value)}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                >
+                  <option value="ALL">Semua Petugas ({branchStaffList.length})</option>
+                  {branchStaffList.map(s => (
+                    <option key={s.id} value={s.name}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {branchTransactions.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-4">Belum ada catatan mutasi barang masuk/keluar di cabang ini.</p>
+              <div className="p-8 text-center text-slate-400 text-xs">
+                Belum ada catatan mutasi transaksi untuk cabang ini.
+              </div>
             ) : (
-              branchTransactions.slice(0, 10).map((tx) => {
+              branchTransactions.slice(0, 15).map((tx) => {
                 const isIn = tx.type === 'IN';
                 return (
-                  <div key={tx.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 gap-2">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className={`p-1.5 rounded-lg flex-shrink-0 ${
+                  <div 
+                    key={tx.id}
+                    className="p-3 bg-slate-50 hover:bg-slate-100/80 rounded-xl border border-slate-200/80 flex items-center justify-between gap-3 text-xs transition"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold ${
                         isIn ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
                       }`}>
                         {isIn ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-900 truncate">{tx.productName}</p>
-                        <p className="text-[10px] text-slate-400">
-                          Petugas: <strong className="text-slate-700">{tx.user || 'Staff'}</strong> • {new Date(tx.createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      <div>
+                        <span className="font-bold text-slate-900">{tx.productName}</span>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Petugas: <strong className="text-slate-700">{tx.user || '-'}</strong> • {new Date(tx.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
                     </div>
 
                     <div className="text-right flex-shrink-0">
                       <span className={`text-xs font-bold ${isIn ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {isIn ? '+' : '-'}{tx.qty}
+                        {isIn ? '+' : '-'}{tx.qty} Pcs
                       </span>
-                      <p className="text-[10px] text-slate-400">{tx.notes || '-'}</p>
+                      <p className="text-[10px] text-slate-400 max-w-xs truncate">{tx.notes || '-'}</p>
                     </div>
                   </div>
                 );
@@ -556,13 +542,15 @@ export default function BranchMonitoring({
           <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">{products.length} <span className="text-xs font-normal text-slate-400">Item</span></h3>
         </div>
         <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <p className="text-[11px] font-semibold text-slate-400 uppercase">Total Unit Fisik</p>
-          <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">{products.reduce((acc, p) => acc + (Number(p.currentStock) || 0), 0).toLocaleString('id-ID')} <span className="text-xs font-normal text-slate-400">Pcs</span></h3>
+          <p className="text-[11px] font-semibold text-slate-400 uppercase">Total Unit di Cabang</p>
+          <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">
+            {branchInventories.filter(bi => bi.status === 'APPROVED').reduce((acc, bi) => acc + (Number(bi.stockQuantity) || 0), 0).toLocaleString('id-ID')} <span className="text-xs font-normal text-slate-400">Pcs</span>
+          </h3>
         </div>
         <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <p className="text-[11px] font-semibold text-slate-400 uppercase">Total Valuasi</p>
+          <p className="text-[11px] font-semibold text-slate-400 uppercase">Total Valuasi Cabang</p>
           <h3 className="text-sm sm:text-xl font-bold text-emerald-600 mt-1 truncate">
-            Rp {products.reduce((acc, p) => acc + ((Number(p.currentStock) || 0) * (Number(p.price) || 0)), 0).toLocaleString('id-ID')}
+            Rp {branchInventories.filter(bi => bi.status === 'APPROVED').reduce((acc, bi) => acc + ((Number(bi.stockQuantity) || 0) * (Number(bi.price) || 0)), 0).toLocaleString('id-ID')}
           </h3>
         </div>
       </div>
@@ -582,11 +570,10 @@ export default function BranchMonitoring({
             </div>
           ) : (
             branches.map((branch) => {
-              const bProducts = products.filter(p => p.branchId === branch.id);
+              const bInventories = branchInventories.filter(bi => bi.branchId === branch.id && bi.status === 'APPROVED');
               const bStaff = users.filter(u => u.branchId === branch.id);
-              const bTotalUnits = bProducts.reduce((acc, p) => acc + (Number(p.currentStock) || 0), 0);
-              const bLowStock = bProducts.filter(p => (Number(p.currentStock) || 0) <= (Number(p.minStock) || 0)).length;
-              const bValuation = bProducts.reduce((acc, p) => acc + ((Number(p.currentStock) || 0) * (Number(p.price) || 0)), 0);
+              const bTotalUnits = bInventories.reduce((acc, bi) => acc + (Number(bi.stockQuantity) || 0), 0);
+              const bValuation = bInventories.reduce((acc, bi) => acc + ((Number(bi.stockQuantity) || 0) * (Number(bi.price) || 0)), 0);
 
               return (
                 <div
@@ -637,11 +624,11 @@ export default function BranchMonitoring({
                   <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 text-center">
                     <div className="p-2 bg-slate-50 rounded-xl">
                       <p className="text-[10px] text-slate-400 uppercase">Item SKU</p>
-                      <p className="font-bold text-slate-900 text-sm mt-0.5">{bProducts.length}</p>
+                      <p className="font-bold text-slate-900 text-sm mt-0.5">{bInventories.length}</p>
                     </div>
                     <div className="p-2 bg-slate-50 rounded-xl">
                       <p className="text-[10px] text-slate-400 uppercase">Fisik Unit</p>
-                      <p className="font-bold text-slate-900 text-sm mt-0.5">{bTotalUnits}</p>
+                      <p className="font-bold text-slate-900 text-sm mt-0.5">{bTotalUnits} Pcs</p>
                     </div>
                     <div className="p-2 bg-slate-50 rounded-xl">
                       <p className="text-[10px] text-slate-400 uppercase">Petugas</p>

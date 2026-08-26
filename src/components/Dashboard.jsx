@@ -25,6 +25,7 @@ export default function Dashboard({
   onLogout 
 }) {
   const isAdmin = currentUser?.role === 'ADMIN';
+  const isStaffPusat = currentUser?.role === 'STAFF_PUSAT' || currentUser?.role === 'PUSAT';
 
   // Metric Calculations
   const totalItemTypes = products.length;
@@ -47,9 +48,11 @@ export default function Dashboard({
             <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
               isAdmin 
                 ? 'bg-sky-100 text-sky-800 border border-sky-200' 
-                : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                : isStaffPusat
+                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                  : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
             }`}>
-              {isAdmin ? 'Admin' : 'Staff'}
+              {isAdmin ? 'Admin' : isStaffPusat ? 'Staff Pusat' : 'Staff Cabang'}
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
@@ -93,7 +96,7 @@ export default function Dashboard({
             </button>
           )}
 
-          {isAdmin ? (
+          {isAdmin || isStaffPusat ? (
             <button
               onClick={() => onNavigate('monitoring')}
               className="flex items-center justify-center gap-2 py-3 px-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-98 cursor-pointer"

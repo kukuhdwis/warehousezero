@@ -1,6 +1,7 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
+import { getFunctions } from "firebase/functions";
 
 // Default config loaded from environment variables or localStorage override
 const getFirebaseConfig = () => {
@@ -37,15 +38,18 @@ export const isFirebaseConfigured = () => {
 let app = null;
 let db = null;
 let auth = null;
+let functions = null;
 
 if (isFirebaseConfigured()) {
   try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
     db = getFirestore(app);
     auth = getAuth(app);
+    functions = getFunctions(app);
   } catch (error) {
     console.error("Error initializing Firebase:", error);
   }
 }
 
-export { app, db, auth };
+export { app, db, auth, functions };
+

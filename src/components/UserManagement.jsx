@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { 
+  User,
   Users, 
   UserPlus, 
   ShieldCheck, 
@@ -18,6 +19,7 @@ import {
   EyeOff, 
   ShieldAlert
 } from 'lucide-react';
+import GlobalSuccessModal from './GlobalSuccessModal';
 
 export default function UserManagement({ 
   currentUser, 
@@ -36,6 +38,7 @@ export default function UserManagement({
   const [editingUser, setEditingUser] = useState(null);
   const [deleteConfirmUser, setDeleteConfirmUser] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [successModal, setSuccessModal] = useState(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -54,13 +57,14 @@ export default function UserManagement({
   // Stats calculation
   const totalUsers = users.length;
   const adminCount = users.filter(u => u.role === 'ADMIN').length;
+  const staffPusatCount = users.filter(u => u.role === 'STAFF_PUSAT' || u.role === 'PUSAT').length;
   const staffCount = users.filter(u => u.role === 'STAFF_BRANCH').length;
   const activeCount = users.filter(u => u.status !== 'INACTIVE').length;
 
   // Helper to dynamically get branch name
   const getBranchDisplayName = (user) => {
     if (!user) return '-';
-    if (user.role === 'ADMIN' || user.branchId === 'ALL' || !user.branchId) {
+    if (user.role === 'ADMIN' || user.role === 'STAFF_PUSAT' || user.role === 'PUSAT' || user.branchId === 'ALL' || !user.branchId) {
       return 'Pusat (Semua Cabang)';
     }
     const found = branches.find(b => b.id === user.branchId);
@@ -107,8 +111,8 @@ export default function UserManagement({
       email: user.email || '',
       password: user.password || '',
       role: user.role || 'STAFF_BRANCH',
-      branchId: user.branchId || (branches[0]?.id || 'ALL'),
-      branchName: matchedBranch ? matchedBranch.name : (user.branchName || 'Pusat (Semua Cabang)'),
+      branchId: (user.role === 'ADMIN' || user.role === 'STAFF_PUSAT' || user.role === 'PUSAT') ? 'ALL' : (user.branchId || (branches[0]?.id || 'ALL')),
+      branchName: (user.role === 'ADMIN' || user.role === 'STAFF_PUSAT' || user.role === 'PUSAT') ? 'Pusat (Semua Cabang)' : (matchedBranch ? matchedBranch.name : (user.branchName || 'Pusat (Semua Cabang)')),
       phone: user.phone || '',
       status: user.status || 'ACTIVE'
     });
@@ -118,20 +122,12 @@ export default function UserManagement({
   };
 
   const handleBranchChange = (branchId) => {
-    if (branchId === 'ALL' || !branchId) {
-      setFormData(prev => ({
-        ...prev,
-        branchId: 'ALL',
-        branchName: 'Pusat (Semua Cabang)'
-      }));
-    } else {
-      const selected = branches.find(b => b.id === branchId);
-      setFormData(prev => ({
-        ...prev,
-        branchId,
-        branchName: selected ? selected.name : branchId
-      }));
-    }
+    const matched = branches.find(b => b.id === branchId);
+    setFormData({
+      ...formData,
+      branchId,
+      branchName: matched ? matched.name : 'Cabang Khusus'
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -139,12 +135,12 @@ export default function UserManagement({
     setFormError('');
 
     if (!formData.name.trim() || !formData.email.trim()) {
-      setFormError('Nama lengkap dan email wajib diisi.');
+      setFormError('Nama lengkap dan alamat email wajib diisi.');
       return;
     }
 
     if (!editingUser && !formData.password.trim()) {
-      setFormError('Kata sandi wajib diisi untuk pengguna baru.');
+      setFormError('Kata sandi awal wajib diisi untuk pengguna baru.');
       return;
     }
 
@@ -161,7 +157,7 @@ export default function UserManagement({
     let finalBranchId = formData.branchId;
     let finalBranchName = 'Pusat (Semua Cabang)';
 
-    if (formData.role === 'ADMIN') {
+    if (formData.role === 'ADMIN' || formData.role === 'STAFF_PUSAT' || formData.role === 'PUSAT') {
       finalBranchId = 'ALL';
       finalBranchName = 'Pusat (Semua Cabang)';
     } else {
@@ -187,6 +183,18 @@ export default function UserManagement({
         await onCreateUser(payload);
       }
       setIsModalOpen(false);
+
+      setSuccessModal({
+        title: editingUser ? "Data Pengguna Berhasil Diperbarui!" : "Pengguna Baru Berhasil Didaftarkan!",
+        message: editingUser 
+          ? "Perubahan data akun dan hak akses pengguna telah disimpan ke database." 
+          : "Akun baru telah aktif dan dapat langsung digunakan untuk masuk ke sistem.",
+        details: [
+          { label: "Nama Pengguna", value: payload.name },
+          { label: "Email Akun", value: payload.email },
+          { label: "Role & Cabang", value: `${payload.role} • ${payload.branchName}`, highlight: true }
+        ]
+      });
     } catch (err) {
       setFormError(err.message || 'Gagal menyimpan data pengguna.');
     }
@@ -215,7 +223,7 @@ export default function UserManagement({
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Kelola akun administrator, staff gudang, dan penugasan cabang.
+            Kelola akun administrator, staff gudang pusat, staff cabang, dan penugasan akses.
           </p>
         </div>
 
@@ -229,44 +237,54 @@ export default function UserManagement({
       </div>
 
       {/* KPI Stats Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
-        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 sm:gap-3.5">
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Total User</p>
-            <h3 className="text-lg sm:text-2xl font-bold text-slate-900 mt-0.5 sm:mt-1">{totalUsers} <span className="text-[10px] sm:text-xs font-normal text-slate-500">Akun</span></h3>
+            <h3 className="text-lg sm:text-xl font-bold text-slate-900 mt-0.5">{totalUsers} <span className="text-[10px] sm:text-xs font-normal text-slate-500">Akun</span></h3>
           </div>
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0">
-            <Users className="w-5 h-5 sm:w-6 sm:h-6" />
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0">
+            <Users className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </div>
 
-        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Admin</p>
-            <h3 className="text-lg sm:text-2xl font-bold text-sky-600 mt-0.5 sm:mt-1">{adminCount} <span className="text-[10px] sm:text-xs font-normal text-sky-700/80">Admin</span></h3>
+            <h3 className="text-lg sm:text-xl font-bold text-sky-600 mt-0.5">{adminCount} <span className="text-[10px] sm:text-xs font-normal text-sky-700/80">Admin</span></h3>
           </div>
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center flex-shrink-0">
-            <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center flex-shrink-0">
+            <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </div>
 
-        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Staff</p>
-            <h3 className="text-lg sm:text-2xl font-bold text-emerald-600 mt-0.5 sm:mt-1">{staffCount} <span className="text-[10px] sm:text-xs font-normal text-emerald-700/80">Staff</span></h3>
+            <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Staff Pusat</p>
+            <h3 className="text-lg sm:text-xl font-bold text-amber-600 mt-0.5">{staffPusatCount} <span className="text-[10px] sm:text-xs font-normal text-amber-700/80">Pusat</span></h3>
           </div>
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
-            <UserCheck className="w-5 h-5 sm:w-6 sm:h-6" />
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+            <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </div>
 
-        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Staff Cabang</p>
+            <h3 className="text-lg sm:text-xl font-bold text-emerald-600 mt-0.5">{staffCount} <span className="text-[10px] sm:text-xs font-normal text-emerald-700/80">Cabang</span></h3>
+          </div>
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+            <UserCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between col-span-2 sm:col-span-1">
           <div>
             <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Akun Aktif</p>
-            <h3 className="text-lg sm:text-2xl font-bold text-indigo-600 mt-0.5 sm:mt-1">{activeCount} <span className="text-[10px] sm:text-xs font-normal text-indigo-700/80">Aktif</span></h3>
+            <h3 className="text-lg sm:text-xl font-bold text-indigo-600 mt-0.5">{activeCount} <span className="text-[10px] sm:text-xs font-normal text-indigo-700/80">Aktif</span></h3>
           </div>
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
-            <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
+            <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </div>
       </div>
@@ -295,7 +313,8 @@ export default function UserManagement({
           >
             <option value="ALL">Semua Peran</option>
             <option value="ADMIN">Administrator</option>
-            <option value="STAFF_BRANCH">Staff</option>
+            <option value="STAFF_PUSAT">Staff Pusat</option>
+            <option value="STAFF_BRANCH">Staff Cabang</option>
           </select>
 
           <select
@@ -321,6 +340,7 @@ export default function UserManagement({
         ) : (
           filteredUsers.map((user) => {
             const isAdmin = user.role === 'ADMIN';
+            const isStaffPusat = user.role === 'STAFF_PUSAT' || user.role === 'PUSAT';
             const isCurrent = currentUser?.email?.toLowerCase() === user.email?.toLowerCase();
             const displayBranch = getBranchDisplayName(user);
             const initials = (user.name || user.email || 'U')
@@ -339,7 +359,9 @@ export default function UserManagement({
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shadow-xs flex-shrink-0 mt-0.5 ${
                       isAdmin 
                         ? 'bg-sky-100 text-sky-700 border border-sky-200' 
-                        : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                        : isStaffPusat
+                          ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                          : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                     }`}>
                       {initials}
                     </div>
@@ -363,9 +385,13 @@ export default function UserManagement({
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
                         <ShieldCheck className="w-3 h-3" /> Admin
                       </span>
+                    ) : isStaffPusat ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                        <Eye className="w-3 h-3" /> Staff Pusat
+                      </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <UserCheck className="w-3 h-3" /> Staff
+                        <UserCheck className="w-3 h-3" /> Staff Cabang
                       </span>
                     )}
                   </div>
@@ -441,6 +467,7 @@ export default function UserManagement({
               ) : (
                 filteredUsers.map((user) => {
                   const isAdmin = user.role === 'ADMIN';
+                  const isStaffPusat = user.role === 'STAFF_PUSAT' || user.role === 'PUSAT';
                   const isCurrent = currentUser?.email?.toLowerCase() === user.email?.toLowerCase();
                   const displayBranch = getBranchDisplayName(user);
                   const initials = (user.name || user.email || 'U')
@@ -459,7 +486,9 @@ export default function UserManagement({
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shadow-xs ${
                             isAdmin 
                               ? 'bg-sky-100 text-sky-700 border border-sky-200' 
-                              : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                              : isStaffPusat
+                                ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                           }`}>
                             {initials}
                           </div>
@@ -486,10 +515,15 @@ export default function UserManagement({
                             <ShieldCheck className="w-3.5 h-3.5" />
                             Administrator
                           </span>
+                        ) : isStaffPusat ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                            <Eye className="w-3.5 h-3.5" />
+                            Staff Pusat
+                          </span>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                             <UserCheck className="w-3.5 h-3.5" />
-                            Staff
+                            Staff Cabang
                           </span>
                         )}
                       </td>
@@ -522,7 +556,7 @@ export default function UserManagement({
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                             Aktif
                           </span>
                         )}
@@ -547,7 +581,7 @@ export default function UserManagement({
                                 ? 'text-slate-300 cursor-not-allowed' 
                                 : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50 cursor-pointer'
                             }`}
-                            title={isCurrent ? "Tidak dapat menghapus akun aktif" : "Hapus Pengguna"}
+                            title={isCurrent ? 'Tidak dapat menghapus akun sendiri' : 'Hapus Pengguna'}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -565,19 +599,19 @@ export default function UserManagement({
       {/* ADD / EDIT USER MODAL (Bottom Sheet Responsive) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100 animate-in slide-in-from-bottom sm:zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden border border-slate-100 animate-in slide-in-from-bottom sm:zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
             
             {/* Modal Header */}
             <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex-shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center">
-                  <UserPlus className="w-4 h-4" />
+                  <User className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-slate-800 text-base">
                     {editingUser ? 'Perbarui Data Pengguna' : 'Tambah Pengguna Baru'}
                   </h3>
-                  <p className="text-xs text-slate-400">Atur kredensial dan hak akses sistem.</p>
+                  <p className="text-xs text-slate-400">Atur kredensial dan hak akses akun sistem WMS.</p>
                 </div>
               </div>
               <button 
@@ -598,52 +632,56 @@ export default function UserManagement({
                 </div>
               )}
 
-              {/* Nama Lengkap */}
+              {/* Name Input */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
                   Nama Lengkap *
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Siti Aminah"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
-                />
+                <div className="relative">
+                  <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Budi Santoso"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
+                  />
+                </div>
               </div>
 
               {/* Email & Password Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                    Email Pengguna *
+                    Alamat Email *
                   </label>
                   <div className="relative">
                     <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="email"
                       required
-                      placeholder="staff@perusahaan.com"
+                      placeholder="user@perusahaan.com"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
+                      className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
                     />
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                    Kata Sandi {editingUser ? '(Opsional)' : '*'}
+                    {editingUser ? 'Kata Sandi (Opsional)' : 'Kata Sandi Awal *'}
                   </label>
                   <div className="relative">
                     <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type={showPassword ? 'text' : 'password'}
-                      placeholder={editingUser ? 'Biarkan jika tidak diubah' : 'Min. 4 karakter'}
+                      required={!editingUser}
+                      placeholder={editingUser ? 'Kosongkan jika tidak diubah' : 'Minimal 4 karakter'}
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      className="w-full pl-9 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
+                      className="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
                     />
                     <button
                       type="button"
@@ -661,66 +699,105 @@ export default function UserManagement({
                 <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
                   Peran / Hak Akses *
                 </label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   
+                  {/* 1. Administrator */}
                   <label className={`
-                    border rounded-xl p-3 flex items-start gap-2.5 cursor-pointer transition
+                    border rounded-xl p-3 flex flex-col justify-between cursor-pointer transition
                     ${formData.role === 'ADMIN' 
                       ? 'border-sky-500 bg-sky-50/60 ring-2 ring-sky-500/20' 
                       : 'border-slate-200 hover:bg-slate-50'}
                   `}>
-                    <input
-                      type="radio"
-                      name="role"
-                      value="ADMIN"
-                      checked={formData.role === 'ADMIN'}
-                      onChange={() => {
-                        setFormData({ 
-                          ...formData, 
-                          role: 'ADMIN',
-                          branchId: 'ALL',
-                          branchName: 'Pusat (Semua Cabang)'
-                        });
-                      }}
-                      className="mt-0.5 text-sky-600 focus:ring-sky-500"
-                    />
-                    <div>
-                      <div className="font-semibold text-slate-900 text-xs flex items-center gap-1">
-                        <ShieldCheck className="w-3.5 h-3.5 text-sky-600" />
-                        Administrator
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="radio"
+                        name="role"
+                        value="ADMIN"
+                        checked={formData.role === 'ADMIN'}
+                        onChange={() => {
+                          setFormData({ 
+                            ...formData, 
+                            role: 'ADMIN',
+                            branchId: 'ALL',
+                            branchName: 'Pusat (Semua Cabang)'
+                          });
+                        }}
+                        className="mt-0.5 text-sky-600 focus:ring-sky-500"
+                      />
+                      <div>
+                        <div className="font-semibold text-slate-900 text-xs flex items-center gap-1">
+                          <ShieldCheck className="w-3.5 h-3.5 text-sky-600" />
+                          Admin
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Akses penuh termasuk kelola user & cabang.</p>
                       </div>
-                      <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Akses penuh semua cabang.</p>
                     </div>
                   </label>
 
+                  {/* 2. Staff Pusat */}
                   <label className={`
-                    border rounded-xl p-3 flex items-start gap-2.5 cursor-pointer transition
+                    border rounded-xl p-3 flex flex-col justify-between cursor-pointer transition
+                    ${formData.role === 'STAFF_PUSAT' 
+                      ? 'border-amber-500 bg-amber-50/60 ring-2 ring-amber-500/20' 
+                      : 'border-slate-200 hover:bg-slate-50'}
+                  `}>
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="radio"
+                        name="role"
+                        value="STAFF_PUSAT"
+                        checked={formData.role === 'STAFF_PUSAT'}
+                        onChange={() => {
+                          setFormData({ 
+                            ...formData, 
+                            role: 'STAFF_PUSAT',
+                            branchId: 'ALL',
+                            branchName: 'Pusat (Semua Cabang)'
+                          });
+                        }}
+                        className="mt-0.5 text-amber-600 focus:ring-amber-500"
+                      />
+                      <div>
+                        <div className="font-semibold text-slate-900 text-xs flex items-center gap-1">
+                          <Eye className="w-3.5 h-3.5 text-amber-600" />
+                          Staff Pusat
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Monitoring semua cabang, In/Out, tanpa kelola user.</p>
+                      </div>
+                    </div>
+                  </label>
+
+                  {/* 3. Staff Cabang */}
+                  <label className={`
+                    border rounded-xl p-3 flex flex-col justify-between cursor-pointer transition
                     ${formData.role === 'STAFF_BRANCH' 
                       ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/20' 
                       : 'border-slate-200 hover:bg-slate-50'}
                   `}>
-                    <input
-                      type="radio"
-                      name="role"
-                      value="STAFF_BRANCH"
-                      checked={formData.role === 'STAFF_BRANCH'}
-                      onChange={() => {
-                        const defaultBranch = branches[0];
-                        setFormData({ 
-                          ...formData, 
-                          role: 'STAFF_BRANCH',
-                          branchId: defaultBranch ? defaultBranch.id : '',
-                          branchName: defaultBranch ? defaultBranch.name : 'Cabang Khusus'
-                        });
-                      }}
-                      className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
-                    />
-                    <div>
-                      <div className="font-semibold text-slate-900 text-xs flex items-center gap-1">
-                        <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-                        Staff
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="radio"
+                        name="role"
+                        value="STAFF_BRANCH"
+                        checked={formData.role === 'STAFF_BRANCH'}
+                        onChange={() => {
+                          const defaultBranch = branches[0];
+                          setFormData({ 
+                            ...formData, 
+                            role: 'STAFF_BRANCH',
+                            branchId: defaultBranch ? defaultBranch.id : '',
+                            branchName: defaultBranch ? defaultBranch.name : 'Cabang Khusus'
+                          });
+                        }}
+                        className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <div>
+                        <div className="font-semibold text-slate-900 text-xs flex items-center gap-1">
+                          <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                          Staff Cabang
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Akses khusus 1 cabang terpilih.</p>
                       </div>
-                      <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Akses khusus cabang terpilih.</p>
                     </div>
                   </label>
 
@@ -735,12 +812,12 @@ export default function UserManagement({
                 <div className="relative">
                   <Building2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <select
-                    disabled={formData.role === 'ADMIN'}
-                    value={formData.role === 'ADMIN' ? 'ALL' : (formData.branchId || '')}
+                    disabled={formData.role === 'ADMIN' || formData.role === 'STAFF_PUSAT'}
+                    value={(formData.role === 'ADMIN' || formData.role === 'STAFF_PUSAT') ? 'ALL' : (formData.branchId || '')}
                     onChange={(e) => handleBranchChange(e.target.value)}
                     className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 transition"
                   >
-                    {formData.role === 'ADMIN' ? (
+                    {(formData.role === 'ADMIN' || formData.role === 'STAFF_PUSAT') ? (
                       <option value="ALL">Pusat (Semua Cabang / Global Access)</option>
                     ) : (
                       <>
@@ -844,6 +921,16 @@ export default function UserManagement({
           </div>
         </div>
       )}
+
+      {/* UNIVERSAL SUCCESS POP-UP MODAL */}
+      <GlobalSuccessModal
+        isOpen={Boolean(successModal)}
+        onClose={() => setSuccessModal(null)}
+        title={successModal?.title}
+        message={successModal?.message}
+        details={successModal?.details}
+        buttonText={successModal?.buttonText || "✓ Selesai & Tutup"}
+      />
 
     </div>
   );
