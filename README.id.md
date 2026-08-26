@@ -132,7 +132,6 @@ Untuk mode simulasi lokal dan instalasi baru, kredensial administrator awal adal
 
 ```text
 warehousezero/
-├── .agents/                    # Konfigurasi skill dan agen AI
 ├── public/                     # Aset publik statis
 ├── src/
 │   ├── components/             # Komponen Antarmuka (UI)

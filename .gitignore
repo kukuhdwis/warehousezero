@@ -72,5 +72,11 @@ dist
 .env.*.local
 
 
+# Agent skills & configs
+.agents/
+.agents
+skills-lock.json
+
 # dataconnect generated files
 .dataconnect
+

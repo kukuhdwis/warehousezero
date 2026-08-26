@@ -130,7 +130,6 @@ For local simulation and fresh setups, the default root administrator credential
 
 ```text
 warehousezero/
-├── .agents/                    # Custom agent and skill workflows
 ├── public/                     # Static assets
 ├── src/
 │   ├── components/             # UI Components
