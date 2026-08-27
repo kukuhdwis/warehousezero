@@ -40,7 +40,9 @@ export default function BranchManagement({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState(null);
   const [deleteConfirmBranch, setDeleteConfirmBranch] = useState(null);
+  const [isDeleteAllConfirmOpen, setIsDeleteAllConfirmOpen] = useState(false);
   const [successModal, setSuccessModal] = useState(null);
+
 
   // Form State - Only the 5 essential fields requested
   const [formData, setFormData] = useState({
@@ -189,11 +191,7 @@ export default function BranchManagement({
         <div className="flex items-center gap-2">
           {branches.length > 0 && (
             <button
-              onClick={() => {
-                if (window.confirm("Apakah Anda yakin ingin menghapus SEMUA data cabang di database?")) {
-                  if (onClearAllBranches) onClearAllBranches();
-                }
-              }}
+              onClick={() => setIsDeleteAllConfirmOpen(true)}
               className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl font-semibold text-xs transition cursor-pointer"
               title="Kosongkan seluruh data cabang di database"
             >
@@ -201,6 +199,7 @@ export default function BranchManagement({
               <span className="hidden sm:inline">Hapus Semua</span>
             </button>
           )}
+
 
           <button
             onClick={handleOpenAddModal}
@@ -700,6 +699,48 @@ export default function BranchManagement({
         </div>
       )}
 
+      {/* CONFIRM DELETE ALL BRANCHES MODAL */}
+      {isDeleteAllConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-100 animate-in zoom-in-95">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="p-2.5 bg-rose-50 rounded-xl">
+                <Trash2 className="w-6 h-6 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Hapus SEMUA Data Cabang?</h3>
+                <p className="text-xs text-slate-500 font-medium">Tindakan ini tidak dapat dibatalkan</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200">
+              Apakah Anda yakin ingin menghapus <strong className="text-rose-700 font-bold">SELURUH data cabang ({branches.length} Cabang)</strong> di database secara permanen?
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsDeleteAllConfirmOpen(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onClearAllBranches) onClearAllBranches();
+                  setIsDeleteAllConfirmOpen(false);
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-600/20 transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Ya, Hapus Semua Cabang</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* UNIVERSAL SUCCESS POP-UP MODAL */}
       <GlobalSuccessModal
         isOpen={Boolean(successModal)}
@@ -709,6 +750,7 @@ export default function BranchManagement({
         details={successModal?.details}
         buttonText={successModal?.buttonText || "✓ Selesai & Tutup"}
       />
+
 
       {/* INTERACTIVE CUSTOM ALERT MODAL */}
       <CustomAlertModal

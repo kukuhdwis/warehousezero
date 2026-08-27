@@ -152,9 +152,10 @@ export default function StockOut({
     e.preventDefault();
     if (!rejectingRequest) return;
     if (!rejectionReason.trim()) {
-      alert("Harap berikan alasan penolakan permintaan stok!");
+      showAlert("Alasan Wajib Diisi ⚠️", "Harap berikan alasan penolakan permintaan stok!", "WARNING");
       return;
     }
+
 
     setIsSubmittingReject(true);
     try {

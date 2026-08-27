@@ -226,11 +226,16 @@ export default function StockIn({
     }
   };
 
+  const [confirmingReceiptTransfer, setConfirmingReceiptTransfer] = useState(null);
+
   // One-click Confirm Receipt of Central Transfer by Branch
-  const handleConfirmReceipt = async (transfer) => {
-    if (!window.confirm(`Konfirmasi penerimaan ${transfer.qty} Pcs "${transfer.productName}" (No. Surat Jalan: ${transfer.deliveryNote})?\n\nStok akan langsung aktif dan ditambahkan ke database inventaris cabang Anda.`)) {
-      return;
-    }
+  const handleOpenConfirmReceiptModal = (transfer) => {
+    setConfirmingReceiptTransfer(transfer);
+  };
+
+  const handleExecuteConfirmReceipt = async () => {
+    if (!confirmingReceiptTransfer) return;
+    const transfer = confirmingReceiptTransfer;
 
     try {
       setConfirmingTransferId(transfer.id);
@@ -252,12 +257,14 @@ export default function StockIn({
           user: currentUser?.name || 'Staff Cabang'
         });
       }
+      setConfirmingReceiptTransfer(null);
     } catch (err) {
-      showAlert("Gagal Mengonfirmasi Penerimaan", err.message, "ERROR");
+      showAlert("Gagal Mengonfirmasi Penerimaan ⚠️", err.message, "ERROR");
     } finally {
       setConfirmingTransferId(null);
     }
   };
+
 
   // Submit Stock Request to Central Office (Branch -> HQ)
   const handleSubmitStockRequest = async (e) => {
@@ -488,8 +495,9 @@ export default function StockIn({
                       </div>
 
                       <button
-                        onClick={() => handleConfirmReceipt(trf)}
+                        onClick={() => handleOpenConfirmReceiptModal(trf)}
                         disabled={confirmingTransferId === trf.id}
+
                         className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap self-stretch sm:self-center"
                       >
                         <CheckCircle className="w-4 h-4" />
@@ -999,6 +1007,45 @@ export default function StockIn({
         buttonText="✓ Selesai & Tutup"
       />
 
+      {/* INTERACTIVE CONFIRM RECEIPT MODAL */}
+      {confirmingReceiptTransfer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-100 animate-in zoom-in-95">
+            <div className="flex items-center gap-3 text-emerald-600">
+              <div className="p-2.5 bg-emerald-50 rounded-xl">
+                <CheckCircle className="w-6 h-6 text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Konfirmasi Penerimaan Paket?</h3>
+                <p className="text-xs text-slate-500 font-medium">Pengiriman Mutasi Stok dari Kantor Pusat</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200">
+              Apakah Anda telah menerima <strong className="text-emerald-700 font-extrabold">+{confirmingReceiptTransfer.qty} Pcs "{confirmingReceiptTransfer.productName}"</strong> (No. Surat Jalan: <span className="font-mono font-bold text-slate-900">{confirmingReceiptTransfer.deliveryNote}</span>)? Stok akan langsung aktif di database inventaris cabang Anda.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmingReceiptTransfer(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteConfirmReceipt}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition cursor-pointer flex items-center gap-1.5"
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>Ya, Konfirmasi Penerimaan</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* INTERACTIVE CUSTOM ALERT MODAL */}
       <CustomAlertModal
         isOpen={Boolean(alertModal)}
@@ -1007,6 +1054,7 @@ export default function StockIn({
         message={alertModal?.message}
         type={alertModal?.type}
       />
+
 
     </div>
   );

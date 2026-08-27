@@ -43,7 +43,8 @@ export default function ProductManagement({
   onCreateMachineCategory,
   onDeleteMachineCategory,
   onShowBarcode,
-  onRequestBranchInventory,
+  onApproveBranchInventory,
+  onRejectBranchInventory,
   onApproveBranchRequest,
   onRejectBranchRequest,
   onUpdateBranchInventory
@@ -95,8 +96,10 @@ export default function ProductManagement({
   const [editingProduct, setEditingProduct] = useState(null);
   const [deleteConfirmProduct, setDeleteConfirmProduct] = useState(null);
   const [deleteConfirmBrand, setDeleteConfirmBrand] = useState(null);
+  const [approvingItem, setApprovingItem] = useState(null);
   const [rejectingItem, setRejectingItem] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
+
 
   // Master Product Form State
   const [formData, setFormData] = useState({
@@ -252,8 +255,9 @@ export default function ProductManagement({
       }
       setAdjustingStockItem(null);
     } catch (err) {
-      alert("Gagal memperbarui stok: " + err.message);
+      showAlert("Gagal Memperbarui Stok ⚠️", err.message, "ERROR");
     } finally {
+
       setIsSubmittingStockAdjust(false);
     }
   };
@@ -549,27 +553,30 @@ export default function ProductManagement({
     }
   };
 
-  // Handle Approve Inventory Request
-  const handleApprove = async (inventoryId) => {
-    if (!window.confirm("Setujui pengajuan inventaris ini? Stok cabang akan resmi aktif.")) return;
+  // Handle Approve Inventory Request (Open Interactive Confirm Modal)
+  const handleOpenApproveModal = (inventoryItem) => {
+    setApprovingItem(inventoryItem);
+  };
+
+  const handleExecuteApprove = async () => {
+    if (!approvingItem) return;
     try {
-      const matchedItem = branchInventories.find(i => i.id === inventoryId);
-      if (onApproveBranchInventory) {
-        await onApproveBranchInventory(inventoryId, currentUser);
+      const approveFn = onApproveBranchInventory || onApproveBranchRequest;
+      if (approveFn) {
+        await approveFn(approvingItem.id, currentUser);
       }
-      if (matchedItem) {
-        setSuccessModal({
-          title: "Pengajuan Inventaris Disetujui!",
-          message: `Inventaris untuk ${matchedItem.productName} telah disetujui dan aktif di cabang ${matchedItem.branchName || 'Cabang'}.`,
-          details: [
-            { label: "Cabang", value: matchedItem.branchName || 'Cabang' },
-            { label: "Produk", value: matchedItem.productName },
-            { label: "Stok Aktif", value: `${matchedItem.stockQuantity} Pcs`, highlight: true }
-          ]
-        });
-      }
+      setSuccessModal({
+        title: "Pengajuan Inventaris Disetujui! 🎉",
+        message: `Inventaris untuk ${approvingItem.productName} telah disetujui dan aktif di cabang ${approvingItem.branchName || 'Cabang'}.`,
+        details: [
+          { label: "Cabang", value: approvingItem.branchName || 'Cabang' },
+          { label: "Produk", value: approvingItem.productName },
+          { label: "Stok Aktif", value: `${approvingItem.stockQuantity} Pcs`, highlight: true }
+        ]
+      });
+      setApprovingItem(null);
     } catch (err) {
-      showAlert("Gagal Menyetujui", err.message, "ERROR");
+      showAlert("Gagal Menyetujui ⚠️", err.message || "Terjadi kesalahan saat menyetujui pengajuan.", "ERROR");
     }
   };
 
@@ -577,15 +584,17 @@ export default function ProductManagement({
   const handleConfirmReject = async () => {
     if (!rejectingItem) return;
     try {
-      if (onRejectBranchInventory) {
-        await onRejectBranchInventory(rejectingItem.id, currentUser, rejectionReason || 'Kuantitas fisik tidak sesuai verifikasi.');
+      const rejectFn = onRejectBranchInventory || onRejectBranchRequest;
+      if (rejectFn) {
+        await rejectFn(rejectingItem.id, currentUser, rejectionReason || 'Kuantitas fisik tidak sesuai verifikasi.');
       }
       setRejectingItem(null);
       setRejectionReason('');
     } catch (err) {
-      showAlert("Gagal Menolak", err.message, "ERROR");
+      showAlert("Gagal Menolak ⚠️", err.message || "Terjadi kesalahan saat menolak pengajuan.", "ERROR");
     }
   };
+
 
 
   return (
@@ -963,9 +972,10 @@ export default function ProductManagement({
                     </button>
 
                     <button
-                      onClick={() => handleApprove(req.id)}
+                      onClick={() => handleOpenApproveModal(req)}
                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
                     >
+
                       <Check className="w-4 h-4" />
                       <span>Setujui (Approve)</span>
                     </button>
@@ -2029,6 +2039,45 @@ export default function ProductManagement({
         </div>
       )}
 
+      {/* INTERACTIVE APPROVAL CONFIRMATION MODAL */}
+      {approvingItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-100 animate-in zoom-in-95">
+            <div className="flex items-center gap-3 text-emerald-600">
+              <div className="p-2.5 bg-emerald-50 rounded-xl">
+                <CheckCircle className="w-6 h-6 text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Setujui Pengajuan Inventaris?</h3>
+                <p className="text-xs text-slate-500 font-medium">Validasi stok cabang kantor pusat</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200">
+              Stok sebanyak <strong className="text-emerald-700 font-extrabold">{approvingItem.stockQuantity} Pcs</strong> untuk produk <strong className="text-slate-900 font-bold">"{approvingItem.productName}"</strong> di cabang <strong className="text-slate-900 font-bold">{approvingItem.branchName || 'Cabang'}</strong> akan resmi diaktifkan di database.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setApprovingItem(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteApprove}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>Ya, Setujui Sekarang</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* UNIVERSAL SUCCESS POP-UP MODAL */}
       <GlobalSuccessModal
         isOpen={Boolean(successModal)}
@@ -2038,6 +2087,7 @@ export default function ProductManagement({
         details={successModal?.details}
         buttonText={successModal?.buttonText || "✓ Selesai & Tutup"}
       />
+
 
       {/* INTERACTIVE CUSTOM ALERT MODAL */}
       <CustomAlertModal
