@@ -16,9 +16,6 @@ export const getStoredUser = () => {
 };
 
 export const loginUser = async (email, password) => {
-  // Simulate network latency
-  await new Promise((resolve) => setTimeout(resolve, 500));
-
   const cleanEmail = (email || '').trim().toLowerCase();
   const cleanPassword = (password || '').trim();
 
@@ -43,7 +40,13 @@ export const loginUser = async (email, password) => {
 };
 
 export const logoutUser = async () => {
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  if (auth) {
+    try {
+      await auth.signOut();
+    } catch (e) {
+      console.warn("Firebase signout warning:", e);
+    }
+  }
   localStorage.removeItem(STORAGE_KEY);
 };
 

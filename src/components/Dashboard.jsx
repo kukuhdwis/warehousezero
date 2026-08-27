@@ -18,6 +18,7 @@ import {
 export default function Dashboard({ 
   currentUser, 
   products = [], 
+  branchInventories = [],
   transactions = [], 
   branches = [], 
   users = [], 
@@ -26,6 +27,12 @@ export default function Dashboard({
 }) {
   const isAdmin = currentUser?.role === 'ADMIN';
   const isStaffPusat = currentUser?.role === 'STAFF_PUSAT' || currentUser?.role === 'PUSAT';
+  const isBranchStaff = currentUser?.role === 'STAFF_BRANCH';
+
+  // Pending branch inventory requests waiting for HQ approval
+  const pendingBranchRequests = isBranchStaff
+    ? branchInventories.filter(bi => bi.branchId === currentUser?.branchId && bi.status === 'PENDING_APPROVAL')
+    : [];
 
   // Metric Calculations
   const totalItemTypes = products.length;
@@ -166,6 +173,38 @@ export default function Dashboard({
         </div>
       </div>
 
+      {/* Branch Staff Empty Inventory Alert Banner */}
+      {isBranchStaff && products.length === 0 && (
+        <div className="bg-amber-50/90 border-2 border-amber-300 p-6 sm:p-8 rounded-2xl text-center space-y-4 shadow-xs">
+          <div className="w-14 h-14 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto">
+            <Boxes className="w-7 h-7" />
+          </div>
+          <div>
+            <h3 className="font-bold text-amber-950 text-base sm:text-lg">
+              Inventaris Gudang Cabang Belum Aktif
+            </h3>
+            <p className="text-xs sm:text-sm text-amber-800 max-w-md mx-auto mt-1">
+              Cabang <strong>{currentUser?.branchName || 'Cabang'}</strong> belum memiliki inventaris produk yang disetujui. Silakan ajukan inventaris produk dari Katalog Master ke Kantor Pusat agar stok cabang dapat disetujui & aktif.
+            </p>
+          </div>
+
+          {pendingBranchRequests.length > 0 ? (
+            <div className="p-3 bg-white/90 border border-amber-300 rounded-xl text-xs text-amber-900 font-semibold inline-flex items-center gap-2">
+              <span>⏳</span>
+              <span>Ada <strong>{pendingBranchRequests.length} pengajuan inventaris</strong> yang sedang menunggu persetujuan Admin Pusat.</span>
+            </div>
+          ) : (
+            <button
+              onClick={() => onNavigate('products')}
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition active:scale-95 cursor-pointer inline-flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Ajukan Inventaris Produk ke Pusat</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         
@@ -240,7 +279,7 @@ export default function Dashboard({
                         <div className="text-xs text-slate-400 font-mono">{prod.sku}</div>
                       </td>
                       <td className="px-4 py-3.5 text-slate-600 text-xs">
-                        {prod.branchName || prod.location || '-'}
+                        {prod.branchName || (isBranchStaff ? currentUser?.branchName : 'Semua Cabang (Pusat)')}
                       </td>
                       <td className="px-4 py-3.5">
                         <span className="font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded-md text-xs">

@@ -22,9 +22,11 @@ import {
   Building2, 
   User, 
   ArrowRight,
-  Send
+  Send,
+  Sliders
 } from 'lucide-react';
 import GlobalSuccessModal from './GlobalSuccessModal';
+import CustomAlertModal from './CustomAlertModal';
 
 export default function ProductManagement({ 
   currentUser,
@@ -32,16 +34,26 @@ export default function ProductManagement({
   branchInventories = [],
   branches = [],
   brands = [],
+  machineCategories = [],
   onCreateProduct, 
   onUpdateProduct, 
   onDeleteProduct, 
   onCreateBrand,
   onDeleteBrand,
+  onCreateMachineCategory,
+  onDeleteMachineCategory,
   onShowBarcode,
   onRequestBranchInventory,
-  onApproveBranchInventory,
-  onRejectBranchInventory
+  onApproveBranchRequest,
+  onRejectBranchRequest,
+  onUpdateBranchInventory
 }) {
+
+  const [alertModal, setAlertModal] = useState(null);
+  const showAlert = (title, message, type = 'WARNING') => {
+    setAlertModal({ title, message, type });
+  };
+
   const isAdmin = currentUser?.role === 'ADMIN';
   const isStaffPusat = currentUser?.role === 'STAFF_PUSAT' || currentUser?.role === 'PUSAT';
   const isBranchStaff = currentUser?.role === 'STAFF_BRANCH';
@@ -58,14 +70,27 @@ export default function ProductManagement({
     isBranchStaff ? 'MY_BRANCH_INVENTORY' : 'MASTER_CATALOG'
   );
 
+  const DEFAULT_MACHINE_CATEGORIES = [
+    'Universal / Semua Mesin',
+    'Mesin Offset',
+    'Mesin Digital Printing',
+    'Mesin Flexography (Flexo)',
+    'Mesin Rotogravure',
+    'Mesin Die Cut & Finishing',
+    'Mesin Laminating & Coating',
+    'Mesin Packaging & Binding'
+  ];
+
   const [searchTerm, setSearchTerm] = useState('');
   const [brandFilter, setBrandFilter] = useState('ALL');
+  const [machineCategoryFilter, setMachineCategoryFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedBranchFilter, setSelectedBranchFilter] = useState('ALL');
 
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBrandManagerOpen, setIsBrandManagerOpen] = useState(false);
+  const [isMachineCategoryManagerOpen, setIsMachineCategoryManagerOpen] = useState(false);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [deleteConfirmProduct, setDeleteConfirmProduct] = useState(null);
@@ -75,28 +100,43 @@ export default function ProductManagement({
 
   // Master Product Form State
   const [formData, setFormData] = useState({
+    sku: '',
     name: '',
     brand: '',
     price: 0,
-    currentStock: 0,
     minStock: 10,
-    unit: 'Pcs'
+    unit: 'Pcs',
+    status: 'ACTIVE',
+    machineCategory: 'Universal / Semua Mesin'
   });
 
-  // Branch Inventory Request Form State
+  // Bulk Branch Inventory Request Modal State (Requirement 5)
+  const [isBulkRequestModalOpen, setIsBulkRequestModalOpen] = useState(false);
+  const [bulkStep, setBulkStep] = useState(1); // 1: Search & Multi-Check, 2: Set Quantities
+  const [bulkSearchTerm, setBulkSearchTerm] = useState('');
+  const [selectedProductIds, setSelectedProductIds] = useState([]);
+  const [bulkRequestItems, setBulkRequestItems] = useState([]);
+  const [bulkRequestError, setBulkRequestError] = useState('');
+
+  // Single Branch Inventory Request Form State
   const [requestFormData, setRequestFormData] = useState({
     productId: '',
-    stockQuantity: 1,
+    stockQuantity: 10,
     minStock: 5,
     notes: ''
   });
 
+
   const [isCreatingNewBrand, setIsCreatingNewBrand] = useState(false);
   const [newBrandInput, setNewBrandInput] = useState('');
+  const [isCreatingNewCategory, setIsCreatingNewCategory] = useState(false);
+  const [newCategoryInput, setNewCategoryInput] = useState('');
   const [newBrandManagerInput, setNewBrandManagerInput] = useState('');
+  const [newCategoryManagerInput, setNewCategoryManagerInput] = useState('');
   const [formError, setFormError] = useState('');
   const [requestError, setRequestError] = useState('');
   const [brandManagerError, setBrandManagerError] = useState('');
+  const [categoryManagerError, setCategoryManagerError] = useState('');
   const [brandManagerSuccess, setBrandManagerSuccess] = useState('');
 
   // Brand Mapping
@@ -117,6 +157,25 @@ export default function ProductManagement({
   const allBrandsList = Array.from(brandMap.values());
   const allBrandNames = allBrandsList.map(b => b.name);
 
+  // Machine Category Mapping
+  const machineCategoryMap = new Map();
+  machineCategories.forEach(mc => {
+    if (mc && mc.name) machineCategoryMap.set(mc.name.toLowerCase(), { id: mc.id || mc.name, name: mc.name });
+  });
+  DEFAULT_MACHINE_CATEGORIES.forEach(name => {
+    const lower = name.toLowerCase();
+    if (!machineCategoryMap.has(lower)) machineCategoryMap.set(lower, { id: `cat-${name}`, name });
+  });
+  products.forEach(p => {
+    const pCat = p.machineCategory || p.kategoriMesin;
+    if (pCat) {
+      const lower = pCat.toLowerCase();
+      if (!machineCategoryMap.has(lower)) machineCategoryMap.set(lower, { id: `cat-${pCat}`, name: pCat });
+    }
+  });
+  const allMachineCategoriesList = Array.from(machineCategoryMap.values());
+  const allMachineCategories = allMachineCategoriesList.map(c => c.name);
+
   // Pending Approvals Count for Admin/Staff Pusat
   const pendingApprovals = branchInventories.filter(bi => bi.status === 'PENDING_APPROVAL');
   const pendingCount = pendingApprovals.length;
@@ -124,12 +183,15 @@ export default function ProductManagement({
   // Filtered Master Products
   const filteredProducts = products.filter(p => {
     const pBrand = p.brand || 'NDK Packaging';
+    const pCategory = p.machineCategory || p.kategoriMesin || 'Universal / Semua Mesin';
     const matchesSearch = 
       (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (p.sku || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pBrand.toLowerCase().includes(searchTerm.toLowerCase());
+      pBrand.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      pCategory.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesBrand = brandFilter === 'ALL' || pBrand === brandFilter;
-    return matchesSearch && matchesBrand;
+    const matchesCategory = machineCategoryFilter === 'ALL' || pCategory === machineCategoryFilter;
+    return matchesSearch && matchesBrand && matchesCategory;
   });
 
   // Filtered Branch Inventories
@@ -146,19 +208,74 @@ export default function ProductManagement({
     return matchesBranch && matchesStatus && matchesSearch;
   });
 
+  // Quick Stock Adjustment Modal State (Opname / Direct Edit Stock)
+  const [adjustingStockItem, setAdjustingStockItem] = useState(null); // { type: 'MASTER' | 'BRANCH', data: item }
+  const [newStockQtyInput, setNewStockQtyInput] = useState(0);
+  const [adjustStockNotes, setAdjustStockNotes] = useState('');
+  const [isSubmittingStockAdjust, setIsSubmittingStockAdjust] = useState(false);
+
+  const handleOpenStockAdjustModal = (item, type = 'MASTER') => {
+    setAdjustingStockItem({ type, data: item });
+    setNewStockQtyInput(type === 'MASTER' ? (item.currentStock ?? 0) : (item.stockQuantity ?? 0));
+    setAdjustStockNotes('Hasil opname / koreksi stok fisik gudang');
+  };
+
+  const handleExecuteStockAdjust = async (e) => {
+    e.preventDefault();
+    if (!adjustingStockItem) return;
+    setIsSubmittingStockAdjust(true);
+    try {
+      const { type, data } = adjustingStockItem;
+      const newQty = Math.max(0, Number(newStockQtyInput));
+
+      if (type === 'MASTER') {
+        await onUpdateProduct(data.id, {
+          ...data,
+          currentStock: newQty
+        });
+        setSuccessModal({
+          title: "Stok Master Produk Berhasil Disesuaikan! 📦",
+          message: `Stok fisik gudang pusat untuk "${data.name}" telah diperbarui dari ${data.currentStock ?? 0} Pcs menjadi ${newQty} Pcs.`,
+          details: [
+            { label: "Produk", value: data.name },
+            { label: "SKU", value: data.sku },
+            { label: "Stok Baru", value: `${newQty} Pcs`, highlight: true }
+          ]
+        });
+      } else if (type === 'BRANCH') {
+        if (onUpdateBranchInventory) {
+          await onUpdateBranchInventory(data.id, {
+            ...data,
+            stockQuantity: newQty
+          });
+        }
+      }
+      setAdjustingStockItem(null);
+    } catch (err) {
+      alert("Gagal memperbarui stok: " + err.message);
+    } finally {
+      setIsSubmittingStockAdjust(false);
+    }
+  };
+
   // Open Master Product Add Modal
   const handleOpenAddModal = () => {
     if (!canManageProducts) return;
     setEditingProduct(null);
     setIsCreatingNewBrand(false);
     setNewBrandInput('');
+    setIsCreatingNewCategory(false);
+    setNewCategoryInput('');
     setFormData({
+      sku: `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
       name: '',
       brand: allBrandNames[0] || 'NDK Packaging',
       price: '',
-      currentStock: '',
       minStock: 10,
-      unit: 'Pcs'
+      currentStock: 0,
+      unit: 'Pcs',
+      status: 'ACTIVE',
+      machineCategory: 'Universal / Semua Mesin'
     });
     setFormError('');
     setIsModalOpen(true);
@@ -170,13 +287,18 @@ export default function ProductManagement({
     setEditingProduct(product);
     setIsCreatingNewBrand(false);
     setNewBrandInput('');
+    setIsCreatingNewCategory(false);
+    setNewCategoryInput('');
     setFormData({
+      sku: product.sku || '',
       name: product.name || '',
       brand: product.brand || allBrandNames[0] || 'NDK Packaging',
       price: product.price ?? 0,
-      currentStock: product.currentStock ?? 0,
       minStock: product.minStock ?? 10,
-      unit: product.unit || 'Pcs'
+      currentStock: product.currentStock ?? 0,
+      unit: product.unit || 'Pcs',
+      status: product.status || 'ACTIVE',
+      machineCategory: product.machineCategory || product.kategoriMesin || 'Universal / Semua Mesin'
     });
     setFormError('');
     setIsModalOpen(true);
@@ -193,6 +315,11 @@ export default function ProductManagement({
       setFormError("Merk / Brand produk wajib diisi.");
       return;
     }
+    let finalCategory = isCreatingNewCategory ? newCategoryInput.trim() : formData.machineCategory.trim();
+    if (!finalCategory) {
+      setFormError("Kategori mesin wajib diisi.");
+      return;
+    }
     if (!formData.name.trim()) {
       setFormError("Nama produk / barang wajib diisi.");
       return;
@@ -207,26 +334,39 @@ export default function ProductManagement({
         }
       }
 
+      if (isCreatingNewCategory && onCreateMachineCategory && newCategoryInput.trim()) {
+        try {
+          await onCreateMachineCategory(finalCategory);
+        } catch (cErr) {
+          console.warn("Category already exists:", cErr);
+        }
+      }
+
       if (editingProduct) {
         await onUpdateProduct(editingProduct.id, {
           ...editingProduct,
+          sku: formData.sku.trim() || editingProduct.sku,
           name: formData.name.trim(),
           brand: finalBrand,
+          machineCategory: finalCategory,
           price: Number(formData.price) || 0,
-          currentStock: Number(formData.currentStock) || 0,
           minStock: Number(formData.minStock) || 0,
-          unit: 'Pcs'
+          currentStock: Number(formData.currentStock) || 0,
+          unit: formData.unit || 'Pcs',
+          status: formData.status || 'ACTIVE'
         });
       } else {
-        const generatedSku = `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
+        const generatedSku = formData.sku.trim() || `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
         await onCreateProduct({
           sku: generatedSku,
           name: formData.name.trim(),
           brand: finalBrand,
+          machineCategory: finalCategory,
           price: Number(formData.price) || 0,
           currentStock: Number(formData.currentStock) || 0,
           minStock: Number(formData.minStock) || 10,
-          unit: 'Pcs'
+          unit: formData.unit || 'Pcs',
+          status: formData.status || 'ACTIVE'
         });
       }
       setIsModalOpen(false);
@@ -234,18 +374,123 @@ export default function ProductManagement({
       setSuccessModal({
         title: editingProduct ? "Master Produk Berhasil Diperbarui!" : "Master Produk Berhasil Dibuat!",
         message: editingProduct 
-          ? "Perubahan data master produk telah berhasil disimpan ke database." 
-          : "Master produk baru telah terdaftar di database dan siap digunakan.",
+          ? "Perubahan data master produk & jumlah stok fisik telah berhasil disimpan ke database." 
+          : "Master produk baru beserta stok fisik awal telah terdaftar di database.",
         details: [
+
           { label: "Nama Produk", value: formData.name.trim() },
           { label: "Merk / Brand", value: finalBrand },
-          { label: "Stok Gudang Pusat", value: `${formData.currentStock || 0} Pcs`, highlight: true }
+          { label: "Status", value: formData.status === 'INACTIVE' ? '🔴 Non-Aktif' : '🟢 Aktif' },
+          { label: "Stok Fisik Awal", value: editingProduct ? `${editingProduct.currentStock || 0} Pcs` : "0 Pcs (Input via Inbound)", highlight: true }
         ]
       });
     } catch (err) {
       setFormError(err.message || "Gagal menyimpan data produk.");
     }
   };
+
+  // Toggle Master Product Active/Inactive Status
+  const handleToggleProductStatus = async (product) => {
+    if (!canManageProducts) return;
+    const nextStatus = product.status === 'INACTIVE' ? 'ACTIVE' : 'INACTIVE';
+    try {
+      await onUpdateProduct(product.id, {
+        ...product,
+        status: nextStatus
+      });
+    } catch (err) {
+      showAlert("Gagal Mengubah Status", err.message, "ERROR");
+    }
+  };
+
+  // Bulk Branch Inventory Request Handlers (Requirement 5)
+  const handleOpenBulkRequestModal = () => {
+    setBulkStep(1);
+    setBulkSearchTerm('');
+    setSelectedProductIds([]);
+    setBulkRequestItems([]);
+    setBulkRequestError('');
+    setIsBulkRequestModalOpen(true);
+  };
+
+  const handleToggleSelectProduct = (productId) => {
+    if (selectedProductIds.includes(productId)) {
+      setSelectedProductIds(selectedProductIds.filter(id => id !== productId));
+    } else {
+      setSelectedProductIds([...selectedProductIds, productId]);
+    }
+  };
+
+  const handleSelectAllProducts = (productList) => {
+    const activeProducts = productList.filter(p => p.status !== 'INACTIVE');
+    if (selectedProductIds.length === activeProducts.length) {
+      setSelectedProductIds([]);
+    } else {
+      setSelectedProductIds(activeProducts.map(p => p.id));
+    }
+  };
+
+  const handleProceedToQtyStep = () => {
+    if (selectedProductIds.length === 0) {
+      setBulkRequestError("Silakan centang minimal 1 produk dari katalog master.");
+      return;
+    }
+    setBulkRequestError('');
+    const items = selectedProductIds.map(id => {
+      const targetP = products.find(p => p.id === id);
+      return {
+        productId: targetP.id,
+        sku: targetP.sku,
+        productName: targetP.name,
+        brand: targetP.brand || 'Generic',
+        price: targetP.price || 0,
+        unit: targetP.unit || 'Pcs',
+        stockQuantity: 10,
+        minStock: targetP.minStock || 5,
+        notes: ''
+      };
+    });
+    setBulkRequestItems(items);
+    setBulkStep(2);
+  };
+
+  const handleSubmitBulkInventoryRequest = async (e) => {
+    e.preventDefault();
+    if (bulkRequestItems.length === 0) return;
+    setBulkRequestError('');
+
+    try {
+      for (const item of bulkRequestItems) {
+        if (onRequestBranchInventory) {
+          await onRequestBranchInventory({
+            productId: item.productId,
+            sku: item.sku,
+            productName: item.productName,
+            brand: item.brand,
+            price: item.price,
+            unit: item.unit || 'Pcs',
+            stockQuantity: Number(item.stockQuantity) || 1,
+            minStock: Number(item.minStock) || 5,
+            notes: item.notes
+          });
+        }
+      }
+      setIsBulkRequestModalOpen(false);
+
+      setSuccessModal({
+        title: "Pengajuan Inventaris Massal Terkirim!",
+        message: `Pengajuan inventaris untuk ${bulkRequestItems.length} produk telah dikirimkan ke Gudang Pusat untuk verifikasi.`,
+        details: [
+          { label: "Jumlah Item", value: `${bulkRequestItems.length} Produk`, highlight: true },
+          { label: "Cabang", value: currentUser?.branchName || 'Cabang' },
+          { label: "Status", value: "⏳ Menunggu Persetujuan Admin" }
+        ]
+      });
+    } catch (err) {
+      setBulkRequestError(err.message || "Gagal mengirim pengajuan inventaris massal.");
+    }
+  };
+
 
   // Open Branch Inventory Request Modal
   const handleOpenRequestModal = () => {
@@ -324,7 +569,7 @@ export default function ProductManagement({
         });
       }
     } catch (err) {
-      alert("Gagal menyetujui: " + err.message);
+      showAlert("Gagal Menyetujui", err.message, "ERROR");
     }
   };
 
@@ -338,9 +583,10 @@ export default function ProductManagement({
       setRejectingItem(null);
       setRejectionReason('');
     } catch (err) {
-      alert("Gagal menolak: " + err.message);
+      showAlert("Gagal Menolak", err.message, "ERROR");
     }
   };
+
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -383,6 +629,14 @@ export default function ProductManagement({
               </button>
 
               <button
+                onClick={() => setIsMachineCategoryManagerOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/80 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                <Settings2 className="w-3.5 h-3.5 text-amber-700" />
+                <span>Kelola Kategori Mesin</span>
+              </button>
+
+              <button
                 onClick={handleOpenAddModal}
                 className="flex items-center gap-1.5 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold shadow-xs transition active:scale-95 cursor-pointer"
               >
@@ -395,13 +649,14 @@ export default function ProductManagement({
           {/* Branch Staff: Request Inventory */}
           {isBranchStaff && (
             <button
-              onClick={handleOpenRequestModal}
+              onClick={handleOpenBulkRequestModal}
               className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition active:scale-95 cursor-pointer"
             >
               <Send className="w-4 h-4" />
-              <span>+ Ajukan Inventaris Produk</span>
+              <span>+ Ajukan Inventaris Produk (Multi-Pick)</span>
             </button>
           )}
+
         </div>
       </div>
 
@@ -491,29 +746,42 @@ export default function ProductManagement({
       {(activeSubTab === 'MASTER_CATALOG' || activeSubTab === 'MASTER_CATALOG_REF') && (
         <div className="space-y-4">
           
-          {/* Search & Brand Filter */}
+          {/* Search & Filters */}
           <div className="flex flex-col sm:flex-row items-center gap-2.5">
             <div className="relative flex-1 w-full">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Cari SKU, nama produk, atau merk..."
+                placeholder="Cari SKU, nama produk, merk, atau kategori mesin..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none"
               />
             </div>
 
-            <select
-              value={brandFilter}
-              onChange={(e) => setBrandFilter(e.target.value)}
-              className="w-full sm:w-48 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-sky-500 focus:outline-none"
-            >
-              <option value="ALL">Semua Merk</option>
-              {allBrandNames.map(bName => (
-                <option key={bName} value={bName}>{bName}</option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <select
+                value={brandFilter}
+                onChange={(e) => setBrandFilter(e.target.value)}
+                className="w-1/2 sm:w-44 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-sky-500 focus:outline-none"
+              >
+                <option value="ALL">Semua Merk</option>
+                {allBrandNames.map(bName => (
+                  <option key={bName} value={bName}>{bName}</option>
+                ))}
+              </select>
+
+              <select
+                value={machineCategoryFilter}
+                onChange={(e) => setMachineCategoryFilter(e.target.value)}
+                className="w-1/2 sm:w-48 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-sky-500 focus:outline-none"
+              >
+                <option value="ALL">Semua Kategori Mesin</option>
+                {allMachineCategories.map(cName => (
+                  <option key={cName} value={cName}>{cName}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Master Product Grid / Table */}
@@ -529,16 +797,17 @@ export default function ProductManagement({
                   <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase border-b border-slate-100">
                     <tr>
                       <th className="px-5 py-3">Produk & Merk</th>
+                      <th className="px-4 py-3">Kategori Mesin</th>
                       <th className="px-4 py-3">SKU Master</th>
                       <th className="px-4 py-3 text-right">Harga Unit</th>
                       <th className="px-4 py-3 text-center">Stok Pusat</th>
-                      <th className="px-4 py-3 text-center">Satuan</th>
+                      <th className="px-4 py-3 text-center">Status</th>
                       <th className="px-5 py-3 text-right">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredProducts.map((prod) => (
-                      <tr key={prod.id} className="hover:bg-slate-50/70 transition">
+                      <tr key={prod.id} className={`hover:bg-slate-50/70 transition ${prod.status === 'INACTIVE' ? 'bg-slate-50/60 opacity-60' : ''}`}>
                         <td className="px-5 py-3.5 font-medium text-slate-900">
                           <div className="flex items-center gap-2">
                             <span>{prod.name}</span>
@@ -546,6 +815,11 @@ export default function ProductManagement({
                               {prod.brand || 'Generic'}
                             </span>
                           </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-slate-600">
+                          <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200/60">
+                            {prod.machineCategory || prod.kategoriMesin || 'Universal'}
+                          </span>
                         </td>
                         <td className="px-4 py-3.5 text-xs font-mono text-slate-500">{prod.sku}</td>
                         <td className="px-4 py-3.5 text-right font-semibold text-slate-800 text-xs">
@@ -556,7 +830,15 @@ export default function ProductManagement({
                             {prod.currentStock || 0} Pcs
                           </span>
                         </td>
-                        <td className="px-4 py-3.5 text-center text-xs text-slate-600">{prod.unit || 'Pcs'}</td>
+                        <td className="px-4 py-3.5 text-center">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                            prod.status === 'INACTIVE'
+                              ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                              : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                          }`}>
+                            {prod.status === 'INACTIVE' ? '🔴 Non-Aktif' : '🟢 Aktif'}
+                          </span>
+                        </td>
                         <td className="px-5 py-3.5 text-right">
                           <div className="flex items-center justify-end gap-1">
                             <button
@@ -569,12 +851,30 @@ export default function ProductManagement({
                             {canManageProducts && (
                               <>
                                 <button
-                                  onClick={() => handleOpenEditModal(prod)}
-                                  className="p-1.5 text-sky-600 hover:text-sky-800 hover:bg-sky-50 rounded-lg transition cursor-pointer"
-                                  title="Ubah Produk Master & Stok"
+                                  onClick={() => handleToggleProductStatus(prod)}
+                                  className={`p-1.5 rounded-lg transition cursor-pointer ${
+                                    prod.status === 'INACTIVE' 
+                                      ? 'text-emerald-600 hover:bg-emerald-50' 
+                                      : 'text-amber-600 hover:bg-amber-50'
+                                  }`}
+                                  title={prod.status === 'INACTIVE' ? 'Aktifkan Produk' : 'Non-aktifkan Produk (Soft Delete)'}
                                 >
-                                  <Edit3 className="w-4 h-4" />
+                                  {prod.status === 'INACTIVE' ? <Check className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
                                 </button>
+                                <button
+                                   onClick={() => handleOpenStockAdjustModal(prod, 'MASTER')}
+                                   className="p-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                                   title="Edit / Opname Stok Direct"
+                                 >
+                                   <Sliders className="w-4 h-4" />
+                                 </button>
+                                 <button
+                                   onClick={() => handleOpenEditModal(prod)}
+                                   className="p-1.5 text-sky-600 hover:text-sky-800 hover:bg-sky-50 rounded-lg transition cursor-pointer"
+                                   title="Ubah Produk Master & Spesifikasi (Termasuk Stok)"
+                                 >
+                                   <Edit3 className="w-4 h-4" />
+                                 </button>
                                 <button
                                   onClick={() => setDeleteConfirmProduct(prod)}
                                   className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition cursor-pointer"
@@ -586,6 +886,7 @@ export default function ProductManagement({
                             )}
                           </div>
                         </td>
+
                       </tr>
                     ))}
                   </tbody>
@@ -807,6 +1108,16 @@ export default function ProductManagement({
                           </td>
 
                           <td className="px-4 py-3.5 text-right">
+                            {isApproved && (
+                              <button
+                                onClick={() => handleOpenStockAdjustModal(inv, 'BRANCH')}
+                                className="p-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition cursor-pointer inline-flex items-center gap-1"
+                                title="Edit / Opname Stok Cabang Direct"
+                              >
+                                <Sliders className="w-4 h-4" />
+                                <span className="text-[11px] font-bold">Edit Stok</span>
+                              </button>
+                            )}
                             {!isBranchStaff && isPending && (
                               <div className="flex items-center justify-end gap-1">
                                 <button
@@ -818,6 +1129,7 @@ export default function ProductManagement({
                               </div>
                             )}
                           </td>
+
                         </tr>
                       );
                     })}
@@ -948,9 +1260,9 @@ export default function ProductManagement({
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-800 text-base">
-                    {editingProduct ? 'Ubah Master Produk Pusat' : 'Tambah Master Produk & Stok Pusat'}
+                    {editingProduct ? 'Ubah Master Produk Pusat' : 'Tambah Master Produk'}
                   </h3>
-                  <p className="text-xs text-slate-400">Master template katalog SKU dan stok fisik resmi Pusat.</p>
+                  <p className="text-xs text-slate-400">Master template katalog SKU dan spesifikasi produk.</p>
                 </div>
               </div>
               <button 
@@ -1024,8 +1336,48 @@ export default function ProductManagement({
                 )}
               </div>
 
-              {/* Price & Stock */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Machine Category Selection */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                    Kategori Mesin *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreatingNewCategory(!isCreatingNewCategory);
+                      setNewCategoryInput('');
+                    }}
+                    className="text-[11px] font-bold text-amber-600 hover:text-amber-700 cursor-pointer"
+                  >
+                    {isCreatingNewCategory ? '← Pilih Kategori Mesin' : '+ Buat Kategori Mesin Baru'}
+                  </button>
+                </div>
+
+                {isCreatingNewCategory ? (
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Mesin Heidelberg Offset GTO..."
+                    value={newCategoryInput}
+                    onChange={(e) => setNewCategoryInput(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-amber-50 border border-amber-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-semibold text-amber-950"
+                  />
+                ) : (
+                  <select
+                    value={formData.machineCategory}
+                    onChange={(e) => setFormData({ ...formData, machineCategory: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  >
+                    {allMachineCategories.map(cName => (
+                      <option key={cName} value={cName}>{cName}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Price, Stock Quantity & Min Stock Threshold */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
                     Harga Master (Rp)
@@ -1041,25 +1393,25 @@ export default function ProductManagement({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                    Stok Fisik di Pusat (Pcs)
+                  <label className="block text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span>Jumlah Stok (Pcs) *</span>
+                    <span className="text-[9px] bg-emerald-100 text-emerald-900 px-1.5 py-0.2 rounded font-extrabold">EDIT STOK</span>
                   </label>
                   <input
                     type="number"
                     min="0"
+                    required
                     placeholder="0"
                     value={formData.currentStock}
-                    onChange={(e) => setFormData({ ...formData, currentStock: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none font-bold text-slate-800"
+                    onChange={(e) => setFormData({ ...formData, currentStock: Math.max(0, Number(e.target.value)) })}
+                    className="w-full px-3.5 py-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none font-extrabold text-emerald-950"
                   />
+                  <p className="text-[10px] text-emerald-700 mt-1">Stok fisik gudang pusat</p>
                 </div>
-              </div>
 
-              {/* Min Stock & Unit */}
-              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                    Batas Minimum Stok
+                    Batas Minimum (Alert)
                   </label>
                   <input
                     type="number"
@@ -1068,20 +1420,33 @@ export default function ProductManagement({
                     onChange={(e) => setFormData({ ...formData, minStock: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                    Satuan Standar
-                  </label>
-                  <input
-                    type="text"
-                    disabled
-                    value="Pcs"
-                    className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-500 font-bold text-center"
-                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Alert stok menipis</p>
                 </div>
               </div>
+
+
+              {/* Unit Standard */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                  Satuan Standar
+                </label>
+                <input
+                  type="text"
+                  disabled
+                  value="Pcs"
+                  className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-500 font-bold text-center"
+                />
+              </div>
+
+              {/* Physical Stock Guidance Notice */}
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-950 flex items-start gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">💡 Pengaturan & Update Stok Fisik Barang:</p>
+                  <p>Anda dapat mengedit jumlah stok fisik secara langsung pada kolom <strong>Jumlah Stok (Pcs)</strong> di atas, atau melalui menu <strong>Inbound (Stok Masuk)</strong> jika memiliki Surat Jalan resmi dari pabrik.</p>
+                </div>
+              </div>
+
 
               <div className="flex justify-end gap-2 pt-2">
                 <button
@@ -1163,6 +1528,102 @@ export default function ProductManagement({
       )}
 
       {/* ========================================================================= */}
+      {/* MODAL 3B: MACHINE CATEGORY MANAGER (ADMIN & STAFF PUSAT)                 */}
+      {/* ========================================================================= */}
+      {canManageProducts && isMachineCategoryManagerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-amber-50/50">
+              <div className="flex items-center gap-2">
+                <Settings2 className="w-5 h-5 text-amber-600" />
+                <div>
+                  <h3 className="font-bold text-slate-800 text-base">Kelola Master Kategori Mesin</h3>
+                  <p className="text-xs text-slate-400">Tambah & hapus master tipe/kategori mesin.</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsMachineCategoryManagerOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-sm">
+              {categoryManagerError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{categoryManagerError}</span>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Ketik kategori mesin baru..."
+                  value={newCategoryManagerInput}
+                  onChange={(e) => setNewCategoryManagerInput(e.target.value)}
+                  className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                />
+                <button
+                  onClick={async () => {
+                    if (!newCategoryManagerInput.trim()) return;
+                    try {
+                      setCategoryManagerError('');
+                      if (onCreateMachineCategory) {
+                        await onCreateMachineCategory(newCategoryManagerInput.trim());
+                      }
+                      setNewCategoryManagerInput('');
+                    } catch (err) {
+                      setCategoryManagerError(err.message || 'Gagal menambah kategori mesin.');
+                    }
+                  }}
+                  className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition cursor-pointer flex-shrink-0"
+                >
+                  Tambah
+                </button>
+              </div>
+
+              <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 pr-1">
+                {allMachineCategoriesList.map(c => {
+                  const mappedCount = products.filter(p => (p.machineCategory || p.kategoriMesin || 'Universal / Semua Mesin').toLowerCase() === c.name.toLowerCase()).length;
+                  return (
+                    <div key={c.id} className="py-2.5 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-800 text-xs">{c.name}</span>
+                        {mappedCount > 0 && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+                            {mappedCount} produk
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!window.confirm(`Hapus kategori mesin "${c.name}"?`)) return;
+                          try {
+                            setCategoryManagerError('');
+                            if (onDeleteMachineCategory) {
+                              await onDeleteMachineCategory(c.id || c.name);
+                            }
+                          } catch (err) {
+                            setCategoryManagerError(err.message || 'Gagal menghapus kategori mesin.');
+                          }
+                        }}
+                        className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
+                        title="Hapus kategori mesin"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* MODAL 4: REJECT CONFIRMATION                                              */}
       {/* ========================================================================= */}
       {rejectingItem && (
@@ -1232,6 +1693,342 @@ export default function ProductManagement({
         </div>
       )}
 
+      {/* ========================================================================= */}
+      {/* MODAL 5: BULK INVENTORY REQUEST MODAL (SEARCH & MULTI-CHECK)              */}
+      {/* ========================================================================= */}
+      {isBulkRequestModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-150 my-8">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-emerald-50/50">
+              <div className="flex items-center gap-2">
+                <Send className="w-5 h-5 text-emerald-600" />
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Ajukan Inventaris Cabang (Multi-Pick)</h3>
+                  <p className="text-xs text-slate-500">Pilih beberapa produk master sekaligus lalu atur kuantitas pengajuan.</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsBulkRequestModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {bulkRequestError && (
+              <div className="mx-6 mt-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 text-rose-500" />
+                <span>{bulkRequestError}</span>
+              </div>
+            )}
+
+            {/* STEP 1: LIVE SEARCH & MULTI-CHECKLIST */}
+            {bulkStep === 1 && (
+              <div className="p-6 space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input 
+                      type="text"
+                      placeholder="Cari nama produk, SKU, merk, atau kategori mesin..."
+                      value={bulkSearchTerm}
+                      onChange={(e) => setBulkSearchTerm(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const filtered = products.filter(p => 
+                        p.status !== 'INACTIVE' &&
+                        ((p.name || '').toLowerCase().includes(bulkSearchTerm.toLowerCase()) ||
+                         (p.sku || '').toLowerCase().includes(bulkSearchTerm.toLowerCase()) ||
+                         (p.brand || '').toLowerCase().includes(bulkSearchTerm.toLowerCase()))
+                      );
+                      handleSelectAllProducts(filtered);
+                    }}
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer whitespace-nowrap"
+                  >
+                    Pilih Semua ({selectedProductIds.length})
+                  </button>
+                </div>
+
+                <div className="max-h-80 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
+                  {products
+                    .filter(p => 
+                      p.status !== 'INACTIVE' &&
+                      ((p.name || '').toLowerCase().includes(bulkSearchTerm.toLowerCase()) ||
+                       (p.sku || '').toLowerCase().includes(bulkSearchTerm.toLowerCase()) ||
+                       (p.brand || '').toLowerCase().includes(bulkSearchTerm.toLowerCase()))
+                    )
+                    .map(prod => {
+                      const isSelected = selectedProductIds.includes(prod.id);
+                      return (
+                        <div 
+                          key={prod.id} 
+                          onClick={() => handleToggleSelectProduct(prod.id)}
+                          className={`p-3.5 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition ${
+                            isSelected ? 'bg-emerald-50/60' : ''
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <input 
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
+                            />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-800 text-xs sm:text-sm">{prod.name}</span>
+                                <span className="px-2 py-0.2 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700">
+                                  {prod.brand || 'Generic'}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 mt-0.5">
+                                SKU: <span className="font-mono">{prod.sku}</span> • Rp {(Number(prod.price) || 0).toLocaleString('id-ID')}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-xs font-semibold text-slate-400">
+                            {isSelected ? '✓ Terpilih' : '+ Pilih'}
+                          </span>
+                        </div>
+                      );
+                    })
+                  }
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                  <span className="text-xs font-bold text-emerald-700">
+                    {selectedProductIds.length} produk dicentang
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsBulkRequestModalOpen(false)}
+                      className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleProceedToQtyStep}
+                      className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1.5"
+                    >
+                      <span>Lanjut ke Pengisian Qty</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 2: REVIEW & SET QUANTITIES */}
+            {bulkStep === 2 && (
+              <form onSubmit={handleSubmitBulkInventoryRequest} className="p-6 space-y-4">
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-center justify-between">
+                  <span>Atur kuantitas fisik stok yang diminta untuk masing-masing item ({bulkRequestItems.length} produk):</span>
+                  <button
+                    type="button"
+                    onClick={() => setBulkStep(1)}
+                    className="text-emerald-700 font-bold underline hover:text-emerald-900 cursor-pointer"
+                  >
+                    ← Kembali Pilih Produk
+                  </button>
+                </div>
+
+                <div className="max-h-80 overflow-y-auto space-y-3 pr-1">
+                  {bulkRequestItems.map((item, idx) => (
+                    <div key={item.productId} className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-slate-800 text-xs sm:text-sm">{item.productName}</span>
+                          <span className="ml-2 text-[11px] font-mono text-slate-500">({item.sku})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = bulkRequestItems.filter((_, i) => i !== idx);
+                            setBulkRequestItems(updated);
+                            setSelectedProductIds(selectedProductIds.filter(id => id !== item.productId));
+                            if (updated.length === 0) setBulkStep(1);
+                          }}
+                          className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
+                          title="Hapus dari pengajuan"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-600 uppercase mb-1">
+                            Qty Diminta (Pcs)
+                          </label>
+                          <input 
+                            type="number"
+                            min="1"
+                            value={item.stockQuantity}
+                            onChange={(e) => {
+                              const updated = [...bulkRequestItems];
+                              updated[idx].stockQuantity = e.target.value;
+                              setBulkRequestItems(updated);
+                            }}
+                            className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-extrabold text-emerald-700 focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-600 uppercase mb-1">
+                            Min Stock Alert
+                          </label>
+                          <input 
+                            type="number"
+                            min="1"
+                            value={item.minStock}
+                            onChange={(e) => {
+                              const updated = [...bulkRequestItems];
+                              updated[idx].minStock = e.target.value;
+                              setBulkRequestItems(updated);
+                            }}
+                            className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <div className="col-span-2 sm:col-span-1">
+                          <label className="block text-[10px] font-semibold text-slate-600 uppercase mb-1">
+                            Catatan / Alasan
+                          </label>
+                          <input 
+                            type="text"
+                            placeholder="Contoh: Stok etalase habis"
+                            value={item.notes}
+                            onChange={(e) => {
+                              const updated = [...bulkRequestItems];
+                              updated[idx].notes = e.target.value;
+                              setBulkRequestItems(updated);
+                            }}
+                            className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsBulkRequestModalOpen(false)}
+                    className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Kirim Pengajuan ({bulkRequestItems.length} Produk)</span>
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: QUICK STOCK ADJUSTMENT (OPNAME / DIRECT EDIT STOK)                 */}
+      {/* ========================================================================= */}
+      {adjustingStockItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-150">
+            
+            {/* Header */}
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-emerald-50/70">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-xs">
+                  <Sliders className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-emerald-950 text-base">Edit / Opname Stok Direct</h3>
+                  <p className="text-xs text-emerald-800">Ubah jumlah stok fisik secara langsung.</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setAdjustingStockItem(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleExecuteStockAdjust} className="p-6 space-y-4 text-sm">
+              
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Detail Produk</span>
+                <h4 className="font-bold text-slate-900 text-sm">{adjustingStockItem.data.name || adjustingStockItem.data.productName}</h4>
+                <p className="text-xs text-slate-500 font-mono">
+                  SKU: {adjustingStockItem.data.sku} | Brand: {adjustingStockItem.data.brand || 'Generic'}
+                </p>
+                <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  {adjustingStockItem.type === 'MASTER' ? 'Gudang Utama Pusat' : `Cabang: ${adjustingStockItem.data.branchName || 'Cabang'}`}
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Jumlah Stok Fisik Baru (Pcs) *
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  required
+                  value={newStockQtyInput}
+                  onChange={(e) => setNewStockQtyInput(e.target.value)}
+                  className="w-full px-4 py-3 bg-emerald-50 border-2 border-emerald-400 rounded-xl text-center text-xl font-extrabold text-emerald-950 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+                <p className="text-xs text-slate-500 mt-1 text-center">
+                  Stok Sebelumnya: <strong className="text-slate-800">{adjustingStockItem.type === 'MASTER' ? (adjustingStockItem.data.currentStock ?? 0) : (adjustingStockItem.data.stockQuantity ?? 0)} Pcs</strong>
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                  Alasan / Catatan Penyesuaian
+                </label>
+                <input
+                  type="text"
+                  placeholder="Misal: Opname bulanan, barang rusak, koreksi selisih"
+                  value={adjustStockNotes}
+                  onChange={(e) => setAdjustStockNotes(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setAdjustingStockItem(null)}
+                  className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingStockAdjust}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1.5"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Simpan Perubahan Stok</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* UNIVERSAL SUCCESS POP-UP MODAL */}
       <GlobalSuccessModal
         isOpen={Boolean(successModal)}
@@ -1242,6 +2039,18 @@ export default function ProductManagement({
         buttonText={successModal?.buttonText || "✓ Selesai & Tutup"}
       />
 
+      {/* INTERACTIVE CUSTOM ALERT MODAL */}
+      <CustomAlertModal
+        isOpen={Boolean(alertModal)}
+        onClose={() => setAlertModal(null)}
+        title={alertModal?.title}
+        message={alertModal?.message}
+        type={alertModal?.type}
+      />
+
     </div>
   );
 }
+
+
+

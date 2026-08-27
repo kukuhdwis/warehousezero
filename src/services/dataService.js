@@ -2,37 +2,72 @@ import { db, isFirebaseConfigured } from "./firebase";
 import { 
   collection, 
   getDocs, 
+  getDoc,
+  setDoc,
   addDoc, 
   updateDoc, 
   deleteDoc, 
   doc, 
   query, 
   orderBy, 
+  limit,
   serverTimestamp,
   increment,
   where 
 } from "firebase/firestore";
 
-// Clean Storage Keys
-const PRODUCTS_KEY = "wms_products";
-const TRANSACTIONS_KEY = "wms_transactions";
-const BRANCHES_KEY = "wms_branches";
-const USERS_KEY = "wms_users_list";
-const BRANDS_KEY = "wms_brands";
-const BRANCH_INVENTORIES_KEY = "wms_branch_inventories";
-const NOTIFICATIONS_KEY = "wms_notifications";
-const TRANSFERS_KEY = "wms_stock_transfers";
-const STOCK_REQUESTS_KEY = "wms_stock_requests";
-const DUMMY_CLEANED_FLAG = "wms_dummy_cleaned_v2";
+// Helper to throw explicit error if Firebase is not active
+const ensureFirebase = () => {
+  if (!isFirebaseConfigured() || !db) {
+    throw new Error("Koneksi Firebase Firestore belum terkonfigurasi. Silakan periksa file .env.");
+  }
+};
+
+// Helper to check if initial database bootstrapping has already been executed
+const isBootstrapInitialized = async () => {
+  try {
+    const metaRef = doc(db, "system_metadata", "bootstrap");
+    const metaSnap = await getDoc(metaRef);
+    return metaSnap.exists() && metaSnap.data()?.initialized === true;
+  } catch (e) {
+    return false;
+  }
+};
+
+// Helper to mark system bootstrapping as completed
+const markBootstrapDone = async () => {
+  try {
+    const metaRef = doc(db, "system_metadata", "bootstrap");
+    await setDoc(metaRef, { 
+      initialized: true, 
+      bootstrappedAt: serverTimestamp() 
+    }, { merge: true });
+  } catch (e) {
+    console.warn("Gagal mencatat status bootstrap:", e);
+  }
+};
+
+// ==========================================
+// DEFAULT SEED DATA FOR INITIAL BOOTSTRAP ONLY
+// ==========================================
 
 export const DEFAULT_BRANDS = [
-  { id: "brand-1", name: "NDK Packaging", createdAt: new Date().toISOString() },
-  { id: "brand-2", name: "Generic / Polos", createdAt: new Date().toISOString() }
+  { name: "NDK Packaging", createdAt: new Date().toISOString() },
+  { name: "Generic / Polos", createdAt: new Date().toISOString() }
 ];
 
-// Default Root Administrator (Only for initial bootstrap if user database is empty)
+export const DEFAULT_MACHINE_CATEGORIES = [
+  { name: "Universal / Semua Mesin", createdAt: new Date().toISOString() },
+  { name: "Mesin Offset", createdAt: new Date().toISOString() },
+  { name: "Mesin Digital Printing", createdAt: new Date().toISOString() },
+  { name: "Mesin Flexography (Flexo)", createdAt: new Date().toISOString() },
+  { name: "Mesin Rotogravure", createdAt: new Date().toISOString() },
+  { name: "Mesin Die Cut & Finishing", createdAt: new Date().toISOString() },
+  { name: "Mesin Laminating & Coating", createdAt: new Date().toISOString() },
+  { name: "Mesin Packaging & Binding", createdAt: new Date().toISOString() }
+];
+
 export const DEFAULT_ROOT_ADMIN = {
-  id: "usr-root-admin",
   name: "Administrator (Pusat)",
   email: "admin@perusahaan.com",
   password: "admin",
@@ -44,210 +79,108 @@ export const DEFAULT_ROOT_ADMIN = {
   createdAt: new Date().toISOString()
 };
 
-// Default Staff Gudang Pusat (Bisa monitor semua cabang, Inbound & Outbound, tanpa kelola user)
 export const DEFAULT_STAFF_PUSAT = {
-  id: "usr-staff-pusat",
   name: "Staff Gudang Pusat",
   email: "staffpusat@perusahaan.com",
   password: "staff",
   role: "STAFF_PUSAT",
-  branchId: "ALL",
-  branchName: "Semua Cabang (Pusat)",
+  branchId: "branch-pusat-hq",
+  branchName: "Gudang Utama Pusat",
   phone: "0812-3456-7890",
   status: "ACTIVE",
   createdAt: new Date().toISOString()
 };
 
-export const INITIAL_DEFAULT_USERS = [DEFAULT_ROOT_ADMIN, DEFAULT_STAFF_PUSAT];
+export const DEFAULT_STAFF_JAKARTA = {
+  name: "Staff Cabang Jakarta",
+  email: "jakarta@perusahaan.com",
+  password: "staff",
+  role: "STAFF_BRANCH",
+  branchId: "branch-jakarta-1",
+  branchName: "Gudang Cabang Jakarta",
+  phone: "0812-9999-8888",
+  status: "ACTIVE",
+  createdAt: new Date().toISOString()
+};
 
-// Automatic cleanup of legacy dummy data from previous sessions
-const cleanupLegacyDummyData = () => {
-  if (!localStorage.getItem(DUMMY_CLEANED_FLAG)) {
-    localStorage.removeItem(PRODUCTS_KEY);
-    localStorage.removeItem(TRANSACTIONS_KEY);
-    localStorage.removeItem(BRANCHES_KEY);
-    localStorage.removeItem(USERS_KEY);
-    localStorage.setItem(DUMMY_CLEANED_FLAG, "true");
+export const INITIAL_DEFAULT_USERS = [DEFAULT_ROOT_ADMIN, DEFAULT_STAFF_PUSAT, DEFAULT_STAFF_JAKARTA];
+
+// Single Protected Gudang Utama Pusat
+export const DEFAULT_GUDANG_PUSAT = {
+  name: "Gudang Utama Pusat",
+  code: "GUDANG-PUSAT",
+  address: "Jl. Raya Utama Pusat No. 1, Jakarta Pusat",
+  managerName: "Staff Gudang Pusat",
+  pic: "Staff Gudang Pusat",
+  phone: "0811-0000-0000",
+  status: "ACTIVE",
+  isPusat: true,
+  isProtected: true,
+  createdAt: new Date().toISOString()
+};
+
+export const DEFAULT_INITIAL_BRANCHES = [
+  DEFAULT_GUDANG_PUSAT,
+  {
+    name: "Gudang Cabang Jakarta",
+    code: "BR-JKT",
+    address: "Jl. Sudirman No. 10, Jakarta Pusat",
+    managerName: "Budi Santoso",
+    pic: "Budi Santoso",
+    phone: "0812-1111-2222",
+    status: "ACTIVE",
+    isPusat: false,
+    createdAt: new Date().toISOString()
+  },
+  {
+    name: "Gudang Cabang Surabaya",
+    code: "BR-SBY",
+    address: "Jl. Pemuda No. 45, Surabaya",
+    managerName: "Siti Rahma",
+    pic: "Siti Rahma",
+    phone: "0813-3333-4444",
+    status: "ACTIVE",
+    isPusat: false,
+    createdAt: new Date().toISOString()
   }
-
-  // Purge any temporary dummy branch if it got cached
-  try {
-    const data = localStorage.getItem(BRANCHES_KEY);
-    if (data) {
-      const branches = JSON.parse(data);
-      const cleaned = branches.filter(b => b.id !== "branch-utama-1" && b.name !== "Gudang Utama Jakarta");
-      if (cleaned.length !== branches.length) {
-        localStorage.setItem(BRANCHES_KEY, JSON.stringify(cleaned));
-      }
-    }
-  } catch (e) {
-    // Ignore JSON parse errors
-  }
-};
-
-// Run cleanup immediately on load
-cleanupLegacyDummyData();
-
-// Helper to get local data safely
-const getLocalProducts = () => {
-  try {
-    const data = localStorage.getItem(PRODUCTS_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch (e) {
-    return [];
-  }
-};
-
-const saveLocalProducts = (products) => {
-  localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
-};
-
-const getLocalTransactions = () => {
-  try {
-    const data = localStorage.getItem(TRANSACTIONS_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch (e) {
-    return [];
-  }
-};
-
-const saveLocalTransactions = (transactions) => {
-  localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
-};
-
-const getLocalBranches = () => {
-  try {
-    const data = localStorage.getItem(BRANCHES_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch (e) {
-    return [];
-  }
-};
-
-const saveLocalBranches = (branches) => {
-  localStorage.setItem(BRANCHES_KEY, JSON.stringify(branches));
-};
-
-const getLocalBrands = () => {
-  try {
-    const data = localStorage.getItem(BRANDS_KEY);
-    if (!data) {
-      localStorage.setItem(BRANDS_KEY, JSON.stringify(DEFAULT_BRANDS));
-      return DEFAULT_BRANDS;
-    }
-    const parsed = JSON.parse(data);
-    return parsed.length > 0 ? parsed : DEFAULT_BRANDS;
-  } catch (e) {
-    return DEFAULT_BRANDS;
-  }
-};
-
-const saveLocalBrands = (brands) => {
-  localStorage.setItem(BRANDS_KEY, JSON.stringify(brands));
-};
-
-const getLocalUsers = () => {
-  try {
-    const data = localStorage.getItem(USERS_KEY);
-    if (!data) {
-      localStorage.setItem(USERS_KEY, JSON.stringify(INITIAL_DEFAULT_USERS));
-      return INITIAL_DEFAULT_USERS;
-    }
-    const parsed = JSON.parse(data);
-    if (parsed.length > 0) {
-      const hasStaffPusat = parsed.some(u => (u.email || '').toLowerCase() === 'staffpusat@perusahaan.com');
-      if (!hasStaffPusat) {
-        parsed.push(DEFAULT_STAFF_PUSAT);
-        localStorage.setItem(USERS_KEY, JSON.stringify(parsed));
-      }
-      return parsed;
-    }
-    return INITIAL_DEFAULT_USERS;
-  } catch (e) {
-    return INITIAL_DEFAULT_USERS;
-  }
-};
-
-const saveLocalUsers = (users) => {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-};
-
-const getLocalBranchInventories = () => {
-  try {
-    const data = localStorage.getItem(BRANCH_INVENTORIES_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch (e) {
-    return [];
-  }
-};
-
-const saveLocalBranchInventories = (inventories) => {
-  localStorage.setItem(BRANCH_INVENTORIES_KEY, JSON.stringify(inventories));
-};
-
-const getLocalNotifications = () => {
-  try {
-    const data = localStorage.getItem(NOTIFICATIONS_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch (e) {
-    return [];
-  }
-};
-
-const saveLocalNotifications = (notifications) => {
-  localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
-};
-
-const getLocalTransfers = () => {
-  try {
-    const data = localStorage.getItem(TRANSFERS_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch (e) {
-    return [];
-  }
-};
-
-const getLocalStockRequests = () => {
-  try {
-    const data = localStorage.getItem(STOCK_REQUESTS_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch (e) {
-    return [];
-  }
-};
-
-const saveLocalStockRequests = (requests) => {
-  localStorage.setItem(STOCK_REQUESTS_KEY, JSON.stringify(requests));
-};
-
-const saveLocalTransfers = (transfers) => {
-  localStorage.setItem(TRANSFERS_KEY, JSON.stringify(transfers));
-};
+];
 
 // ==========================================
-// BRAND / MERK SERVICES (REAL DATA)
+// BRAND / MERK SERVICES (FIRESTORE)
 // ==========================================
 
 export const fetchBrands = async () => {
-  if (isFirebaseConfigured() && db) {
-    try {
-      const q = query(collection(db, "brands"), orderBy("name", "asc"));
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const firestoreBrands = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-        saveLocalBrands(firestoreBrands);
-        return firestoreBrands;
-      }
-      return getLocalBrands();
-    } catch (err) {
-      console.warn("Firestore error, reading local brands:", err);
-      return getLocalBrands();
+  ensureFirebase();
+  try {
+    const q = query(collection(db, "brands"), orderBy("name", "asc"));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
     }
+    
+    const isDone = await isBootstrapInitialized();
+    if (isDone) {
+      return [];
+    }
+
+    const seededBrands = [];
+    for (const b of DEFAULT_BRANDS) {
+      const docRef = await addDoc(collection(db, "brands"), {
+        ...b,
+        createdAt: serverTimestamp()
+      });
+      seededBrands.push({ id: docRef.id, ...b });
+    }
+    await markBootstrapDone();
+    return seededBrands;
+  } catch (err) {
+    console.error("Firestore error fetching brands:", err);
+    throw new Error(`Gagal mengambil data Brand dari Firestore: ${err.message}`);
   }
-  return getLocalBrands();
 };
 
 export const createBrand = async (brandData) => {
+  ensureFirebase();
   const brandName = (typeof brandData === 'string' ? brandData : brandData.name || '').trim();
   if (!brandName) throw new Error("Nama merk tidak boleh kosong.");
 
@@ -256,81 +189,138 @@ export const createBrand = async (brandData) => {
     createdAt: new Date().toISOString()
   };
 
-  let assignedId = `brand-${Date.now()}`;
-
-  if (isFirebaseConfigured() && db) {
-    try {
-      const docRef = await addDoc(collection(db, "brands"), {
-        ...newBrand,
-        createdAt: serverTimestamp()
-      });
-      assignedId = docRef.id;
-    } catch (err) {
-      console.warn("Firestore error creating brand:", err);
-    }
+  try {
+    const docRef = await addDoc(collection(db, "brands"), {
+      ...newBrand,
+      createdAt: serverTimestamp()
+    });
+    await markBootstrapDone();
+    return { id: docRef.id, ...newBrand };
+  } catch (err) {
+    console.error("Firestore error creating brand:", err);
+    throw new Error(`Gagal menambah Brand ke Firestore: ${err.message}`);
   }
-
-  const brands = getLocalBrands();
-  const existing = brands.find(b => b.name.toLowerCase() === brandName.toLowerCase());
-  if (existing) return existing;
-
-  const created = { id: assignedId, ...newBrand };
-  brands.push(created);
-  saveLocalBrands(brands);
-  return created;
 };
 
 export const deleteBrand = async (brandIdOrName) => {
+  ensureFirebase();
   if (!brandIdOrName) return false;
 
-  if (isFirebaseConfigured() && db) {
-    try {
-      const brandsSnapshot = await getDocs(collection(db, "brands"));
-      for (const docSnap of brandsSnapshot.docs) {
-        if (docSnap.id === brandIdOrName || docSnap.data().name?.toLowerCase() === brandIdOrName.toLowerCase()) {
-          await deleteDoc(doc(db, "brands", docSnap.id));
-        }
+  try {
+    const brandsSnapshot = await getDocs(collection(db, "brands"));
+    for (const docSnap of brandsSnapshot.docs) {
+      if (docSnap.id === brandIdOrName || docSnap.data().name?.toLowerCase() === brandIdOrName.toLowerCase()) {
+        await deleteDoc(doc(db, "brands", docSnap.id));
       }
-    } catch (err) {
-      console.warn("Firestore error deleting brand:", err);
     }
+    await markBootstrapDone();
+    return true;
+  } catch (err) {
+    console.error("Firestore error deleting brand:", err);
+    throw new Error(`Gagal menghapus Brand dari Firestore: ${err.message}`);
   }
-
-  const brands = getLocalBrands();
-  const filtered = brands.filter(b => b.id !== brandIdOrName && b.name?.toLowerCase() !== brandIdOrName.toLowerCase());
-  saveLocalBrands(filtered);
-  return true;
 };
 
 // ==========================================
-// PRODUCT SERVICES (REAL MASTER CATALOG DATA)
+// MACHINE CATEGORY SERVICES (FIRESTORE)
+// ==========================================
+
+export const fetchMachineCategories = async () => {
+  ensureFirebase();
+  try {
+    const q = query(collection(db, "machine_categories"), orderBy("name", "asc"));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    }
+    
+    const isDone = await isBootstrapInitialized();
+    if (isDone) {
+      return [];
+    }
+
+    const seededCategories = [];
+    for (const c of DEFAULT_MACHINE_CATEGORIES) {
+      const docRef = await addDoc(collection(db, "machine_categories"), {
+        ...c,
+        createdAt: serverTimestamp()
+      });
+      seededCategories.push({ id: docRef.id, ...c });
+    }
+    await markBootstrapDone();
+    return seededCategories;
+  } catch (err) {
+    console.error("Firestore error fetching machine categories:", err);
+    throw new Error(`Gagal mengambil data Kategori Mesin dari Firestore: ${err.message}`);
+  }
+};
+
+export const createMachineCategory = async (catData) => {
+  ensureFirebase();
+  const catName = (typeof catData === 'string' ? catData : catData.name || '').trim();
+  if (!catName) throw new Error("Nama kategori mesin tidak boleh kosong.");
+
+  const newCat = {
+    name: catName,
+    createdAt: new Date().toISOString()
+  };
+
+  try {
+    const docRef = await addDoc(collection(db, "machine_categories"), {
+      ...newCat,
+      createdAt: serverTimestamp()
+    });
+    await markBootstrapDone();
+    return { id: docRef.id, ...newCat };
+  } catch (err) {
+    console.error("Firestore error creating machine category:", err);
+    throw new Error(`Gagal menambah Kategori Mesin ke Firestore: ${err.message}`);
+  }
+};
+
+export const deleteMachineCategory = async (catIdOrName) => {
+  ensureFirebase();
+  if (!catIdOrName) return false;
+
+  try {
+    const snapshot = await getDocs(collection(db, "machine_categories"));
+    for (const docSnap of snapshot.docs) {
+      if (docSnap.id === catIdOrName || docSnap.data().name?.toLowerCase() === catIdOrName.toLowerCase()) {
+        await deleteDoc(doc(db, "machine_categories", docSnap.id));
+      }
+    }
+    await markBootstrapDone();
+    return true;
+  } catch (err) {
+    console.error("Firestore error deleting machine category:", err);
+    throw new Error(`Gagal menghapus Kategori Mesin dari Firestore: ${err.message}`);
+  }
+};
+
+// ==========================================
+// PRODUCT SERVICES (FIRESTORE)
 // ==========================================
 
 export const fetchProducts = async () => {
-  if (isFirebaseConfigured() && db) {
-    try {
-      const q = query(collection(db, "products"), orderBy("name", "asc"));
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const firestoreProds = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-        saveLocalProducts(firestoreProds);
-        return firestoreProds;
-      }
-      return getLocalProducts();
-    } catch (err) {
-      console.warn("Firestore error, reading local database:", err);
-      return getLocalProducts();
-    }
+  ensureFirebase();
+  try {
+    const q = query(collection(db, "products"), orderBy("name", "asc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+  } catch (err) {
+    console.error("Firestore error fetching products:", err);
+    throw new Error(`Gagal mengambil data Produk dari Firestore: ${err.message}`);
   }
-  return getLocalProducts();
 };
 
 export const createProduct = async (productData) => {
+  ensureFirebase();
   const newProd = {
     ...productData,
     price: Number(productData.price) || 0,
     minStock: Number(productData.minStock) || 0,
     currentStock: Number(productData.currentStock) || 0,
+    machineCategory: productData.machineCategory || productData.kategoriMesin || 'Universal / Semua Mesin',
     barcode: productData.barcode || productData.sku,
     unit: 'Pcs',
     branchId: 'ALL',
@@ -338,96 +328,71 @@ export const createProduct = async (productData) => {
     updatedAt: new Date().toISOString()
   };
 
-  let assignedId = `prod-${Date.now()}`;
-
-  if (isFirebaseConfigured() && db) {
-    try {
-      const docRef = await addDoc(collection(db, "products"), {
-        ...newProd,
-        createdAt: serverTimestamp()
-      });
-      assignedId = docRef.id;
-    } catch (err) {
-      console.warn("Firestore error creating product:", err);
-    }
+  try {
+    const docRef = await addDoc(collection(db, "products"), {
+      ...newProd,
+      createdAt: serverTimestamp()
+    });
+    return { id: docRef.id, ...newProd };
+  } catch (err) {
+    console.error("Firestore error creating product:", err);
+    throw new Error(`Gagal membuat Produk baru di Firestore: ${err.message}`);
   }
-
-  const products = getLocalProducts();
-  const created = { id: assignedId, ...newProd };
-  products.unshift(created);
-  saveLocalProducts(products);
-  return created;
 };
 
 export const updateProduct = async (id, productData) => {
+  ensureFirebase();
   const updatedData = {
     ...productData,
     price: Number(productData.price) || 0,
     minStock: Number(productData.minStock) || 0,
     currentStock: Number(productData.currentStock) || 0,
+    machineCategory: productData.machineCategory || productData.kategoriMesin || 'Universal / Semua Mesin',
     updatedAt: new Date().toISOString()
   };
 
-  if (isFirebaseConfigured() && db) {
-    try {
-      const docRef = doc(db, "products", id);
-      await updateDoc(docRef, updatedData);
-    } catch (err) {
-      console.warn("Firestore error updating product:", err);
-    }
+  try {
+    const docRef = doc(db, "products", id);
+    await updateDoc(docRef, updatedData);
+    return { id, ...updatedData };
+  } catch (err) {
+    console.error("Firestore error updating product:", err);
+    throw new Error(`Gagal memperbarui Produk di Firestore: ${err.message}`);
   }
-
-  const products = getLocalProducts();
-  const idx = products.findIndex(p => p.id === id);
-  if (idx !== -1) {
-    products[idx] = { ...products[idx], ...updatedData };
-    saveLocalProducts(products);
-  }
-  return { id, ...updatedData };
 };
 
 export const deleteProduct = async (id) => {
-  if (isFirebaseConfigured() && db) {
-    try {
-      await deleteDoc(doc(db, "products", id));
-    } catch (err) {
-      console.warn("Firestore error deleting product:", err);
-    }
+  ensureFirebase();
+  try {
+    await deleteDoc(doc(db, "products", id));
+    return true;
+  } catch (err) {
+    console.error("Firestore error deleting product:", err);
+    throw new Error(`Gagal menghapus Produk dari Firestore: ${err.message}`);
   }
-  const products = getLocalProducts().filter(p => p.id !== id);
-  saveLocalProducts(products);
 };
 
 // ==========================================
-// BRANCH INVENTORIES & APPROVAL FLOW
+// BRANCH INVENTORIES (FIRESTORE)
 // ==========================================
 
 export const fetchBranchInventories = async (branchId = null) => {
-  if (isFirebaseConfigured() && db) {
-    try {
-      let q = collection(db, "branch_inventories");
-      if (branchId && branchId !== 'ALL') {
-        q = query(collection(db, "branch_inventories"), where("branchId", "==", branchId));
-      }
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const firestoreList = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-        saveLocalBranchInventories(firestoreList);
-        return firestoreList;
-      }
-      const local = getLocalBranchInventories();
-      return (branchId && branchId !== 'ALL') ? local.filter(b => b.branchId === branchId) : local;
-    } catch (err) {
-      console.warn("Firestore error fetching branch inventories:", err);
-      const local = getLocalBranchInventories();
-      return (branchId && branchId !== 'ALL') ? local.filter(b => b.branchId === branchId) : local;
+  ensureFirebase();
+  try {
+    let q = collection(db, "branch_inventories");
+    if (branchId && branchId !== 'ALL') {
+      q = query(collection(db, "branch_inventories"), where("branchId", "==", branchId));
     }
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+  } catch (err) {
+    console.error("Firestore error fetching branch inventories:", err);
+    throw new Error(`Gagal mengambil data Inventaris Cabang dari Firestore: ${err.message}`);
   }
-  const local = getLocalBranchInventories();
-  return (branchId && branchId !== 'ALL') ? local.filter(b => b.branchId === branchId) : local;
 };
 
 export const requestBranchInventory = async (data, currentUser) => {
+  ensureFirebase();
   const newInventoryRequest = {
     branchId: currentUser?.branchId || data.branchId,
     branchName: currentUser?.branchName || data.branchName || 'Cabang',
@@ -439,88 +404,65 @@ export const requestBranchInventory = async (data, currentUser) => {
     price: Number(data.price) || 0,
     minStock: Number(data.minStock) || 5,
     stockQuantity: Number(data.stockQuantity || data.currentStock) || 0,
-    status: 'PENDING_APPROVAL', // 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED'
+    status: 'PENDING_APPROVAL',
     requestedBy: currentUser?.name || currentUser?.email || 'Staff Cabang',
     requestedAt: new Date().toISOString()
   };
 
-  let assignedId = `binv-${Date.now()}`;
+  try {
+    const docRef = await addDoc(collection(db, "branch_inventories"), {
+      ...newInventoryRequest,
+      createdAt: serverTimestamp()
+    });
+    const created = { id: docRef.id, ...newInventoryRequest };
 
-  if (isFirebaseConfigured() && db) {
-    try {
-      const docRef = await addDoc(collection(db, "branch_inventories"), {
-        ...newInventoryRequest,
-        createdAt: serverTimestamp()
-      });
-      assignedId = docRef.id;
-    } catch (err) {
-      console.warn("Firestore error creating branch inventory request:", err);
-    }
+    await createNotification({
+      type: 'INVENTORY_REQUEST',
+      title: 'Pengajuan Inventaris Cabang Baru',
+      message: `${newInventoryRequest.branchName} mengajukan inventaris produk "${newInventoryRequest.productName}" sebanyak ${newInventoryRequest.stockQuantity} Pcs.`,
+      targetRole: 'ADMIN_AND_PUSAT',
+      metaId: docRef.id,
+      branchId: newInventoryRequest.branchId,
+      branchName: newInventoryRequest.branchName
+    });
+
+    return created;
+  } catch (err) {
+    console.error("Firestore error creating branch inventory request:", err);
+    throw new Error(`Gagal mengajukan inventaris ke Firestore: ${err.message}`);
   }
-
-  const list = getLocalBranchInventories();
-  const created = { id: assignedId, ...newInventoryRequest };
-  list.unshift(created);
-  saveLocalBranchInventories(list);
-
-  // Trigger Notification to Admin & Staff Pusat
-  await createNotification({
-    type: 'INVENTORY_REQUEST',
-    title: 'Pengajuan Inventaris Cabang Baru',
-    message: `${newInventoryRequest.branchName} mengajukan inventaris produk "${newInventoryRequest.productName}" sebanyak ${newInventoryRequest.stockQuantity} Pcs.`,
-    targetRole: 'ADMIN_AND_PUSAT',
-    metaId: assignedId,
-    branchId: newInventoryRequest.branchId,
-    branchName: newInventoryRequest.branchName
-  });
-
-  return created;
 };
 
 export const approveBranchInventory = async (id, adminUser) => {
+  ensureFirebase();
   const approvalData = {
     status: 'APPROVED',
     approvedBy: adminUser?.name || 'Administrator Pusat',
     approvedAt: new Date().toISOString()
   };
 
-  if (isFirebaseConfigured() && db) {
-    try {
-      const docRef = doc(db, "branch_inventories", id);
-      await updateDoc(docRef, approvalData);
-    } catch (err) {
-      console.warn("Firestore error approving inventory:", err);
-    }
+  try {
+    const docRef = doc(db, "branch_inventories", id);
+    await updateDoc(docRef, approvalData);
+
+    await createNotification({
+      type: 'INVENTORY_APPROVED',
+      title: 'Pengajuan Inventaris Disetujui! ✅',
+      message: `Pengajuan inventaris untuk cabang telah DISETUJUI oleh Kantor Pusat.`,
+      targetRole: 'STAFF_BRANCH',
+      targetBranchId: 'ALL',
+      metaId: id
+    });
+
+    return { id, ...approvalData };
+  } catch (err) {
+    console.error("Firestore error approving inventory:", err);
+    throw new Error(`Gagal menyetujui inventaris di Firestore: ${err.message}`);
   }
-
-  const list = getLocalBranchInventories();
-  const idx = list.findIndex(item => item.id === id);
-  let targetBranchId = 'ALL';
-  let targetBranchName = 'Cabang';
-  let productName = 'Produk';
-
-  if (idx !== -1) {
-    list[idx] = { ...list[idx], ...approvalData };
-    targetBranchId = list[idx].branchId;
-    targetBranchName = list[idx].branchName;
-    productName = list[idx].productName;
-    saveLocalBranchInventories(list);
-  }
-
-  // Send Notification to Branch Staff
-  await createNotification({
-    type: 'INVENTORY_APPROVED',
-    title: 'Pengajuan Inventaris Disetujui! ✅',
-    message: `Pengajuan inventaris produk "${productName}" untuk ${targetBranchName} telah DISETUJUI oleh Kantor Pusat. Stok kini aktif untuk penjualan.`,
-    targetRole: 'STAFF_BRANCH',
-    targetBranchId: targetBranchId,
-    metaId: id
-  });
-
-  return { id, ...approvalData };
 };
 
 export const rejectBranchInventory = async (id, adminUser, reason = 'Kuantitas atau spesifikasi tidak sesuai verifikasi fisik.') => {
+  ensureFirebase();
   const rejectionData = {
     status: 'REJECTED',
     rejectionReason: reason,
@@ -528,133 +470,138 @@ export const rejectBranchInventory = async (id, adminUser, reason = 'Kuantitas a
     rejectedAt: new Date().toISOString()
   };
 
-  if (isFirebaseConfigured() && db) {
-    try {
-      const docRef = doc(db, "branch_inventories", id);
-      await updateDoc(docRef, rejectionData);
-    } catch (err) {
-      console.warn("Firestore error rejecting inventory:", err);
-    }
+  try {
+    const docRef = doc(db, "branch_inventories", id);
+    await updateDoc(docRef, rejectionData);
+
+    await createNotification({
+      type: 'INVENTORY_REJECTED',
+      title: 'Pengajuan Inventaris Ditolak ⚠️',
+      message: `Pengajuan inventaris DITOLAK oleh Pusat. Alasan: ${reason}`,
+      targetRole: 'STAFF_BRANCH',
+      targetBranchId: 'ALL',
+      metaId: id
+    });
+
+    return { id, ...rejectionData };
+  } catch (err) {
+    console.error("Firestore error rejecting inventory:", err);
+    throw new Error(`Gagal menolak inventaris di Firestore: ${err.message}`);
   }
-
-  const list = getLocalBranchInventories();
-  const idx = list.findIndex(item => item.id === id);
-  let targetBranchId = 'ALL';
-  let targetBranchName = 'Cabang';
-  let productName = 'Produk';
-
-  if (idx !== -1) {
-    list[idx] = { ...list[idx], ...rejectionData };
-    targetBranchId = list[idx].branchId;
-    targetBranchName = list[idx].branchName;
-    productName = list[idx].productName;
-    saveLocalBranchInventories(list);
-  }
-
-  // Send Notification to Branch Staff
-  await createNotification({
-    type: 'INVENTORY_REJECTED',
-    title: 'Pengajuan Inventaris Ditolak ⚠️',
-    message: `Pengajuan inventaris "${productName}" untuk ${targetBranchName} DITOLAK oleh Pusat. Alasan: ${reason}`,
-    targetRole: 'STAFF_BRANCH',
-    targetBranchId: targetBranchId,
-    metaId: id
-  });
-
-  return { id, ...rejectionData };
 };
 
+export const updateBranchInventory = async (id, updateData) => {
+  ensureFirebase();
+  try {
+    const docRef = doc(db, "branch_inventories", id);
+    const payload = {
+      ...updateData,
+      stockQuantity: Number(updateData.stockQuantity) || 0,
+      updatedAt: new Date().toISOString()
+    };
+    await updateDoc(docRef, payload);
+    return { id, ...payload };
+  } catch (err) {
+    console.error("Firestore error updating branch inventory:", err);
+    throw new Error(`Gagal memperbarui Inventaris Cabang di Firestore: ${err.message}`);
+  }
+};
+
+
 // ==========================================
-// NOTIFICATION SYSTEM SERVICES
+// NOTIFICATION SYSTEM SERVICES (FIRESTORE)
 // ==========================================
 
 export const fetchNotifications = async (currentUser) => {
-  const notifs = getLocalNotifications();
+  ensureFirebase();
   if (!currentUser) return [];
 
-  // Filter based on role and branch
-  return notifs.filter(n => {
-    if (currentUser.role === 'ADMIN' || currentUser.role === 'STAFF_PUSAT') {
-      return n.targetRole === 'ADMIN_AND_PUSAT' || n.targetRole === 'ALL';
-    }
-    if (currentUser.role === 'STAFF_BRANCH') {
-      return (n.targetRole === 'STAFF_BRANCH' && (n.targetBranchId === currentUser.branchId || n.targetBranchId === 'ALL')) || n.targetRole === 'ALL';
-    }
-    return true;
-  });
+  try {
+    const q = query(collection(db, "notifications"), orderBy("createdAt", "desc"), limit(50));
+    const snapshot = await getDocs(q);
+    const notifs = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+
+    return notifs.filter(n => {
+      if (currentUser.role === 'ADMIN' || currentUser.role === 'STAFF_PUSAT') {
+        return n.targetRole === 'ADMIN_AND_PUSAT' || n.targetRole === 'ALL';
+      }
+      if (currentUser.role === 'STAFF_BRANCH') {
+        return (n.targetRole === 'STAFF_BRANCH' && (n.targetBranchId === currentUser.branchId || n.targetBranchId === 'ALL')) || n.targetRole === 'ALL';
+      }
+      return true;
+    });
+  } catch (err) {
+    console.error("Firestore error fetching notifications:", err);
+    return [];
+  }
 };
 
 export const createNotification = async (notificationData) => {
+  ensureFirebase();
   const newNotif = {
-    id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     ...notificationData,
     isRead: false,
     createdAt: new Date().toISOString()
   };
 
-  const notifs = getLocalNotifications();
-  notifs.unshift(newNotif);
-  // Keep last 50 notifications
-  saveLocalNotifications(notifs.slice(0, 50));
-  return newNotif;
+  try {
+    const docRef = await addDoc(collection(db, "notifications"), {
+      ...newNotif,
+      createdAt: serverTimestamp()
+    });
+    return { id: docRef.id, ...newNotif };
+  } catch (err) {
+    console.error("Firestore error creating notification:", err);
+    return { id: `notif-${Date.now()}`, ...newNotif };
+  }
 };
 
 export const markNotificationAsRead = async (id) => {
-  const notifs = getLocalNotifications();
-  const idx = notifs.findIndex(n => n.id === id);
-  if (idx !== -1) {
-    notifs[idx].isRead = true;
-    saveLocalNotifications(notifs);
+  ensureFirebase();
+  try {
+    const docRef = doc(db, "notifications", id);
+    await updateDoc(docRef, { isRead: true });
+  } catch (err) {
+    console.error("Firestore error marking notification as read:", err);
   }
 };
 
 export const markAllNotificationsAsRead = async (currentUser) => {
-  const notifs = getLocalNotifications();
-  const updated = notifs.map(n => {
-    if (currentUser?.role === 'ADMIN' || currentUser?.role === 'STAFF_PUSAT') {
-      if (n.targetRole === 'ADMIN_AND_PUSAT' || n.targetRole === 'ALL') {
-        return { ...n, isRead: true };
-      }
-    } else if (currentUser?.role === 'STAFF_BRANCH') {
-      if ((n.targetRole === 'STAFF_BRANCH' && (n.targetBranchId === currentUser.branchId || n.targetBranchId === 'ALL')) || n.targetRole === 'ALL') {
-        return { ...n, isRead: true };
+  ensureFirebase();
+  try {
+    const notifs = await fetchNotifications(currentUser);
+    for (const n of notifs) {
+      if (!n.isRead) {
+        const docRef = doc(db, "notifications", n.id);
+        await updateDoc(docRef, { isRead: true });
       }
     }
-    return n;
-  });
-  saveLocalNotifications(updated);
+  } catch (err) {
+    console.error("Firestore error marking all notifications as read:", err);
+  }
 };
 
 // ==========================================
-// PUSAT TO BRANCH STOCK TRANSFER SERVICES
+// STOCK TRANSFERS (FIRESTORE)
 // ==========================================
 
 export const fetchTransfers = async (branchId = null) => {
-  if (isFirebaseConfigured() && db) {
-    try {
-      let q = query(collection(db, "stock_transfers"), orderBy("sentAt", "desc"));
-      if (branchId && branchId !== 'ALL') {
-        q = query(collection(db, "stock_transfers"), where("targetBranchId", "==", branchId), orderBy("sentAt", "desc"));
-      }
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-        saveLocalTransfers(list);
-        return list;
-      }
-      const local = getLocalTransfers();
-      return (branchId && branchId !== 'ALL') ? local.filter(t => t.targetBranchId === branchId) : local;
-    } catch (err) {
-      console.warn("Firestore error fetching transfers:", err);
-      const local = getLocalTransfers();
-      return (branchId && branchId !== 'ALL') ? local.filter(t => t.targetBranchId === branchId) : local;
+  ensureFirebase();
+  try {
+    let q = query(collection(db, "stock_transfers"), orderBy("sentAt", "desc"));
+    if (branchId && branchId !== 'ALL') {
+      q = query(collection(db, "stock_transfers"), where("targetBranchId", "==", branchId), orderBy("sentAt", "desc"));
     }
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+  } catch (err) {
+    console.error("Firestore error fetching transfers:", err);
+    throw new Error(`Gagal mengambil data Transfer Stok dari Firestore: ${err.message}`);
   }
-  const local = getLocalTransfers();
-  return (branchId && branchId !== 'ALL') ? local.filter(t => t.targetBranchId === branchId) : local;
 };
 
 export const createStockTransfer = async (transferData, currentUser) => {
+  ensureFirebase();
   const newTransfer = {
     productId: transferData.productId,
     sku: transferData.sku,
@@ -668,54 +615,38 @@ export const createStockTransfer = async (transferData, currentUser) => {
     targetBranchId: transferData.targetBranchId,
     targetBranchName: transferData.targetBranchName || 'Cabang',
     deliveryNote: transferData.deliveryNote || `SJ-HQ-${Date.now().toString().slice(-6)}`,
-    status: 'IN_TRANSIT', // 'IN_TRANSIT' | 'RECEIVED'
+    status: 'IN_TRANSIT',
     senderName: currentUser?.name || 'Staff Pusat',
     notes: transferData.notes || '',
     sentAt: new Date().toISOString()
   };
 
-  let assignedId = `trf-${Date.now()}`;
+  try {
+    const docRef = await addDoc(collection(db, "stock_transfers"), {
+      ...newTransfer,
+      createdAt: serverTimestamp()
+    });
 
-  if (isFirebaseConfigured() && db) {
-    try {
-      const docRef = await addDoc(collection(db, "stock_transfers"), {
-        ...newTransfer,
-        createdAt: serverTimestamp()
-      });
-      assignedId = docRef.id;
-    } catch (err) {
-      console.warn("Firestore error creating transfer:", err);
-    }
+    const created = { id: docRef.id, ...newTransfer };
+
+    await createNotification({
+      type: 'STOCK_TRANSFER_INCOMING',
+      title: 'Kiriman Stok Baru dari Kantor Pusat 🚚',
+      message: `Pusat telah mengirim ${newTransfer.qty} Pcs "${newTransfer.productName}" (No. Surat Jalan: ${newTransfer.deliveryNote}).`,
+      targetRole: 'STAFF_BRANCH',
+      targetBranchId: newTransfer.targetBranchId,
+      metaId: docRef.id
+    });
+
+    return created;
+  } catch (err) {
+    console.error("Firestore error creating transfer:", err);
+    throw new Error(`Gagal membuat Transfer Stok di Firestore: ${err.message}`);
   }
-
-  const transfers = getLocalTransfers();
-  const created = { id: assignedId, ...newTransfer };
-  transfers.unshift(created);
-  saveLocalTransfers(transfers);
-
-  // Trigger Notification to Branch Staff
-  await createNotification({
-    type: 'STOCK_TRANSFER_INCOMING',
-    title: 'Kiriman Stok Baru dari Kantor Pusat 🚚',
-    message: `Pusat telah mengirim ${newTransfer.qty} Pcs "${newTransfer.productName}" (No. Surat Jalan: ${newTransfer.deliveryNote}). Silakan periksa barang fisik dan konfirmasi penerimaan di menu Barang Masuk.`,
-    targetRole: 'STAFF_BRANCH',
-    targetBranchId: newTransfer.targetBranchId,
-    metaId: assignedId
-  });
-
-  return created;
 };
 
 export const confirmTransferReceipt = async (transferId, receiverUser, receiverNotes = '') => {
-  const transfers = getLocalTransfers();
-  const tIdx = transfers.findIndex(t => t.id === transferId);
-  if (tIdx === -1) throw new Error("Data pengiriman tidak ditemukan.");
-
-  const transfer = transfers[tIdx];
-  if (transfer.status === 'RECEIVED') {
-    throw new Error("Pengiriman ini sudah dikonfirmasi diterima sebelumnya.");
-  }
-
+  ensureFirebase();
   const updateData = {
     status: 'RECEIVED',
     receiverName: receiverUser?.name || 'Staff Cabang',
@@ -723,107 +654,60 @@ export const confirmTransferReceipt = async (transferId, receiverUser, receiverN
     receivedAt: new Date().toISOString()
   };
 
-  if (isFirebaseConfigured() && db) {
-    try {
-      const docRef = doc(db, "stock_transfers", transferId);
-      await updateDoc(docRef, updateData);
-    } catch (err) {
-      console.warn("Firestore error confirming transfer:", err);
-    }
-  }
+  try {
+    const docRef = doc(db, "stock_transfers", transferId);
+    await updateDoc(docRef, updateData);
 
-  transfers[tIdx] = { ...transfers[tIdx], ...updateData };
-  saveLocalTransfers(transfers);
-
-  // Automatically update or insert into branch_inventories
-  const branchInvs = getLocalBranchInventories();
-  const bIdx = branchInvs.findIndex(bi => bi.branchId === transfer.targetBranchId && (bi.productId === transfer.productId || bi.sku === transfer.sku));
-  
-  if (bIdx !== -1) {
-    const currentStock = Number(branchInvs[bIdx].stockQuantity) || 0;
-    branchInvs[bIdx].stockQuantity = currentStock + Number(transfer.qty);
-    branchInvs[bIdx].status = 'APPROVED';
-    branchInvs[bIdx].updatedAt = new Date().toISOString();
-  } else {
-    branchInvs.unshift({
-      id: `binv-${Date.now()}`,
-      branchId: transfer.targetBranchId,
-      branchName: transfer.targetBranchName,
-      productId: transfer.productId,
-      sku: transfer.sku,
-      productName: transfer.productName,
-      brand: transfer.brand || 'Generic',
+    const mov = await recordStockMovement({
+      productId: 'TRANSFER_PROD',
+      sku: 'TRANSFER_SKU',
+      productName: 'Penerimaan Transfer',
+      type: 'IN',
+      qty: 1,
       unit: 'Pcs',
-      price: Number(transfer.price) || 0,
-      minStock: 5,
-      stockQuantity: Number(transfer.qty),
-      status: 'APPROVED',
-      requestedBy: 'Kantor Pusat (Transfer Otomatis)',
-      requestedAt: transfer.sentAt,
-      approvedBy: receiverUser?.name || 'Staff Cabang (Diterima)',
-      approvedAt: new Date().toISOString()
+      branchId: receiverUser?.branchId || 'CABANG',
+      branchName: receiverUser?.branchName || 'Cabang',
+      source: 'KANTOR_PUSAT',
+      notes: `Konfirmasi Penerimaan Transfer • ${receiverNotes}`,
+      user: receiverUser?.name || 'Staff Cabang'
     });
+
+    await createNotification({
+      type: 'STOCK_TRANSFER_RECEIVED',
+      title: 'Kiriman Diterima oleh Cabang ✅',
+      message: `Cabang telah mengonfirmasi penerimaan transfer stok.`,
+      targetRole: 'ADMIN_AND_PUSAT',
+      metaId: transferId
+    });
+
+    return { id: transferId, ...updateData, movement: mov };
+  } catch (err) {
+    console.error("Firestore error confirming transfer:", err);
+    throw new Error(`Gagal mengonfirmasi penerimaan transfer di Firestore: ${err.message}`);
   }
-  saveLocalBranchInventories(branchInvs);
-
-  // Record Stock Movement IN for the branch
-  const mov = await recordStockMovement({
-    productId: transfer.productId,
-    sku: transfer.sku,
-    productName: transfer.productName,
-    type: 'IN',
-    qty: Number(transfer.qty),
-    unit: 'Pcs',
-    branchId: transfer.targetBranchId,
-    branchName: transfer.targetBranchName,
-    source: 'KANTOR_PUSAT',
-    deliveryNote: transfer.deliveryNote,
-    notes: `Penerimaan Kiriman dari Kantor Pusat (Pcs) • No. Surat Jalan: ${transfer.deliveryNote}${receiverNotes ? ` • Catatan: ${receiverNotes}` : ''}`,
-    user: receiverUser?.name || 'Staff Cabang'
-  });
-
-  // Trigger Notification to Admin & Staff Pusat
-  await createNotification({
-    type: 'STOCK_TRANSFER_RECEIVED',
-    title: 'Kiriman Diterima oleh Cabang ✅',
-    message: `${transfer.targetBranchName} telah mengonfirmasi penerimaan ${transfer.qty} Pcs "${transfer.productName}" (No. Surat Jalan: ${transfer.deliveryNote}). Stok cabang kini telah aktif bertambah.`,
-    targetRole: 'ADMIN_AND_PUSAT',
-    metaId: transferId
-  });
-
-  return { transfer: transfers[tIdx], movement: mov };
 };
 
 // ==========================================
-// BRANCH STOCK REQUEST SERVICES (CABANG -> PUSAT)
+// STOCK REQUESTS (FIRESTORE)
 // ==========================================
 
 export const fetchStockRequests = async (branchId = null) => {
-  if (isFirebaseConfigured() && db) {
-    try {
-      let q = query(collection(db, "stock_requests"), orderBy("requestedAt", "desc"));
-      if (branchId && branchId !== 'ALL') {
-        q = query(collection(db, "stock_requests"), where("branchId", "==", branchId), orderBy("requestedAt", "desc"));
-      }
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-        saveLocalStockRequests(list);
-        return list;
-      }
-      const local = getLocalStockRequests();
-      return (branchId && branchId !== 'ALL') ? local.filter(r => r.branchId === branchId) : local;
-    } catch (err) {
-      console.warn("Firestore error fetching stock requests:", err);
-      const local = getLocalStockRequests();
-      return (branchId && branchId !== 'ALL') ? local.filter(r => r.branchId === branchId) : local;
+  ensureFirebase();
+  try {
+    let q = query(collection(db, "stock_requests"), orderBy("requestedAt", "desc"));
+    if (branchId && branchId !== 'ALL') {
+      q = query(collection(db, "stock_requests"), where("branchId", "==", branchId), orderBy("requestedAt", "desc"));
     }
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+  } catch (err) {
+    console.error("Firestore error fetching stock requests:", err);
+    throw new Error(`Gagal mengambil data Permintaan Stok dari Firestore: ${err.message}`);
   }
-  const local = getLocalStockRequests();
-  return (branchId && branchId !== 'ALL') ? local.filter(r => r.branchId === branchId) : local;
 };
 
 export const createStockRequest = async (requestData, currentUser) => {
+  ensureFirebase();
   const newReq = {
     productId: requestData.productId,
     sku: requestData.sku,
@@ -835,160 +719,122 @@ export const createStockRequest = async (requestData, currentUser) => {
     branchName: currentUser?.branchName || requestData.branchName || 'Cabang',
     requestedBy: currentUser?.name || 'Staff Cabang',
     notes: requestData.notes || '',
-    status: 'PENDING', // 'PENDING' | 'FULFILLED' | 'CANCELLED'
+    status: 'PENDING',
     requestedAt: new Date().toISOString()
   };
 
-  let assignedId = `req-${Date.now()}`;
+  try {
+    const docRef = await addDoc(collection(db, "stock_requests"), {
+      ...newReq,
+      createdAt: serverTimestamp()
+    });
 
-  if (isFirebaseConfigured() && db) {
-    try {
-      const docRef = await addDoc(collection(db, "stock_requests"), {
-        ...newReq,
-        createdAt: serverTimestamp()
-      });
-      assignedId = docRef.id;
-    } catch (err) {
-      console.warn("Firestore error creating stock request:", err);
-    }
+    const created = { id: docRef.id, ...newReq };
+
+    await createNotification({
+      type: 'STOCK_REQUEST_SUBMITTED',
+      title: 'Permintaan Kiriman Stok dari Cabang 📦',
+      message: `${newReq.branchName} mengajukan permintaan ${newReq.qty} Pcs "${newReq.productName}".`,
+      targetRole: 'ADMIN_AND_PUSAT',
+      metaId: docRef.id
+    });
+
+    return created;
+  } catch (err) {
+    console.error("Firestore error creating stock request:", err);
+    throw new Error(`Gagal membuat Permintaan Stok di Firestore: ${err.message}`);
   }
-
-  const requests = getLocalStockRequests();
-  const created = { id: assignedId, ...newReq };
-  requests.unshift(created);
-  saveLocalStockRequests(requests);
-
-  // Trigger Notification to Admin & Staff Pusat
-  await createNotification({
-    type: 'STOCK_REQUEST_SUBMITTED',
-    title: 'Permintaan Kiriman Stok dari Cabang 📦',
-    message: `${newReq.branchName} mengajukan permintaan ${newReq.qty} Pcs "${newReq.productName}". Catatan: ${newReq.notes || 'Mohon segera dikirimkan.'}`,
-    targetRole: 'ADMIN_AND_PUSAT',
-    metaId: assignedId
-  });
-
-  return created;
 };
 
 export const rejectStockRequest = async (requestId, reason, currentUser) => {
-  const requests = getLocalStockRequests();
-  const idx = requests.findIndex(r => r.id === requestId);
-  if (idx === -1) {
-    throw new Error("Permintaan stok tidak ditemukan.");
+  ensureFirebase();
+  try {
+    const updateData = {
+      status: 'REJECTED',
+      rejectionReason: reason,
+      rejectedBy: currentUser?.name || 'Staff Pusat',
+      rejectedAt: new Date().toISOString()
+    };
+    await updateDoc(doc(db, "stock_requests", requestId), updateData);
+
+    await createNotification({
+      type: 'STOCK_REQUEST_REJECTED',
+      title: 'Permintaan Stok Ditolak oleh Pusat ❌',
+      message: `Permintaan pengiriman ditolak oleh Kantor Pusat. Alasan: "${reason}".`,
+      targetRole: 'STAFF_BRANCH',
+      metaId: requestId
+    });
+
+    return { id: requestId, ...updateData };
+  } catch (err) {
+    console.error("Firestore error rejecting stock request:", err);
+    throw new Error(`Gagal menolak Permintaan Stok di Firestore: ${err.message}`);
   }
-
-  const req = requests[idx];
-  req.status = 'REJECTED';
-  req.rejectionReason = reason;
-  req.rejectedBy = currentUser?.name || 'Staff Pusat';
-  req.rejectedAt = new Date().toISOString();
-
-  saveLocalStockRequests(requests);
-
-  if (isFirebaseConfigured() && db) {
-    try {
-      await updateDoc(doc(db, "stock_requests", requestId), {
-        status: 'REJECTED',
-        rejectionReason: reason,
-        rejectedBy: currentUser?.name || 'Staff Pusat',
-        rejectedAt: serverTimestamp()
-      });
-    } catch (e) {
-      console.warn("Firestore reject stock request error:", e);
-    }
-  }
-
-  // Trigger Notification to Branch
-  await createNotification({
-    type: 'STOCK_REQUEST_REJECTED',
-    title: 'Permintaan Stok Ditolak oleh Pusat ❌',
-    message: `Permintaan pengiriman ${req.qty} Pcs "${req.productName}" ditolak oleh Kantor Pusat. Alasan: "${reason}".`,
-    targetRole: 'STAFF_BRANCH',
-    targetBranchId: req.branchId,
-    metaId: requestId
-  });
-
-  return req;
 };
 
 export const fulfillStockRequest = async (requestId, deliveryNote, currentUser) => {
-  const requests = getLocalStockRequests();
-  const idx = requests.findIndex(r => r.id === requestId);
-  if (idx === -1) return null;
+  ensureFirebase();
+  try {
+    const updateData = {
+      status: 'FULFILLED',
+      fulfilledBy: currentUser?.name || 'Staff Pusat',
+      fulfilledAt: new Date().toISOString(),
+      deliveryNote: deliveryNote
+    };
+    await updateDoc(doc(db, "stock_requests", requestId), updateData);
 
-  const req = requests[idx];
-  req.status = 'FULFILLED';
-  req.fulfilledBy = currentUser?.name || 'Staff Pusat';
-  req.fulfilledAt = new Date().toISOString();
-  req.deliveryNote = deliveryNote;
+    await createNotification({
+      type: 'STOCK_REQUEST_APPROVED',
+      title: 'Permintaan Stok Disetujui & Dikirimkan 🚚',
+      message: `Kantor Pusat telah menyetujui permintaan dan mengirimkan stok (No. Surat Jalan: ${deliveryNote}).`,
+      targetRole: 'STAFF_BRANCH',
+      metaId: requestId
+    });
 
-  saveLocalStockRequests(requests);
-
-  if (isFirebaseConfigured() && db) {
-    try {
-      await updateDoc(doc(db, "stock_requests", requestId), {
-        status: 'FULFILLED',
-        fulfilledBy: currentUser?.name || 'Staff Pusat',
-        fulfilledAt: serverTimestamp(),
-        deliveryNote: deliveryNote
-      });
-    } catch (e) {
-      console.warn("Firestore fulfill stock request error:", e);
-    }
+    return { id: requestId, ...updateData };
+  } catch (err) {
+    console.error("Firestore error fulfilling stock request:", err);
+    throw new Error(`Gagal menyetujui Permintaan Stok di Firestore: ${err.message}`);
   }
-
-  // Trigger Notification to Branch
-  await createNotification({
-    type: 'STOCK_REQUEST_APPROVED',
-    title: 'Permintaan Stok Disetujui & Dikirimkan 🚚',
-    message: `Kantor Pusat telah menyetujui permintaan dan mengirimkan ${req.qty} Pcs "${req.productName}" (No. Surat Jalan: ${deliveryNote}). Silakan periksa di menu Barang Masuk.`,
-    targetRole: 'STAFF_BRANCH',
-    targetBranchId: req.branchId,
-    metaId: requestId
-  });
-
-  return req;
 };
 
 export const cancelStockRequest = async (requestId, user) => {
-  const requests = getLocalStockRequests();
-  const idx = requests.findIndex(r => r.id === requestId);
-  if (idx !== -1) {
-    requests[idx].status = 'CANCELLED';
-    requests[idx].cancelledAt = new Date().toISOString();
-    saveLocalStockRequests(requests);
+  ensureFirebase();
+  try {
+    const docRef = doc(db, "stock_requests", requestId);
+    await updateDoc(docRef, {
+      status: 'CANCELLED',
+      cancelledAt: new Date().toISOString()
+    });
+    return { id: requestId, status: 'CANCELLED' };
+  } catch (err) {
+    console.error("Firestore error cancelling stock request:", err);
+    throw new Error(`Gagal membatalkan Permintaan Stok di Firestore: ${err.message}`);
   }
-  return requests[idx];
 };
 
 // ==========================================
-// INVENTORY & STOCK TRANSACTION SERVICES
+// STOCK TRANSACTIONS (FIRESTORE)
 // ==========================================
 
 export const fetchTransactions = async () => {
-  if (isFirebaseConfigured() && db) {
-    try {
-      const q = query(collection(db, "stock_movements"), orderBy("createdAt", "desc"));
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const firestoreTxs = snapshot.docs.map(docSnap => ({ 
-          id: docSnap.id, 
-          ...docSnap.data(),
-          createdAt: docSnap.data().createdAt?.toDate ? docSnap.data().createdAt.toDate().toISOString() : docSnap.data().createdAt
-        }));
-        saveLocalTransactions(firestoreTxs);
-        return firestoreTxs;
-      }
-      return getLocalTransactions();
-    } catch (err) {
-      console.warn("Firestore error, reading local transactions:", err);
-      return getLocalTransactions();
-    }
+  ensureFirebase();
+  try {
+    const q = query(collection(db, "stock_movements"), orderBy("createdAt", "desc"), limit(100));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(docSnap => ({ 
+      id: docSnap.id, 
+      ...docSnap.data(),
+      createdAt: docSnap.data().createdAt?.toDate ? docSnap.data().createdAt.toDate().toISOString() : docSnap.data().createdAt
+    }));
+  } catch (err) {
+    console.error("Firestore error fetching transactions:", err);
+    throw new Error(`Gagal mengambil data Transaksi Stok dari Firestore: ${err.message}`);
   }
-  return getLocalTransactions();
 };
 
 export const recordStockMovement = async (movementData) => {
+  ensureFirebase();
   const isIncrement = movementData.type === 'IN';
   const qtyChange = Number(movementData.qty) || 1;
   const isBundling = Boolean(movementData.isBundling && movementData.items && movementData.items.length > 0);
@@ -999,267 +845,286 @@ export const recordStockMovement = async (movementData) => {
     createdAt: new Date().toISOString()
   };
 
-  let assignedTxId = `mov-${Date.now()}`;
+  try {
+    const docRef = await addDoc(collection(db, "stock_movements"), {
+      ...movement,
+      createdAt: serverTimestamp()
+    });
 
-  if (isFirebaseConfigured() && db) {
-    try {
-      const docRef = await addDoc(collection(db, "stock_movements"), {
-        ...movement,
-        createdAt: serverTimestamp()
-      });
-      assignedTxId = docRef.id;
-
-      // Update product stock in Firestore
-      if (isBundling) {
-        for (const item of movementData.items) {
-          if (item.productId) {
-            const prodRef = doc(db, "products", item.productId);
-            await updateDoc(prodRef, {
-              currentStock: increment(-Number(item.qty || 1)),
-              updatedAt: new Date().toISOString()
-            });
-          }
-        }
-      } else if (movement.productId) {
-        const prodRef = doc(db, "products", movement.productId);
-        await updateDoc(prodRef, {
-          currentStock: increment(isIncrement ? qtyChange : -qtyChange),
-          updatedAt: new Date().toISOString()
-        });
-      }
-    } catch (err) {
-      console.warn("Firestore error recording stock movement:", err);
-    }
-  }
-
-  // Update local product stock
-  const products = getLocalProducts();
-  if (isBundling) {
-    for (const item of movementData.items) {
-      const prodIndex = products.findIndex(p => p.id === item.productId || p.sku === item.sku);
-      if (prodIndex !== -1) {
-        const current = Number(products[prodIndex].currentStock) || 0;
-        products[prodIndex].currentStock = Math.max(0, current - Number(item.qty || 1));
-        products[prodIndex].updatedAt = new Date().toISOString();
-      }
-    }
-    saveLocalProducts(products);
-  } else {
-    const prodIndex = products.findIndex(p => p.id === movement.productId || p.sku === movement.sku);
-    if (prodIndex !== -1) {
-      const current = Number(products[prodIndex].currentStock) || 0;
-      products[prodIndex].currentStock = isIncrement ? current + qtyChange : Math.max(0, current - qtyChange);
-      products[prodIndex].updatedAt = new Date().toISOString();
-      saveLocalProducts(products);
-    }
-  }
-
-  // ALSO Sync to Branch Inventories if this movement belongs to a branch
-  const branchInvs = getLocalBranchInventories();
-  if (movementData.branchId && movementData.branchId !== 'ALL') {
+    // Update product stock in Firestore
     if (isBundling) {
       for (const item of movementData.items) {
-        const bIdx = branchInvs.findIndex(bi => bi.branchId === movementData.branchId && (bi.productId === item.productId || bi.sku === item.sku));
-        if (bIdx !== -1 && branchInvs[bIdx].status === 'APPROVED') {
-          const bStock = Number(branchInvs[bIdx].stockQuantity) || 0;
-          branchInvs[bIdx].stockQuantity = Math.max(0, bStock - Number(item.qty || 1));
+        if (item.productId) {
+          const prodRef = doc(db, "products", item.productId);
+          await updateDoc(prodRef, {
+            currentStock: increment(-Number(item.qty || 1)),
+            updatedAt: new Date().toISOString()
+          });
         }
       }
-    } else {
-      const bIdx = branchInvs.findIndex(bi => bi.branchId === movementData.branchId && (bi.productId === movementData.productId || bi.sku === movementData.sku));
-      if (bIdx !== -1 && branchInvs[bIdx].status === 'APPROVED') {
-        const bStock = Number(branchInvs[bIdx].stockQuantity) || 0;
-        branchInvs[bIdx].stockQuantity = isIncrement ? bStock + qtyChange : Math.max(0, bStock - qtyChange);
-      }
+    } else if (movement.productId) {
+      const prodRef = doc(db, "products", movement.productId);
+      await updateDoc(prodRef, {
+        currentStock: increment(isIncrement ? qtyChange : -qtyChange),
+        updatedAt: new Date().toISOString()
+      });
     }
-    saveLocalBranchInventories(branchInvs);
+
+    return { id: docRef.id, ...movement };
+  } catch (err) {
+    console.error("Firestore error recording stock movement:", err);
+    throw new Error(`Gagal mencatat mutasi stok di Firestore: ${err.message}`);
   }
-
-  const txs = getLocalTransactions();
-  const newTx = { id: assignedTxId, ...movement };
-  txs.unshift(newTx);
-  saveLocalTransactions(txs);
-
-  return newTx;
 };
 
 // ==========================================
-// BRANCH / CABANG SERVICES (REAL DATA)
+// BRANCH MANAGEMENT SERVICES (FIRESTORE)
 // ==========================================
 
 export const fetchBranches = async () => {
-  if (isFirebaseConfigured() && db) {
-    try {
-      const q = query(collection(db, "branches"), orderBy("name", "asc"));
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const firestoreBranches = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-        saveLocalBranches(firestoreBranches);
-        return firestoreBranches;
+  ensureFirebase();
+  try {
+    const q = query(collection(db, "branches"), orderBy("name", "asc"));
+    const snapshot = await getDocs(q);
+
+    let branchesList = [];
+
+    if (!snapshot.empty) {
+      branchesList = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    } else {
+      const isDone = await isBootstrapInitialized();
+      if (!isDone) {
+        for (const branch of DEFAULT_INITIAL_BRANCHES) {
+          const docRef = await addDoc(collection(db, "branches"), {
+            ...branch,
+            createdAt: serverTimestamp()
+          });
+          branchesList.push({ id: docRef.id, ...branch });
+        }
+        await markBootstrapDone();
       }
-      return getLocalBranches();
-    } catch (err) {
-      console.warn("Firestore error, reading local branches:", err);
-      return getLocalBranches();
     }
+
+    // Ensure Gudang Utama Pusat ALWAYS exists as master system location (Singleton)
+    const hasPusat = branchesList.some(b => b.isPusat === true || b.code === 'GUDANG-PUSAT' || (b.name || '').toLowerCase().includes('gudang utama pusat'));
+    if (!hasPusat) {
+      const docRef = await addDoc(collection(db, "branches"), {
+        ...DEFAULT_GUDANG_PUSAT,
+        createdAt: serverTimestamp()
+      });
+      const pusatBranch = { id: docRef.id, ...DEFAULT_GUDANG_PUSAT };
+      branchesList.unshift(pusatBranch);
+    }
+
+    return branchesList;
+  } catch (err) {
+    console.error("Firestore error fetching branches:", err);
+    throw new Error(`Gagal mengambil data Cabang dari Firestore: ${err.message}`);
   }
-  return getLocalBranches();
 };
 
 export const createBranch = async (branchData) => {
-  const newBranch = {
-    ...branchData,
-    code: branchData.code || `BR-${Math.floor(100 + Math.random() * 900)}`,
-    status: branchData.status || "ACTIVE",
-    createdAt: new Date().toISOString()
-  };
-
-  let assignedId = `branch-${Date.now()}`;
-
-  if (isFirebaseConfigured() && db) {
-    try {
-      const docRef = await addDoc(collection(db, "branches"), {
-        ...newBranch,
-        createdAt: serverTimestamp()
-      });
-      assignedId = docRef.id;
-    } catch (err) {
-      console.warn("Firestore error creating branch:", err);
+  ensureFirebase();
+  const isPusatChoice = Boolean(branchData.isPusat) || branchData.code === 'GUDANG-PUSAT';
+  
+  if (isPusatChoice) {
+    const snapshot = await getDocs(collection(db, "branches"));
+    const existingPusat = snapshot.docs.some(docSnap => docSnap.data().isPusat === true || docSnap.data().code === 'GUDANG-PUSAT');
+    if (existingPusat) {
+      throw new Error("Gudang Utama Pusat sudah terdaftar. Hanya boleh ada 1 Gudang Utama Pusat di dalam sistem.");
     }
   }
 
-  const branches = getLocalBranches();
-  const created = { id: assignedId, ...newBranch };
-  branches.push(created);
-  saveLocalBranches(branches);
-  return created;
+  const newBranch = {
+    ...branchData,
+    code: isPusatChoice ? "GUDANG-PUSAT" : (branchData.code || `BR-${Math.floor(100 + Math.random() * 900)}`),
+    status: branchData.status || "ACTIVE",
+    isPusat: isPusatChoice,
+    isProtected: isPusatChoice,
+    createdAt: new Date().toISOString()
+  };
+
+  try {
+    const docRef = await addDoc(collection(db, "branches"), {
+      ...newBranch,
+      createdAt: serverTimestamp()
+    });
+    await markBootstrapDone();
+    return { id: docRef.id, ...newBranch };
+  } catch (err) {
+    console.error("Firestore error creating branch:", err);
+    throw new Error(`Gagal membuat Cabang baru di Firestore: ${err.message}`);
+  }
 };
 
 export const updateBranch = async (id, branchData) => {
+  ensureFirebase();
   const updatedData = {
     ...branchData,
     updatedAt: new Date().toISOString()
   };
 
-  if (isFirebaseConfigured() && db) {
-    try {
-      const docRef = doc(db, "branches", id);
-      await updateDoc(docRef, updatedData);
-    } catch (err) {
-      console.warn("Firestore error updating branch:", err);
-    }
+  try {
+    const docRef = doc(db, "branches", id);
+    await updateDoc(docRef, updatedData);
+    return { id, ...updatedData };
+  } catch (err) {
+    console.error("Firestore error updating branch:", err);
+    throw new Error(`Gagal memperbarui Cabang di Firestore: ${err.message}`);
   }
-
-  const branches = getLocalBranches();
-  const idx = branches.findIndex(b => b.id === id);
-  if (idx !== -1) {
-    branches[idx] = { ...branches[idx], ...updatedData };
-    saveLocalBranches(branches);
-  }
-  return { id, ...updatedData };
 };
 
 export const deleteBranch = async (id) => {
-  if (isFirebaseConfigured() && db) {
-    try {
-      await deleteDoc(doc(db, "branches", id));
-    } catch (err) {
-      console.warn("Firestore error deleting branch:", err);
+  ensureFirebase();
+  try {
+    const docRef = doc(db, "branches", id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      if (data.isPusat === true || data.code === 'GUDANG-PUSAT' || data.isProtected === true) {
+        throw new Error("Gudang Utama Pusat adalah lokasi master sistem dan tidak dapat dihapus.");
+      }
     }
+
+    await deleteDoc(docRef);
+    await markBootstrapDone();
+    return true;
+  } catch (err) {
+    console.error("Firestore error deleting branch:", err);
+    throw new Error(err.message || "Gagal menghapus Cabang dari Firestore.");
   }
-  const branches = getLocalBranches().filter(b => b.id !== id);
-  saveLocalBranches(branches);
+};
+
+export const clearAllBranches = async () => {
+  ensureFirebase();
+  try {
+    const snapshot = await getDocs(collection(db, "branches"));
+    for (const docSnap of snapshot.docs) {
+      const data = docSnap.data();
+      // Protect Gudang Utama Pusat from bulk clear
+      if (!data.isPusat && data.code !== 'GUDANG-PUSAT' && !data.isProtected) {
+        await deleteDoc(doc(db, "branches", docSnap.id));
+      }
+    }
+    await markBootstrapDone();
+    return true;
+  } catch (err) {
+    console.error("Firestore error clearing branches:", err);
+    throw new Error(`Gagal menghapus seluruh Cabang di Firestore: ${err.message}`);
+  }
 };
 
 // ==========================================
-// USER / PENGGUNA SERVICES (REAL DATA)
+// USER MANAGEMENT SERVICES (FIRESTORE)
 // ==========================================
 
 export const fetchUsers = async () => {
-  if (isFirebaseConfigured() && db) {
-    try {
-      const q = query(collection(db, "users"), orderBy("name", "asc"));
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const firestoreUsers = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-        saveLocalUsers(firestoreUsers);
-        return firestoreUsers;
-      }
-      return getLocalUsers();
-    } catch (err) {
-      console.warn("Firestore error, reading local users:", err);
-      return getLocalUsers();
+  ensureFirebase();
+  try {
+    const q = query(collection(db, "users"), orderBy("name", "asc"));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
     }
+
+    const isDone = await isBootstrapInitialized();
+    if (isDone) {
+      return [];
+    }
+
+    const seededUsers = [];
+    for (const user of INITIAL_DEFAULT_USERS) {
+      const docRef = await addDoc(collection(db, "users"), {
+        ...user,
+        createdAt: serverTimestamp()
+      });
+      seededUsers.push({ id: docRef.id, ...user });
+    }
+    await markBootstrapDone();
+    return seededUsers;
+  } catch (err) {
+    console.error("Firestore error fetching users:", err);
+    throw new Error(`Gagal mengambil data Pengguna dari Firestore: ${err.message}`);
   }
-  return getLocalUsers();
 };
 
 export const createUser = async (userData) => {
+  ensureFirebase();
+  let assignedBranchId = userData.branchId || "ALL";
+  let assignedBranchName = userData.branchName || "Semua Cabang (Pusat)";
+
+  if (userData.role === 'STAFF_PUSAT' || userData.role === 'PUSAT') {
+    const branches = await fetchBranches();
+    const pusatBranch = branches.find(b => b.isPusat === true || b.code === 'GUDANG-PUSAT' || (b.name || '').toLowerCase().includes('gudang utama pusat'));
+    assignedBranchId = pusatBranch ? pusatBranch.id : "branch-pusat-hq";
+    assignedBranchName = pusatBranch ? pusatBranch.name : "Gudang Utama Pusat";
+  }
+
   const newUser = {
     ...userData,
     role: userData.role || "STAFF_BRANCH",
-    branchId: userData.branchId || "ALL",
-    branchName: userData.branchName || "Semua Cabang (Pusat)",
+    branchId: assignedBranchId,
+    branchName: assignedBranchName,
     status: userData.status || "ACTIVE",
     createdAt: new Date().toISOString()
   };
 
-  let assignedId = `usr-${Date.now()}`;
-
-  if (isFirebaseConfigured() && db) {
-    try {
-      const docRef = await addDoc(collection(db, "users"), {
-        ...newUser,
-        createdAt: serverTimestamp()
-      });
-      assignedId = docRef.id;
-    } catch (err) {
-      console.warn("Firestore error creating user:", err);
-    }
+  try {
+    const docRef = await addDoc(collection(db, "users"), {
+      ...newUser,
+      createdAt: serverTimestamp()
+    });
+    await markBootstrapDone();
+    return { id: docRef.id, ...newUser };
+  } catch (err) {
+    console.error("Firestore error creating user:", err);
+    throw new Error(`Gagal membuat Pengguna baru di Firestore: ${err.message}`);
   }
-
-  const users = getLocalUsers();
-  const created = { id: assignedId, ...newUser };
-  users.push(created);
-  saveLocalUsers(users);
-  return created;
 };
 
 export const updateUser = async (id, userData) => {
+  ensureFirebase();
+  let assignedBranchId = userData.branchId;
+  let assignedBranchName = userData.branchName;
+
+  if (userData.role === 'STAFF_PUSAT' || userData.role === 'PUSAT') {
+    const branches = await fetchBranches();
+    const pusatBranch = branches.find(b => b.isPusat === true || b.code === 'GUDANG-PUSAT' || (b.name || '').toLowerCase().includes('gudang utama pusat'));
+    assignedBranchId = pusatBranch ? pusatBranch.id : "branch-pusat-hq";
+    assignedBranchName = pusatBranch ? pusatBranch.name : "Gudang Utama Pusat";
+  }
+
   const updatedData = {
     ...userData,
+    ...(assignedBranchId ? { branchId: assignedBranchId, branchName: assignedBranchName } : {}),
     updatedAt: new Date().toISOString()
   };
 
-  if (isFirebaseConfigured() && db) {
-    try {
-      const docRef = doc(db, "users", id);
-      await updateDoc(docRef, updatedData);
-    } catch (err) {
-      console.warn("Firestore error updating user:", err);
-    }
+  try {
+    const docRef = doc(db, "users", id);
+    await updateDoc(docRef, updatedData);
+    return { id, ...updatedData };
+  } catch (err) {
+    console.error("Firestore error updating user:", err);
+    throw new Error(`Gagal memperbarui Pengguna di Firestore: ${err.message}`);
   }
-
-  const users = getLocalUsers();
-  const idx = users.findIndex(u => u.id === id);
-  if (idx !== -1) {
-    users[idx] = { ...users[idx], ...updatedData };
-    saveLocalUsers(users);
-  }
-  return { id, ...updatedData };
 };
 
 export const deleteUser = async (id) => {
-  if (isFirebaseConfigured() && db) {
-    try {
-      await deleteDoc(doc(db, "users", id));
-    } catch (err) {
-      console.warn("Firestore error deleting user:", err);
-    }
+  ensureFirebase();
+  try {
+    await deleteDoc(doc(db, "users", id));
+    await markBootstrapDone();
+    return true;
+  } catch (err) {
+    console.error("Firestore error deleting user:", err);
+    throw new Error(`Gagal menghapus Pengguna dari Firestore: ${err.message}`);
   }
-  const users = getLocalUsers().filter(u => u.id !== id);
-  saveLocalUsers(users);
 };
+
+// ==========================================
+// EXPORT UTILITIES
+// ==========================================
 
 export const exportToCSV = (data, filename = "wms-export.csv") => {
   if (!data || !data.length) return;

@@ -20,6 +20,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import GlobalSuccessModal from './GlobalSuccessModal';
+import CustomAlertModal from './CustomAlertModal';
 
 export default function UserManagement({ 
   currentUser, 
@@ -33,12 +34,19 @@ export default function UserManagement({
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [branchFilter, setBranchFilter] = useState('ALL');
   
+  // Alert Modal State
+  const [alertModal, setAlertModal] = useState(null);
+  const showAlert = (title, message, type = 'WARNING') => {
+    setAlertModal({ title, message, type });
+  };
+
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [deleteConfirmUser, setDeleteConfirmUser] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [successModal, setSuccessModal] = useState(null);
+
 
   // Form State
   const [formData, setFormData] = useState({
@@ -64,8 +72,11 @@ export default function UserManagement({
   // Helper to dynamically get branch name
   const getBranchDisplayName = (user) => {
     if (!user) return '-';
-    if (user.role === 'ADMIN' || user.role === 'STAFF_PUSAT' || user.role === 'PUSAT' || user.branchId === 'ALL' || !user.branchId) {
-      return 'Pusat (Semua Cabang)';
+    if (user.role === 'ADMIN') {
+      return 'Pusat (Semua Cabang / Admin)';
+    }
+    if (user.role === 'STAFF_PUSAT' || user.role === 'PUSAT') {
+      return 'Gudang Utama Pusat';
     }
     const found = branches.find(b => b.id === user.branchId);
     return found ? found.name : (user.branchName || user.branchId);
@@ -94,7 +105,7 @@ export default function UserManagement({
       password: '',
       role: 'STAFF_BRANCH',
       branchId: defaultBranch ? defaultBranch.id : 'ALL',
-      branchName: defaultBranch ? defaultBranch.name : 'Pusat (Semua Cabang)',
+      branchName: defaultBranch ? defaultBranch.name : 'Gudang Cabang',
       phone: '',
       status: 'ACTIVE'
     });
@@ -106,13 +117,29 @@ export default function UserManagement({
   const handleOpenEditModal = (user) => {
     setEditingUser(user);
     const matchedBranch = branches.find(b => b.id === user.branchId);
+    const pusatBranch = branches.find(b => b.isPusat === true || b.code === 'GUDANG-PUSAT' || (b.name || '').toLowerCase().includes('gudang utama pusat'));
+    
+    let branchId = user.branchId;
+    let branchName = user.branchName;
+
+    if (user.role === 'ADMIN') {
+      branchId = 'ALL';
+      branchName = 'Semua Cabang (Global Admin)';
+    } else if (user.role === 'STAFF_PUSAT' || user.role === 'PUSAT') {
+      branchId = pusatBranch ? pusatBranch.id : 'branch-pusat-hq';
+      branchName = pusatBranch ? pusatBranch.name : 'Gudang Utama Pusat';
+    } else {
+      branchId = user.branchId || (branches[0]?.id || 'ALL');
+      branchName = matchedBranch ? matchedBranch.name : (user.branchName || 'Cabang');
+    }
+
     setFormData({
       name: user.name || '',
       email: user.email || '',
       password: user.password || '',
       role: user.role || 'STAFF_BRANCH',
-      branchId: (user.role === 'ADMIN' || user.role === 'STAFF_PUSAT' || user.role === 'PUSAT') ? 'ALL' : (user.branchId || (branches[0]?.id || 'ALL')),
-      branchName: (user.role === 'ADMIN' || user.role === 'STAFF_PUSAT' || user.role === 'PUSAT') ? 'Pusat (Semua Cabang)' : (matchedBranch ? matchedBranch.name : (user.branchName || 'Pusat (Semua Cabang)')),
+      branchId,
+      branchName,
       phone: user.phone || '',
       status: user.status || 'ACTIVE'
     });
@@ -155,11 +182,15 @@ export default function UserManagement({
 
     // Strictly resolve correct branchName from current branch list
     let finalBranchId = formData.branchId;
-    let finalBranchName = 'Pusat (Semua Cabang)';
+    let finalBranchName = 'Gudang Utama Pusat';
 
-    if (formData.role === 'ADMIN' || formData.role === 'STAFF_PUSAT' || formData.role === 'PUSAT') {
+    if (formData.role === 'ADMIN') {
       finalBranchId = 'ALL';
-      finalBranchName = 'Pusat (Semua Cabang)';
+      finalBranchName = 'Pusat (Semua Cabang / Global Admin)';
+    } else if (formData.role === 'STAFF_PUSAT' || formData.role === 'PUSAT') {
+      const pusatBranch = branches.find(b => b.isPusat === true || b.code === 'GUDANG-PUSAT' || (b.name || '').toLowerCase().includes('gudang utama pusat'));
+      finalBranchId = pusatBranch ? pusatBranch.id : 'branch-pusat-hq';
+      finalBranchName = pusatBranch ? pusatBranch.name : 'Gudang Utama Pusat';
     } else {
       const matched = branches.find(b => b.id === finalBranchId);
       if (matched) {
@@ -206,9 +237,10 @@ export default function UserManagement({
       await onDeleteUser(deleteConfirmUser.id);
       setDeleteConfirmUser(null);
     } catch (err) {
-      alert('Gagal menghapus pengguna: ' + err.message);
+      showAlert("Gagal Menghapus Pengguna", err.message, "ERROR");
     }
   };
+
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -813,12 +845,16 @@ export default function UserManagement({
                   <Building2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <select
                     disabled={formData.role === 'ADMIN' || formData.role === 'STAFF_PUSAT'}
-                    value={(formData.role === 'ADMIN' || formData.role === 'STAFF_PUSAT') ? 'ALL' : (formData.branchId || '')}
+                    value={formData.role === 'ADMIN' ? 'ALL' : formData.role === 'STAFF_PUSAT' ? (branches.find(b => b.isPusat === true || b.code === 'GUDANG-PUSAT')?.id || 'branch-pusat-hq') : (formData.branchId || '')}
                     onChange={(e) => handleBranchChange(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 transition"
+                    className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-500 transition font-medium"
                   >
-                    {(formData.role === 'ADMIN' || formData.role === 'STAFF_PUSAT') ? (
-                      <option value="ALL">Pusat (Semua Cabang / Global Access)</option>
+                    {formData.role === 'ADMIN' ? (
+                      <option value="ALL">Administrator Pusat (Akses Seluruh Sistem)</option>
+                    ) : formData.role === 'STAFF_PUSAT' ? (
+                      <option value={branches.find(b => b.isPusat === true || b.code === 'GUDANG-PUSAT')?.id || 'branch-pusat-hq'}>
+                        Gudang Utama Pusat (Otomatis Penugasan Gudang Pusat)
+                      </option>
                     ) : (
                       <>
                         {branches.length === 0 ? (
@@ -826,7 +862,7 @@ export default function UserManagement({
                         ) : (
                           branches.map(b => (
                             <option key={b.id} value={b.id}>
-                              {b.name}
+                              {b.name} {b.isPusat ? '(Gudang Utama)' : ''}
                             </option>
                           ))
                         )}
@@ -932,6 +968,16 @@ export default function UserManagement({
         buttonText={successModal?.buttonText || "✓ Selesai & Tutup"}
       />
 
+      {/* INTERACTIVE CUSTOM ALERT MODAL */}
+      <CustomAlertModal
+        isOpen={Boolean(alertModal)}
+        onClose={() => setAlertModal(null)}
+        title={alertModal?.title}
+        message={alertModal?.message}
+        type={alertModal?.type}
+      />
+
     </div>
   );
 }
+

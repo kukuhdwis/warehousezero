@@ -23,6 +23,7 @@ import {
   createBranch,
   updateBranch,
   deleteBranch,
+  clearAllBranches,
   fetchUsers,
   createUser,
   updateUser,
@@ -30,10 +31,15 @@ import {
   fetchBrands,
   createBrand,
   deleteBrand,
+  fetchMachineCategories,
+  createMachineCategory,
+  deleteMachineCategory,
   fetchBranchInventories,
   requestBranchInventory,
   approveBranchInventory,
   rejectBranchInventory,
+  updateBranchInventory,
+
   fetchNotifications,
   markNotificationAsRead,
   markAllNotificationsAsRead,
@@ -48,6 +54,7 @@ import {
 
 import BottomNav from './components/BottomNav';
 import GlobalSuccessModal from './components/GlobalSuccessModal';
+import LogoutConfirmModal from './components/LogoutConfirmModal';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(getStoredUser());
@@ -63,20 +70,25 @@ export default function App() {
   const [transactions, setTransactions] = useState([]);
   const [branches, setBranches] = useState([]);
   const [brands, setBrands] = useState([]);
+  const [machineCategories, setMachineCategories] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [barcodeProduct, setBarcodeProduct] = useState(null);
   const [globalSuccessPopup, setGlobalSuccessPopup] = useState(null);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [backToast, setBackToast] = useState(null);
+
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [prods, txs, branchList, userList, brandList, invList, notifList, transferList, reqList] = await Promise.all([
+      const [prods, txs, branchList, userList, brandList, categoryList, invList, notifList, transferList, reqList] = await Promise.all([
         fetchProducts(),
         fetchTransactions(),
         fetchBranches(),
         fetchUsers(),
         fetchBrands(),
+        fetchMachineCategories(),
         fetchBranchInventories(),
         fetchNotifications(currentUser),
         fetchTransfers(currentUser?.branchId),
@@ -86,6 +98,7 @@ export default function App() {
       setBranches(branchList);
       setUsers(userList);
       setBrands(brandList);
+      setMachineCategories(categoryList);
       setProducts(prods);
       setBranchInventories(invList);
       setNotifications(notifList);
@@ -110,6 +123,50 @@ export default function App() {
       loadData();
     }
   }, [currentUser]);
+
+  // Mobile / Browser Hardware Back Button Handler (Requirement 6)
+  useEffect(() => {
+    window.history.replaceState({ tab: activeTab }, '');
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = (e) => {
+      // 1. Close open modals first
+      if (globalSuccessPopup) {
+        setGlobalSuccessPopup(null);
+        return;
+      }
+      if (barcodeProduct) {
+        setBarcodeProduct(null);
+        return;
+      }
+      if (isLogoutModalOpen) {
+        setIsLogoutModalOpen(false);
+        return;
+      }
+
+      // 2. Return to dashboard if in another tab
+      if (activeTab !== 'dashboard') {
+        setActiveTab('dashboard');
+        return;
+      }
+
+      // 3. Show Toast if already on dashboard
+      setBackToast("Tekan sekali lagi untuk keluar dari aplikasi.");
+      setTimeout(() => setBackToast(null), 3000);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [globalSuccessPopup, barcodeProduct, isLogoutModalOpen, activeTab]);
+
+  const changeTab = (newTab) => {
+    if (newTab !== activeTab) {
+      window.history.pushState({ tab: newTab }, '');
+      setActiveTab(newTab);
+    }
+  };
+
 
   // Jika belum login -> Tampilkan Halaman Login!
   if (!currentUser) {
@@ -155,6 +212,17 @@ export default function App() {
     await loadData();
   };
 
+  const handleCreateMachineCategory = async (catData) => {
+    const newCat = await createMachineCategory(catData);
+    await loadData();
+    return newCat;
+  };
+
+  const handleDeleteMachineCategory = async (catIdOrName) => {
+    await deleteMachineCategory(catIdOrName);
+    await loadData();
+  };
+
   // Handlers for Branch Inventory Requests & Approval Flow
   const handleRequestBranchInventory = async (requestData) => {
     await requestBranchInventory(requestData, currentUser);
@@ -192,6 +260,21 @@ export default function App() {
       ]
     });
   };
+
+  const handleUpdateBranchInventory = async (id, data) => {
+    await updateBranchInventory(id, data);
+    await loadData();
+    setGlobalSuccessPopup({
+      title: "Stok Inventaris Cabang Diperbarui!",
+      message: `Jumlah stok untuk "${data.productName || 'Produk'}" di cabang telah berhasil disesuaikan.`,
+      details: [
+        { label: "Cabang", value: data.branchName || 'Cabang' },
+        { label: "Produk", value: data.productName },
+        { label: "Stok Baru", value: `${data.stockQuantity} Pcs`, highlight: true }
+      ]
+    });
+  };
+
 
   // Handlers for Notifications
   const handleMarkNotificationRead = async (id) => {
@@ -342,16 +425,26 @@ export default function App() {
 
   const handleClearAllBranches = async () => {
     setLoading(true);
-    for (const b of branches) {
-      await deleteBranch(b.id);
+    try {
+      await clearAllBranches();
+      await loadData();
+    } catch (e) {
+      console.error("Error clearing branches:", e);
+    } finally {
+      setLoading(false);
     }
-    await loadData();
   };
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
+    setIsLogoutModalOpen(true);
+  };
+
+  const handleConfirmLogout = async () => {
     await logoutUser();
     setCurrentUser(null);
+    setIsLogoutModalOpen(false);
   };
+
 
   const currentBranchDisplay = currentUser?.role === 'ADMIN' || currentUser?.branchId === 'ALL'
     ? 'Semua Cabang (Pusat)'
@@ -362,18 +455,28 @@ export default function App() {
     branchName: currentBranchDisplay
   } : null;
 
-  // Compute products available for Outbound for the current branch:
-  // If Staff Cabang: map stocks from approved branchInventories
+  // Compute products available for Dashboard and Outbound for the current branch:
+  // If Staff Cabang: ONLY map approved branchInventories for their specific branchId!
   const effectiveOutboundProducts = (currentUser?.role === 'STAFF_BRANCH')
-    ? products.map(p => {
-        const branchInv = branchInventories.find(
-          bi => bi.branchId === currentUser.branchId && (bi.productId === p.id || bi.sku === p.sku) && bi.status === 'APPROVED'
-        );
-        return {
-          ...p,
-          currentStock: branchInv ? Number(branchInv.stockQuantity) : 0
-        };
-      })
+    ? branchInventories
+        .filter(bi => bi.branchId === currentUser?.branchId && bi.status === 'APPROVED')
+        .map(bi => {
+          const masterP = products.find(p => p.id === bi.productId || p.sku === bi.sku);
+          return {
+            id: bi.id,
+            productId: bi.productId,
+            sku: bi.sku,
+            name: bi.productName,
+            brand: bi.brand || masterP?.brand || 'Generic',
+            machineCategory: masterP?.machineCategory || masterP?.kategoriMesin || 'Universal',
+            price: bi.price ?? masterP?.price ?? 0,
+            unit: bi.unit || masterP?.unit || 'Pcs',
+            currentStock: Number(bi.stockQuantity) || 0,
+            minStock: Number(bi.minStock) || 5,
+            branchId: bi.branchId,
+            branchName: bi.branchName || currentUser?.branchName || 'Cabang'
+          };
+        })
     : products;
 
   const handleNavigate = (tab, contextData = null) => {
@@ -411,7 +514,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-['Inter',sans-serif]">
+    <div className="min-h-screen bg-slate-100 flex flex-col font-sans antialiased text-slate-800">
       {/* Top Navbar with Real-time Notification Center */}
       <Navbar 
         currentUser={resolvedCurrentUser}
@@ -426,9 +529,10 @@ export default function App() {
         <Sidebar 
           currentUser={resolvedCurrentUser}
           activeTab={activeTab}
-          setActiveTab={setActiveTab}
+          setActiveTab={changeTab}
           onLogout={handleLogout}
         />
+
 
         {/* Main Content Area with Mobile Safe Padding */}
         <main className="flex-1 p-3.5 sm:p-6 lg:p-8 pb-28 lg:pb-8 overflow-y-auto max-w-7xl mx-auto w-full">
@@ -443,6 +547,7 @@ export default function App() {
                 <Dashboard 
                   currentUser={currentUser}
                   products={effectiveOutboundProducts}
+                  branchInventories={branchInventories}
                   transactions={transactions}
                   branches={branches}
                   users={users}
@@ -457,16 +562,21 @@ export default function App() {
                   branchInventories={branchInventories}
                   branches={branches}
                   brands={brands}
+                  machineCategories={machineCategories}
                   onCreateProduct={handleCreateProduct}
                   onUpdateProduct={handleUpdateProduct}
                   onDeleteProduct={handleDeleteProduct}
                   onCreateBrand={handleCreateBrand}
                   onDeleteBrand={handleDeleteBrand}
+                  onCreateMachineCategory={handleCreateMachineCategory}
+                  onDeleteMachineCategory={handleDeleteMachineCategory}
                   onShowBarcode={setBarcodeProduct}
                   onRequestBranchInventory={handleRequestBranchInventory}
                   onApproveBranchInventory={handleApproveBranchInventory}
                   onRejectBranchInventory={handleRejectBranchInventory}
+                  onUpdateBranchInventory={handleUpdateBranchInventory}
                 />
+
               )}
               {activeTab === 'stock-in' && (
                 <StockIn 
@@ -545,9 +655,10 @@ export default function App() {
       <BottomNav 
         currentUser={resolvedCurrentUser}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={changeTab}
         onLogout={handleLogout}
       />
+
 
       {/* TOPMOST ROOT LEVEL SUCCESS POP-UP CONFIRMATION MODAL */}
       <GlobalSuccessModal
@@ -558,6 +669,21 @@ export default function App() {
         details={globalSuccessPopup?.details}
         buttonText={globalSuccessPopup?.buttonText || "✓ Selesai & Tutup"}
       />
+
+      {/* LOGOUT CONFIRMATION MODAL */}
+      <LogoutConfirmModal 
+        isOpen={isLogoutModalOpen}
+        onClose={() => setIsLogoutModalOpen(false)}
+        onConfirm={handleConfirmLogout}
+      />
+
+      {/* MOBILE BACK BUTTON TOAST */}
+      {backToast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-2xl z-[999] animate-bounce backdrop-blur-sm border border-slate-700">
+          {backToast}
+        </div>
+      )}
     </div>
   );
 }
+

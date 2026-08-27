@@ -22,3 +22,27 @@ body {
     width: 100%;
   }
 }
+
+/* Scanner Camera Viewport Overrides */
+#interactive-qr-reader {
+  border: none !important;
+}
+
+#interactive-qr-reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 1rem;
+}
+
+#interactive-qr-reader img[alt="Info icon"],
+#interactive-qr-reader img[alt="Camera menu icon"],
+#interactive-qr-reader__dashboard,
+#interactive-qr-reader__dashboard_section_csr,
+#interactive-qr-reader__dashboard_section_swaplink {
+  display: none !important;
+}
+
+#interactive-qr-reader canvas {
+  display: none !important;
+}

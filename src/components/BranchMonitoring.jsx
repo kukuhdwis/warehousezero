@@ -45,9 +45,30 @@ export default function BranchMonitoring({
   // Selected Branch Object
   const selectedBranch = branches.find(b => b.id === selectedBranchId);
 
+  // Helper to accurately filter staff assigned to a specific branch (including Staff Pusat for Gudang Utama Pusat)
+  const getBranchStaff = (branch) => {
+    if (!branch || !users) return [];
+    const isPusatBranch = branch.isPusat === true || branch.code === 'GUDANG-PUSAT' || (branch.name || '').toLowerCase().includes('gudang utama pusat');
+
+    return users.filter(u => {
+      if (u.role === 'ADMIN') return false; // Exclude root administrator from branch staff count
+      
+      if (isPusatBranch) {
+        return (
+          u.role === 'STAFF_PUSAT' || 
+          u.role === 'PUSAT' || 
+          u.branchId === branch.id || 
+          u.branchId === 'branch-pusat-hq' || 
+          (u.branchName || '').toLowerCase().includes('gudang utama pusat')
+        );
+      }
+      return u.branchId === branch.id || u.branchName === branch.name;
+    });
+  };
+
   // Staff list for selected branch
   const branchStaffList = selectedBranch
-    ? users.filter(u => u.branchId === selectedBranch.id)
+    ? getBranchStaff(selectedBranch)
     : users;
 
   // Branch Inventories belonging to selected branch (or all)
@@ -571,7 +592,7 @@ export default function BranchMonitoring({
           ) : (
             branches.map((branch) => {
               const bInventories = branchInventories.filter(bi => bi.branchId === branch.id && bi.status === 'APPROVED');
-              const bStaff = users.filter(u => u.branchId === branch.id);
+              const bStaff = getBranchStaff(branch);
               const bTotalUnits = bInventories.reduce((acc, bi) => acc + (Number(bi.stockQuantity) || 0), 0);
               const bValuation = bInventories.reduce((acc, bi) => acc + ((Number(bi.stockQuantity) || 0) * (Number(bi.price) || 0)), 0);
 

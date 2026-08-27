@@ -1,19 +1,15 @@
 import { initializeApp, getApps } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { 
+  getFirestore, 
+  initializeFirestore, 
+  persistentLocalCache, 
+  persistentMultipleTabManager 
+} from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { getFunctions } from "firebase/functions";
 
-// Default config loaded from environment variables or localStorage override
+// Secure Firebase Configuration loaded exclusively from environment variables (.env)
 const getFirebaseConfig = () => {
-  const customConfig = localStorage.getItem("wms_firebase_config");
-  if (customConfig) {
-    try {
-      return JSON.parse(customConfig);
-    } catch (e) {
-      console.error("Invalid custom Firebase config", e);
-    }
-  }
-
   return {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
     authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
@@ -43,7 +39,15 @@ let functions = null;
 if (isFirebaseConfigured()) {
   try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-    db = getFirestore(app);
+    try {
+      db = initializeFirestore(app, {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager()
+        })
+      });
+    } catch (cacheErr) {
+      db = getFirestore(app);
+    }
     auth = getAuth(app);
     functions = getFunctions(app);
   } catch (error) {

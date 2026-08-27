@@ -16,6 +16,7 @@ import {
   Users
 } from 'lucide-react';
 import GlobalSuccessModal from './GlobalSuccessModal';
+import CustomAlertModal from './CustomAlertModal';
 
 export default function BranchManagement({ 
   currentUser, 
@@ -26,8 +27,14 @@ export default function BranchManagement({
   onDeleteBranch,
   onClearAllBranches
 }) {
+  const [alertModal, setAlertModal] = useState(null);
+  const showAlert = (title, message, type = 'WARNING') => {
+    setAlertModal({ title, message, type });
+  };
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -46,10 +53,31 @@ export default function BranchManagement({
 
   const [formError, setFormError] = useState('');
 
+  // Helper to accurately filter staff assigned to a specific branch (including Staff Pusat for Gudang Utama Pusat)
+  const getStaffInBranch = (branch) => {
+    if (!branch || !users) return [];
+    const isPusatBranch = branch.isPusat === true || branch.code === 'GUDANG-PUSAT' || (branch.name || '').toLowerCase().includes('gudang utama pusat');
+
+    return users.filter(u => {
+      if (u.role === 'ADMIN') return false; // Exclude root administrator from branch staff count
+      
+      if (isPusatBranch) {
+        return (
+          u.role === 'STAFF_PUSAT' || 
+          u.role === 'PUSAT' || 
+          u.branchId === branch.id || 
+          u.branchId === 'branch-pusat-hq' || 
+          (u.branchName || '').toLowerCase().includes('gudang utama pusat')
+        );
+      }
+      return u.branchId === branch.id || u.branchName === branch.name;
+    });
+  };
+
   // Stats calculation
   const totalBranches = branches.length;
   const activeBranches = branches.filter(b => b.status === 'ACTIVE').length;
-  const totalAssignedStaff = users.filter(u => u.branchId && u.branchId !== 'ALL').length;
+  const totalAssignedStaff = users.filter(u => u.role !== 'ADMIN' && (u.branchId || u.role === 'STAFF_PUSAT' || u.role === 'PUSAT')).length;
 
   // Filtered branches
   const filteredBranches = branches.filter(branch => {
@@ -136,9 +164,10 @@ export default function BranchManagement({
       await onDeleteBranch(deleteConfirmBranch.id);
       setDeleteConfirmBranch(null);
     } catch (err) {
-      alert('Gagal menghapus cabang: ' + err.message);
+      showAlert("Gagal Menghapus Cabang", err.message, "ERROR");
     }
   };
+
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -251,7 +280,7 @@ export default function BranchManagement({
           </div>
         ) : (
           filteredBranches.map((branch) => {
-            const staffInBranch = users.filter(u => u.branchId === branch.id);
+            const staffInBranch = getStaffInBranch(branch);
             const isMaintenance = branch.status === 'MAINTENANCE';
             const isClosed = branch.status === 'CLOSED';
 
@@ -274,7 +303,12 @@ export default function BranchManagement({
                   </div>
 
                   <div>
-                    {isMaintenance ? (
+                    {branch.isPusat || branch.code === 'GUDANG-PUSAT' ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                        <Building2 className="w-3 h-3 text-purple-600" />
+                        Gudang Utama (Pusat)
+                      </span>
+                    ) : isMaintenance ? (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                         Pemeliharaan
@@ -333,13 +367,23 @@ export default function BranchManagement({
                     <span>Ubah Data</span>
                   </button>
 
-                  <button
-                    onClick={() => setDeleteConfirmBranch(branch)}
-                    className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs transition"
-                    title="Hapus Cabang"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {branch.isPusat || branch.code === 'GUDANG-PUSAT' || branch.isProtected ? (
+                    <button
+                      disabled
+                      className="p-2 bg-slate-100 text-slate-300 rounded-xl text-xs cursor-not-allowed"
+                      title="Gudang Utama Pusat tidak dapat dihapus (Master Sistem)"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setDeleteConfirmBranch(branch)}
+                      className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs transition cursor-pointer"
+                      title="Hapus Cabang"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
 
               </div>
@@ -374,7 +418,7 @@ export default function BranchManagement({
                 </tr>
               ) : (
                 filteredBranches.map((branch) => {
-                  const staffInBranch = users.filter(u => u.branchId === branch.id);
+                  const staffInBranch = getStaffInBranch(branch);
                   const isMaintenance = branch.status === 'MAINTENANCE';
                   const isClosed = branch.status === 'CLOSED';
 
@@ -431,7 +475,12 @@ export default function BranchManagement({
 
                       {/* Status */}
                       <td className="px-4 py-4">
-                        {isMaintenance ? (
+                        {branch.isPusat || branch.code === 'GUDANG-PUSAT' ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                            <Building2 className="w-3.5 h-3.5 text-purple-600" />
+                            Gudang Utama (Pusat)
+                          </span>
+                        ) : isMaintenance ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                             Pemeliharaan
@@ -460,13 +509,23 @@ export default function BranchManagement({
                             <Edit3 className="w-4 h-4" />
                           </button>
                           
-                          <button
-                            onClick={() => setDeleteConfirmBranch(branch)}
-                            className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                            title="Hapus Cabang"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {branch.isPusat || branch.code === 'GUDANG-PUSAT' || branch.isProtected ? (
+                            <button
+                              disabled
+                              className="p-1.5 text-slate-300 bg-slate-100 rounded-lg cursor-not-allowed"
+                              title="Gudang Utama Pusat tidak dapat dihapus (Master Sistem)"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setDeleteConfirmBranch(branch)}
+                              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                              title="Hapus Cabang"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -651,6 +710,16 @@ export default function BranchManagement({
         buttonText={successModal?.buttonText || "✓ Selesai & Tutup"}
       />
 
+      {/* INTERACTIVE CUSTOM ALERT MODAL */}
+      <CustomAlertModal
+        isOpen={Boolean(alertModal)}
+        onClose={() => setAlertModal(null)}
+        title={alertModal?.title}
+        message={alertModal?.message}
+        type={alertModal?.type}
+      />
+
     </div>
   );
 }
+

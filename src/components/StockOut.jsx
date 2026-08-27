@@ -22,11 +22,17 @@ import {
   ShieldCheck,
   Check,
   Send,
-  Sparkles
+  Sparkles,
+  Tag
 } from 'lucide-react';
+
 import ScannerModal from './ScannerModal';
 import TransactionSuccessModal from './TransactionSuccessModal';
 import GlobalSuccessModal from './GlobalSuccessModal';
+import ProductSearchPicker from './ProductSearchPicker';
+import CustomAlertModal from './CustomAlertModal';
+
+
 
 export default function StockOut({ 
   currentUser, 
@@ -48,19 +54,32 @@ export default function StockOut({
   );
   const [rejectSuccessData, setRejectSuccessData] = useState(null);
 
+  // Sales Platform & Type States (Requirement: Unified Sales Section)
+  const [salesType, setSalesType] = useState('SINGLE'); // 'SINGLE' | 'BUNDLE'
+  const [salesPlatform, setSalesPlatform] = useState('OFFLINE'); // 'OFFLINE' | 'SHOPEE' | 'TOKOPEDIA' | 'TIKTOK' | 'OTHER'
+
   // Single Item State (For Retail Pcs / HQ Transfer)
   const [selectedProductId, setSelectedProductId] = useState('');
   const [qty, setQty] = useState(1);
   const [targetBranchId, setTargetBranchId] = useState(branches[0]?.id || '');
   const [customerName, setCustomerName] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('CASH'); // 'CASH' | 'TRANSFER' | 'QRIS'
+  const [paymentMethod, setPaymentMethod] = useState('CASH'); // 'CASH' | 'TRANSFER' | 'QRIS' | 'MARKETPLACE'
   const [notes, setNotes] = useState('');
   const [user, setUser] = useState(currentUser?.name || (isBranchStaff ? 'Staff Kasir Cabang' : 'Staff Toko/Gudang Pusat'));
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+
   
+  // Alert Modal State
+  const [alertModal, setAlertModal] = useState(null); // { title, message, type }
+
+  const showAlert = (title, message, type = 'WARNING') => {
+    setAlertModal({ title, message, type });
+  };
+
   // Confirmation & Success Modal States
   const [pendingConfirm, setPendingConfirm] = useState(null);
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [successModalData, setSuccessModalData] = useState(null);
   const [activeFulfillmentRequest, setActiveFulfillmentRequest] = useState(initialRequestData);
@@ -171,11 +190,15 @@ export default function StockOut({
         ]
       });
     } catch (err) {
-      alert("Gagal menolak permintaan: " + err.message);
+      showAlert("Gagal Menolak Permintaan", err.message, "ERROR");
     } finally {
       setIsSubmittingReject(false);
     }
   };
+
+  // Batch Barcode Scan Mode State (Requirement 1)
+  const [isBatchTransferMode, setIsBatchTransferMode] = useState(false);
+  const [transferCart, setTransferCart] = useState([]);
 
   const selectedProduct = products.find(p => p.id === selectedProductId || p.sku === selectedProductId);
   const currentAvailable = Number(selectedProduct?.currentStock) || 0;
@@ -184,16 +207,69 @@ export default function StockOut({
   const isSaleMode = outboundMode === 'RETAIL_PCS' || outboundMode === 'CUSTOM_BUNDLING';
   const isTransferMode = outboundMode === 'STOCK_TRANSFER_TO_BRANCH';
 
+  // Helper: Add product to transfer cart
+  const handleAddItemToTransferCart = (product) => {
+    if (!product) return;
+    const existingIdx = transferCart.findIndex(item => item.productId === product.id);
+    const maxStock = Number(product.currentStock) || 0;
+    if (existingIdx !== -1) {
+      const updated = [...transferCart];
+      if (updated[existingIdx].qty + 1 > maxStock) {
+        showAlert("Stok Produk Terbatas ⚠️", `Stok produk "${product.name}" di gudang pusat terbatas hanya ${maxStock} Pcs.`, "WARNING");
+        return;
+      }
+      updated[existingIdx].qty += 1;
+      setTransferCart(updated);
+    } else {
+      if (maxStock <= 0) {
+        showAlert("Stok Produk Habis 📦", `Stok produk "${product.name}" di gudang pusat habis (0 Pcs).`, "WARNING");
+        return;
+      }
+      setTransferCart([
+        ...transferCart,
+        {
+          productId: product.id,
+          sku: product.sku,
+          productName: product.name,
+          brand: product.brand || 'Generic',
+          price: product.price || 0,
+          currentStock: maxStock,
+          qty: 1
+        }
+      ]);
+    }
+  };
+
+  const handleUpdateTransferCartQty = (index, newQty) => {
+    const updated = [...transferCart];
+    const item = updated[index];
+    const maxStock = Number(item.currentStock) || 0;
+    const val = Number(newQty);
+    if (val > maxStock) {
+      showAlert("Kuantitas Melebihi Stok ⚠️", `Kuantitas kirim melebihi stok pusat! Maksimal ${maxStock} Pcs.`, "WARNING");
+      updated[index].qty = maxStock;
+    } else {
+      updated[index].qty = Math.max(1, val);
+    }
+    setTransferCart(updated);
+  };
+
+
+  const handleRemoveFromTransferCart = (index) => {
+    setTransferCart(transferCart.filter((_, i) => i !== index));
+  };
+
   // Scanner handler
   const handleScanSuccess = (scannedText) => {
     const matched = products.find(
-      p => p.sku.toLowerCase() === scannedText.toLowerCase() || 
-           p.barcode?.toLowerCase() === scannedText.toLowerCase()
+      p => p.sku?.toLowerCase() === scannedText.toLowerCase() || 
+           p.barcode?.toLowerCase() === scannedText.toLowerCase() ||
+           p.id?.toLowerCase() === scannedText.toLowerCase()
     );
     if (matched) {
-      if (outboundMode !== 'CUSTOM_BUNDLING') {
-        setSelectedProductId(matched.id);
-      } else {
+      if (outboundMode === 'STOCK_TRANSFER_TO_BRANCH' && isBatchTransferMode) {
+        handleAddItemToTransferCart(matched);
+      } else if (outboundMode === 'CUSTOM_BUNDLING') {
         const existingIdx = bundleItems.findIndex(bi => bi.productId === matched.id);
         if (existingIdx !== -1) {
           const updated = [...bundleItems];
@@ -202,31 +278,58 @@ export default function StockOut({
         } else {
           setBundleItems([...bundleItems, { productId: matched.id, qty: 1 }]);
         }
+      } else {
+        setSelectedProductId(matched.id);
       }
     } else {
-      alert(`Produk dengan SKU/Barcode "${scannedText}" tidak ditemukan di database.`);
+      showAlert("Barcode Tidak Ditemukan 🔍", `Produk dengan SKU/Barcode "${scannedText}" tidak ditemukan di database.`, "WARNING");
     }
   };
 
-  // Bundling Helper: Add Component Row
+
+  // Bundling Helper: Add Component Row (Prevent Duplicates)
   const handleAddBundleComponent = () => {
-    const availableProd = products.find(p => !bundleItems.some(bi => bi.productId === p.id)) || products[0];
-    if (availableProd) {
-      setBundleItems([...bundleItems, { productId: availableProd.id, qty: 1 }]);
+    const unselectedProd = products.find(p => !bundleItems.some(bi => bi.productId === p.id));
+    if (!unselectedProd) {
+      showAlert(
+        "Semua Produk Sudah Dimasukkan 📋",
+        "Semua produk katalog yang tersedia telah dimasukkan ke dalam list bundling.",
+        "INFO"
+      );
+      return;
     }
+    setBundleItems([...bundleItems, { productId: unselectedProd.id, qty: 1 }]);
   };
 
-  // Bundling Helper: Update Component Row
+  // Bundling Helper: Update Component Row (Auto Merge / Confirm Duplicates)
   const handleUpdateBundleComponent = (index, field, value) => {
+    if (field === 'productId') {
+      const existingIdx = bundleItems.findIndex((item, i) => i !== index && item.productId === value);
+      if (existingIdx !== -1) {
+        const prod = products.find(p => p.id === value);
+        // Automatically merge +1 Qty to existing row and clear duplicate
+        const updated = bundleItems.filter((_, i) => i !== index);
+        updated[existingIdx].qty = (Number(updated[existingIdx].qty) || 1) + 1;
+        setBundleItems(updated);
+
+        showAlert(
+          "Produk Digabungkan 📦",
+          `Produk "${prod?.name || 'tersebut'}" sudah ada di dalam list bundling. Kuantitas (+1 Pcs) telah digabungkan secara otomatis ke baris produk yang ada.`,
+          "INFO"
+        );
+        return;
+      }
+    }
     const updated = [...bundleItems];
     updated[index] = { ...updated[index], [field]: value };
     setBundleItems(updated);
   };
 
+
   // Bundling Helper: Remove Component Row
   const handleRemoveBundleComponent = (index) => {
     if (bundleItems.length <= 1) {
-      alert("Paket bundling minimal harus memiliki 1 komponen produk.");
+      showAlert("Komponen Paket Minimal 1", "Paket bundling minimal harus memiliki 1 komponen produk.", "WARNING");
       return;
     }
     setBundleItems(bundleItems.filter((_, i) => i !== index));
@@ -244,19 +347,30 @@ export default function StockOut({
     return (Number(item.qty) || 0) > (Number(p?.currentStock) || 0);
   });
 
+  const getPlatformLabel = (platformCode) => {
+    switch (platformCode) {
+      case 'SHOPEE': return 'Shopee';
+      case 'TOKOPEDIA': return 'Tokopedia';
+      case 'TIKTOK': return 'TikTok Shop';
+      case 'OTHER': return 'Direct / Channel';
+      case 'OFFLINE':
+      default: return 'Toko Fisik (Offline)';
+    }
+  };
+
   // Step 1: Open Confirmation Modal Before Processing Single Item Outbound
   const handlePrepareSingleSubmit = (e) => {
     e.preventDefault();
     if (!selectedProduct) {
-      alert("Silakan pilih produk terlebih dahulu!");
+      showAlert("Produk Belum Dipilih", "Silakan pilih produk terlebih dahulu!", "WARNING");
       return;
     }
     if (Number(qty) <= 0) {
-      alert("Jumlah kuantitas (Pcs) harus lebih besar dari 0!");
+      showAlert("Kuantitas Tidak Valid", "Jumlah kuantitas (Pcs) harus lebih besar dari 0!", "WARNING");
       return;
     }
     if (isInsufficient) {
-      alert(`Stok tidak mencukupi! Stok tersedia hanya ${currentAvailable} Pcs.`);
+      showAlert("Stok Tidak Mencukupi 📦", `Stok tidak mencukupi! Stok tersedia hanya ${currentAvailable} Pcs.`, "WARNING");
       return;
     }
 
@@ -277,15 +391,19 @@ export default function StockOut({
         deliveryNote: sjNo
       };
     } else {
-      // Retail Sale (Either at Branch or Central Physical Store)
+      // Retail Sale (Satuan Per Pcs - Offline / Marketplace)
       const unitPrice = Number(selectedProduct.price) || 0;
       const totalPrice = unitPrice * Number(qty);
-      const notaNo = invoiceNumber || `NOTA-${Math.floor(1000 + Math.random() * 9000)}`;
-      const locationLabel = isBranchStaff ? currentUser?.branchName || 'Cabang' : 'Toko Fisik Pusat';
+      const platformName = getPlatformLabel(salesPlatform);
+      const defaultPrefix = salesPlatform !== 'OFFLINE' ? `${salesPlatform}-` : 'NOTA-';
+      const notaNo = invoiceNumber || `${defaultPrefix}${Math.floor(100000 + Math.random() * 900000)}`;
+      const locationLabel = isBranchStaff ? currentUser?.branchName || 'Cabang' : 'Pusat';
 
-      finalNotes = `Penjualan Satuan (${locationLabel} - ${qty} Pcs) • Pembeli: ${customerName || 'Walk-in Customer'} • No. Nota: ${notaNo} • Bayar: ${paymentMethod}${notes ? ` • ${notes}` : ''}`;
+      finalNotes = `Penjualan Satuan (${platformName} • ${locationLabel} • ${qty} Pcs) • Pembeli: ${customerName || 'Walk-in Customer'} • No. Nota/Pesanan: ${notaNo} • Bayar: ${paymentMethod}${notes ? ` • ${notes}` : ''}`;
       movementTypeData = {
         transactionType: 'RETAIL_PCS',
+        salesPlatform: salesPlatform,
+        platformName: platformName,
         customerName: customerName || 'Walk-in Customer',
         invoiceNumber: notaNo,
         paymentMethod: paymentMethod,
@@ -308,13 +426,72 @@ export default function StockOut({
     setPendingConfirm(payload);
   };
 
+  // Step 1B: Prepare Batch Scan Transfer Submit
+  const handlePrepareBatchTransferSubmit = (e) => {
+    e.preventDefault();
+    if (transferCart.length === 0) {
+      showAlert("List Barang Kosong 📋", "Keranjang mutasi transfer masih kosong! Silakan scan atau pilih produk terlebih dahulu.", "WARNING");
+      return;
+    }
+    const targetBranch = branches.find(b => b.id === targetBranchId);
+    const targetBranchName = targetBranch?.name || 'Cabang Tujuan';
+    const sjNo = invoiceNumber || `SJ-HQ-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const summaryList = transferCart.map(item => `${item.qty}x ${item.productName}`).join(' + ');
+
+    const payload = {
+      productId: 'BATCH-TRANSFER',
+      sku: 'MULTI-TRANSFER',
+      productName: `[MULTI-TRANSFER] ${transferCart.length} Jenis Produk`,
+      type: 'OUT',
+      qty: transferCart.reduce((acc, i) => acc + Number(i.qty), 0),
+      unit: 'Pcs',
+      notes: `Batch Transfer ke: ${targetBranchName} [${summaryList}] • No. Surat Jalan: ${sjNo}${notes ? ` • Catatan: ${notes}` : ''}`,
+      user: user || currentUser?.name || 'Staff',
+      transactionType: 'STOCK_TRANSFER_TO_BRANCH',
+      targetBranchId: targetBranchId,
+      targetBranchName: targetBranchName,
+      deliveryNote: sjNo,
+      isBatchTransfer: true,
+      batchItems: transferCart
+    };
+
+    setPendingConfirm(payload);
+  };
+
   // Step 2: User Confirmed -> Execute and Show Success Pop-Up
   const handleExecuteConfirmed = async () => {
     if (!pendingConfirm) return;
     setIsProcessing(true);
 
     try {
-      await onRecordMovement(pendingConfirm);
+      if (pendingConfirm.isBatchTransfer && pendingConfirm.batchItems) {
+        for (const item of pendingConfirm.batchItems) {
+          await onRecordMovement({
+            productId: item.productId,
+            sku: item.sku,
+            productName: item.productName,
+            type: 'OUT',
+            qty: Number(item.qty),
+            unit: 'Pcs',
+            notes: pendingConfirm.notes,
+            user: pendingConfirm.user,
+            transactionType: 'STOCK_TRANSFER_TO_BRANCH',
+            targetBranchId: pendingConfirm.targetBranchId,
+            targetBranchName: pendingConfirm.targetBranchName,
+            deliveryNote: pendingConfirm.deliveryNote
+          });
+        }
+        setTransferCart([]);
+      } else if (pendingConfirm.transactionType === 'CUSTOM_BUNDLING' && pendingConfirm.bundleItems) {
+        await onRecordMovement({
+          ...pendingConfirm,
+          isBundling: true,
+          items: pendingConfirm.bundleItems
+        });
+      } else {
+        await onRecordMovement(pendingConfirm);
+      }
 
       // Trigger Success Receipt Modal
       setSuccessModalData(pendingConfirm);
@@ -331,31 +508,35 @@ export default function StockOut({
       setActiveFulfillmentRequest(null);
       if (onClearInitialRequest) onClearInitialRequest();
     } catch (err) {
-      alert("Gagal memproses transaksi: " + err.message);
+      showAlert("Gagal Memproses Transaksi", err.message, "ERROR");
     } finally {
       setIsProcessing(false);
     }
   };
 
+
   // Step 1: Open Confirmation Modal for Bundling Sale
   const handlePrepareBundlingSubmit = (e) => {
     e.preventDefault();
     if (!bundleName.trim()) {
-      alert("Masukkan nama paket bundling!");
+      showAlert("Nama Paket Wajib Diisi", "Masukkan nama paket bundling terlebih dahulu!", "WARNING");
       return;
     }
     if (bundleItems.length === 0) {
-      alert("Paket bundling harus memiliki minimal 1 komponen produk.");
+      showAlert("Komponen Paket Kosong", "Paket bundling harus memiliki minimal 1 komponen produk.", "WARNING");
       return;
     }
     if (isBundleStockInsufficient) {
-      alert("Salah satu komponen bundling melebihi stok yang tersedia!");
+      showAlert("Stok Komponen Tidak Mencukupi 📦", "Salah satu komponen bundling melebihi stok yang tersedia!", "WARNING");
       return;
     }
 
+
     const totalBundlePrice = bundleCustomPrice ? Number(bundleCustomPrice) : bundleRegularTotal;
-    const notaNo = invoiceNumber || `NOTA-BUNDLE-${Math.floor(1000 + Math.random() * 9000)}`;
-    const locationLabel = isBranchStaff ? currentUser?.branchName || 'Cabang' : 'Toko Fisik Pusat';
+    const platformName = getPlatformLabel(salesPlatform);
+    const defaultPrefix = salesPlatform !== 'OFFLINE' ? `${salesPlatform}-BUNDLE-` : 'NOTA-BUNDLE-';
+    const notaNo = invoiceNumber || `${defaultPrefix}${Math.floor(100000 + Math.random() * 900000)}`;
+    const locationLabel = isBranchStaff ? currentUser?.branchName || 'Cabang' : 'Pusat';
 
     const itemsSummary = bundleItems.map(item => {
       const p = products.find(prod => prod.id === item.productId);
@@ -369,9 +550,11 @@ export default function StockOut({
       type: 'OUT',
       qty: bundleItems.reduce((acc, i) => acc + Number(i.qty), 0),
       unit: 'Paket',
-      notes: `Penjualan Paket Bundling (${locationLabel}) • "${bundleName}" [${itemsSummary}] • Pembeli: ${customerName || 'Walk-in Customer'} • Total: Rp ${totalBundlePrice.toLocaleString('id-ID')} • No. Nota: ${notaNo}`,
+      notes: `Penjualan Paket Bundling (${platformName} • ${locationLabel}) • "${bundleName}" [${itemsSummary}] • Pembeli: ${customerName || 'Walk-in Customer'} • Total: Rp ${totalBundlePrice.toLocaleString('id-ID')} • No. Nota/Pesanan: ${notaNo}`,
       user: user || currentUser?.name || 'Staff',
       transactionType: 'CUSTOM_BUNDLING',
+      salesPlatform: salesPlatform,
+      platformName: platformName,
       customerName: customerName || 'Walk-in Customer',
       invoiceNumber: notaNo,
       paymentMethod: paymentMethod,
@@ -543,79 +726,58 @@ export default function StockOut({
       {/* Main Card */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 sm:p-6 space-y-5">
         
-        {/* OUTBOUND MODE SELECTOR */}
+        {/* OUTBOUND MODE SELECTOR (2 MAIN OPTIONS) */}
         <div>
           <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
             Pilih Jenis Pengeluaran Barang (Outbound)
           </label>
-          <div className={`grid gap-3 ${!isBranchStaff ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2'}`}>
+          <div className={`grid gap-3 ${!isBranchStaff ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
             
-            {/* OPSI A: MUTASI KE CABANG (PUSAT ONLY) */}
+            {/* OPSI 1: MUTASI KE CABANG (PUSAT ONLY) */}
             {!isBranchStaff && (
               <button
                 type="button"
                 onClick={() => setOutboundMode('STOCK_TRANSFER_TO_BRANCH')}
-                className={`p-3.5 rounded-2xl border text-left transition cursor-pointer flex items-start gap-3 ${
+                className={`p-4 rounded-2xl border text-left transition cursor-pointer flex items-start gap-3.5 ${
                   outboundMode === 'STOCK_TRANSFER_TO_BRANCH'
-                    ? 'border-indigo-500 bg-indigo-50/70 ring-2 ring-indigo-500/20 text-indigo-950'
+                    ? 'border-indigo-500 bg-indigo-50/70 ring-2 ring-indigo-500/20 text-indigo-950 shadow-xs'
                     : 'border-slate-200 hover:bg-slate-50 text-slate-600'
                 }`}
               >
-                <div className={`p-2 rounded-xl flex-shrink-0 ${outboundMode === 'STOCK_TRANSFER_TO_BRANCH' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                  <Truck className="w-4 h-4" />
+                <div className={`p-2.5 rounded-xl flex-shrink-0 ${outboundMode === 'STOCK_TRANSFER_TO_BRANCH' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 text-slate-500'}`}>
+                  <Truck className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-1">
-                    <span className="font-bold text-xs sm:text-sm">1. Kirim ke Cabang</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-sm">1. Kirim ke Cabang</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-full">Mutasi Stok</span>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Kirim mutasi stok per pcs dengan Surat Jalan.</p>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">Kirim mutasi stok dari gudang pusat ke cabang dengan Surat Jalan.</p>
                 </div>
               </button>
             )}
 
-            {/* OPSI B: PENJUALAN SATUAN (RETAIL PCS) */}
+            {/* OPSI 2: PENJUALAN PRODUK (SATUAN & BUNDLING - ALL PLATFORMS) */}
             <button
               type="button"
               onClick={() => setOutboundMode('RETAIL_PCS')}
-              className={`p-3.5 rounded-2xl border text-left transition cursor-pointer flex items-start gap-3 ${
+              className={`p-4 rounded-2xl border text-left transition cursor-pointer flex items-start gap-3.5 ${
                 outboundMode === 'RETAIL_PCS'
-                  ? 'border-emerald-500 bg-emerald-50/70 ring-2 ring-emerald-500/20 text-emerald-950'
+                  ? 'border-emerald-500 bg-emerald-50/70 ring-2 ring-emerald-500/20 text-emerald-950 shadow-xs'
                   : 'border-slate-200 hover:bg-slate-50 text-slate-600'
               }`}
             >
-              <div className={`p-2 rounded-xl flex-shrink-0 ${outboundMode === 'RETAIL_PCS' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                <Store className="w-4 h-4" />
+              <div className={`p-2.5 rounded-xl flex-shrink-0 ${outboundMode === 'RETAIL_PCS' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-100 text-slate-500'}`}>
+                <ShoppingBag className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
-                  <span className="font-bold text-xs sm:text-sm">{!isBranchStaff ? '2. Penjualan Toko' : '1. Penjualan Satuan'}</span>
-                  <span className="text-[10px] font-bold px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded">Per Pcs</span>
+                  <span className="font-bold text-sm">{!isBranchStaff ? '2. Penjualan Produk' : '1. Penjualan Produk'}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full">Satuan & Combo</span>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  {!isBranchStaff ? 'Jual produk satuan di toko fisik pusat.' : 'Penjualan 1 jenis produk per pcs langsung.'}
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Penjualan toko fisik atau marketplace (Shopee, Tokopedia, TikTok Shop).
                 </p>
-              </div>
-            </button>
-
-            {/* OPSI C: PAKET BUNDLING */}
-            <button
-              type="button"
-              onClick={() => setOutboundMode('CUSTOM_BUNDLING')}
-              className={`p-3.5 rounded-2xl border text-left transition cursor-pointer flex items-start gap-3 ${
-                outboundMode === 'CUSTOM_BUNDLING'
-                  ? 'border-purple-500 bg-purple-50/70 ring-2 ring-purple-500/20 text-purple-950'
-                  : 'border-slate-200 hover:bg-slate-50 text-slate-600'
-              }`}
-            >
-              <div className={`p-2 rounded-xl flex-shrink-0 ${outboundMode === 'CUSTOM_BUNDLING' ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                <Boxes className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-bold text-xs sm:text-sm">{!isBranchStaff ? '3. Paket Bundling' : '2. Paket Bundling'}</span>
-                  <span className="text-[10px] font-bold px-1.5 py-0.2 bg-purple-100 text-purple-800 rounded">Combo</span>
-                </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">Jual gabungan beberapa barang sekaligus.</p>
               </div>
             </button>
 
@@ -623,413 +785,633 @@ export default function StockOut({
         </div>
 
         {/* ========================================================================= */}
-        {/* VIEW 1 & 2: SINGLE ITEM (MUTASI KE CABANG ATAU PENJUALAN SATUAN)          */}
+        {/* VIEW 1: MUTASI KE CABANG (STOCK TRANSFER)                                */}
         {/* ========================================================================= */}
-        {(outboundMode === 'STOCK_TRANSFER_TO_BRANCH' || outboundMode === 'RETAIL_PCS') && (
-          <form onSubmit={handlePrepareSingleSubmit} className="space-y-4 pt-2">
-            
-            {/* Step 1: Scan / Select Product */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
-                  1. Pilih / Scan Produk dari Gudang (Per Pcs)
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setIsScannerOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded-xl text-xs font-semibold transition active:scale-95 cursor-pointer"
-                >
-                  <Camera className="w-4 h-4 text-sky-600" />
-                  <span>Scan Barcode</span>
-                </button>
-              </div>
-
-              <select
-                value={selectedProductId}
-                onChange={(e) => setSelectedProductId(e.target.value)}
-                className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:ring-2 focus:ring-rose-500 focus:outline-none"
-              >
-                <option value="">-- Pilih Produk dari Gudang ({products.length} Tersedia) --</option>
-                {products.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} [{p.brand || 'Generic'}] ({p.sku}) — Stok Tersedia: {p.currentStock} Pcs
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Product Preview Card */}
-            {selectedProduct && (
-              <div className={`p-3.5 rounded-xl border flex items-center justify-between transition ${
-                isInsufficient ? 'bg-rose-50/80 border-rose-300' : 'bg-slate-50 border-slate-200'
-              }`}>
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 flex-shrink-0">
-                    <Package className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-slate-900 text-sm">{selectedProduct.name}</h4>
-                    <p className="text-xs text-slate-400 font-mono">
-                      Merk: <span className="text-indigo-600 font-semibold">{selectedProduct.brand || 'NDK Packaging'}</span> | SKU: {selectedProduct.sku}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <span className="text-[10px] text-slate-400 block uppercase font-semibold">Stok Fisik Tersedia</span>
-                  <span className={`text-sm font-extrabold ${isInsufficient ? 'text-rose-600' : 'text-slate-800'}`}>
-                    {selectedProduct.currentStock} Pcs
+        {outboundMode === 'STOCK_TRANSFER_TO_BRANCH' && (
+          <div className="space-y-4 pt-2">
+            <form onSubmit={handlePrepareBatchTransferSubmit} className="space-y-4">
+              
+              {/* Step 1: Search & Pick Products to Transfer Staging List */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                    1. Pilih / Cari Produk ke Dalam List Transfer Cabang
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsScannerOpen(true)}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer shadow-xs"
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span>Scan Barcode</span>
+                  </button>
                 </div>
-              </div>
-            )}
 
-            {/* Step 2: Destination or Customer Details */}
-            {isTransferMode ? (
-              /* MUTASI KE CABANG */
+                <ProductSearchPicker
+                  products={products}
+                  selectedProductId=""
+                  onSelectProduct={(prod) => handleAddItemToTransferCart(prod)}
+                  placeholder="🔍 Ketik Nama Produk, SKU, Merk, atau Kategori untuk menambah ke list transfer..."
+                  label=""
+                  showStockInfo={true}
+                />
+              </div>
+
+              {/* Step 2: Transfer Staging Cart Table with Inline Qty Input */}
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
+                <div className="p-3 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between">
+                  <span className="font-bold text-xs text-slate-700 uppercase tracking-wider">
+                    📋 List Barang Kiriman Cabang ({transferCart.length} Jenis Produk Dipilih)
+                  </span>
+                  {transferCart.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setTransferCart([])}
+                      className="text-[11px] font-bold text-rose-600 hover:text-rose-800"
+                    >
+                      Kosongkan List
+                    </button>
+                  )}
+                </div>
+
+                {transferCart.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 space-y-2">
+                    <Boxes className="w-8 h-8 mx-auto text-slate-300 stroke-1" />
+                    <p className="text-xs font-medium">Belum ada barang yang dipilih ke dalam list kiriman cabang.</p>
+                    <p className="text-[11px] text-slate-400">Gunakan kotak pencarian atau scanner barcode di atas untuk memilih barang.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-100/70 text-slate-600 font-semibold uppercase">
+                        <tr>
+                          <th className="px-4 py-2.5">Produk</th>
+                          <th className="px-3 py-2.5">SKU & Merk</th>
+                          <th className="px-3 py-2.5 text-center">Stok Gudang Pusat</th>
+                          <th className="px-3 py-2.5 text-center w-36">Qty Kirim (Pcs)</th>
+                          <th className="px-4 py-2.5 text-right">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {transferCart.map((item, idx) => (
+                          <tr key={item.productId} className="hover:bg-slate-50">
+                            <td className="px-4 py-3 font-semibold text-slate-900">{item.productName}</td>
+                            <td className="px-3 py-3 font-mono text-slate-500 text-[11px]">
+                              {item.sku} | <span className="text-indigo-600 font-bold">{item.brand}</span>
+                            </td>
+                            <td className="px-3 py-3 text-center">
+                              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700">
+                                {item.currentStock} Pcs
+                              </span>
+                            </td>
+                            <td className="px-3 py-3 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateTransferCartQty(idx, (Number(item.qty) || 1) - 1)}
+                                  className="w-7 h-7 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold flex items-center justify-center transition active:scale-95"
+                                >
+                                  -
+                                </button>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max={item.currentStock}
+                                  value={item.qty}
+                                  onChange={(e) => handleUpdateTransferCartQty(idx, Math.max(1, Number(e.target.value)))}
+                                  className="w-16 py-1 bg-indigo-50 border border-indigo-300 rounded-lg text-center font-extrabold text-indigo-950 text-xs focus:ring-2 focus:ring-indigo-500"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateTransferCartQty(idx, (Number(item.qty) || 1) + 1)}
+                                  className="w-7 h-7 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold flex items-center justify-center transition active:scale-95"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveFromTransferCart(idx)}
+                                className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-md transition cursor-pointer"
+                                title="Hapus dari list"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Step 3: Destination Branch & Delivery Note Header */}
               <div className="space-y-3 p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl">
                 <div className="flex items-center gap-2 text-indigo-900 font-bold text-xs uppercase tracking-wider">
                   <Truck className="w-4 h-4 text-indigo-600" />
-                  <span>Tujuan Pengiriman Mutasi Cabang</span>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                    Pilih Cabang Penerima *
-                  </label>
-                  <select
-                    required
-                    value={targetBranchId}
-                    onChange={(e) => setTargetBranchId(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                  >
-                    {branches.map(b => (
-                      <option key={b.id} value={b.id}>
-                        {b.name} ({b.address || 'Alamat Cabang'})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                    No. Surat Jalan Resmi (Opsional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Contoh: SJ-HQ-2026-001 (Otomatis jika kosong)"
-                    value={invoiceNumber}
-                    onChange={(e) => setInvoiceNumber(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-            ) : (
-              /* PENJUALAN SATUAN (RETAIL PCS) */
-              <div className="space-y-3 p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
-                <div className="flex items-center gap-2 text-emerald-900 font-bold text-xs uppercase tracking-wider">
-                  <ShoppingBag className="w-4 h-4 text-emerald-600" />
-                  <span>Informasi Pembeli & Transaksi Penjualan Satuan</span>
+                  <span>Tujuan Pengiriman & Surat Jalan Mutasi</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                      Nama Pembeli / Pelanggan
+                      Pilih Cabang Penerima *
+                    </label>
+                    <select
+                      required
+                      value={targetBranchId}
+                      onChange={(e) => setTargetBranchId(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    >
+                      {branches.map(b => (
+                        <option key={b.id} value={b.id}>
+                          {b.name} ({b.address || 'Alamat Cabang'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                      No. Surat Jalan Resmi (Opsional)
                     </label>
                     <input
                       type="text"
-                      placeholder="Contoh: Walk-in Customer / Bpk Andi"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      placeholder="Contoh: SJ-HQ-2026-001"
+                      value={invoiceNumber}
+                      onChange={(e) => setInvoiceNumber(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Catatan Pengiriman (Opsional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: Titipan pengiriman darurat via armada truk A"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Submit Batch Transfer */}
+              <button
+                type="submit"
+                disabled={transferCart.length === 0}
+                className={`w-full py-3.5 rounded-xl font-bold text-sm text-white shadow-lg transition flex items-center justify-center gap-2 cursor-pointer ${
+                  transferCart.length === 0 
+                    ? 'bg-slate-300 cursor-not-allowed' 
+                    : 'bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99]'
+                }`}
+              >
+                <Send className="w-4 h-4" />
+                <span>Kirim Mutasi Stok ke Cabang ({transferCart.length} Jenis Produk • Total {transferCart.reduce((acc, i) => acc + (Number(i.qty) || 0), 0)} Pcs)</span>
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* VIEW 2: PENJUALAN PRODUK TERPADU (SATUAN & BUNDLING VIA MULTI-PLATFORM)  */}
+        {/* ========================================================================= */}
+        {outboundMode === 'RETAIL_PCS' && (
+          <div className="space-y-5 pt-2">
+            
+            {/* SUB-HEADER: PLATFORM & FORMAT SELECTION CONTAINER */}
+            <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-4">
+              
+              {/* PLATFORM PENJUALAN SELECTOR */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-emerald-950 mb-2">
+                  1. Pilih Platform / Channel Penjualan
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  
+                  {/* Toko Fisik / Offline */}
+                  <button
+                    type="button"
+                    onClick={() => setSalesPlatform('OFFLINE')}
+                    className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-2 cursor-pointer ${
+                      salesPlatform === 'OFFLINE'
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Store className="w-4 h-4 text-emerald-400" />
+                    <span>Toko Fisik / Offline</span>
+                  </button>
+
+                  {/* Shopee */}
+                  <button
+                    type="button"
+                    onClick={() => setSalesPlatform('SHOPEE')}
+                    className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-2 cursor-pointer ${
+                      salesPlatform === 'SHOPEE'
+                        ? 'bg-orange-600 text-white border-orange-600 shadow-xs'
+                        : 'bg-white text-orange-700 border-orange-200 hover:bg-orange-50'
+                    }`}
+                  >
+                    <ShoppingBag className="w-4 h-4" />
+                    <span>Shopee</span>
+                  </button>
+
+                  {/* Tokopedia */}
+                  <button
+                    type="button"
+                    onClick={() => setSalesPlatform('TOKOPEDIA')}
+                    className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-2 cursor-pointer ${
+                      salesPlatform === 'TOKOPEDIA'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50'
+                    }`}
+                  >
+                    <Store className="w-4 h-4" />
+                    <span>Tokopedia</span>
+                  </button>
+
+                  {/* TikTok Shop */}
+                  <button
+                    type="button"
+                    onClick={() => setSalesPlatform('TIKTOK')}
+                    className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-2 cursor-pointer ${
+                      salesPlatform === 'TIKTOK'
+                        ? 'bg-slate-950 text-white border-slate-950 shadow-xs'
+                        : 'bg-white text-slate-800 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4 text-rose-400" />
+                    <span>TikTok Shop</span>
+                  </button>
+
+                  {/* Direct / Other */}
+                  <button
+                    type="button"
+                    onClick={() => setSalesPlatform('OTHER')}
+                    className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-2 cursor-pointer col-span-2 sm:col-span-1 ${
+                      salesPlatform === 'OTHER'
+                        ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                        : 'bg-white text-sky-700 border-sky-200 hover:bg-sky-50'
+                    }`}
+                  >
+                    <Tag className="w-4 h-4" />
+                    <span>Lainnya / Direct</span>
+                  </button>
+
+                </div>
+              </div>
+
+              {/* FORMAT JENIS PENJUALAN: SATUAN VS BUNDLING */}
+              <div className="flex items-center justify-between pt-1 border-t border-emerald-200/80">
+                <div>
+                  <h4 className="font-bold text-emerald-950 text-xs">Format Barang Penjualan</h4>
+                  <p className="text-[11px] text-emerald-800">Jual per produk satuan atau gabungan paket bundling combo.</p>
+                </div>
+                <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-emerald-300 shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => setSalesType('SINGLE')}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      salesType === 'SINGLE'
+                        ? 'bg-emerald-600 text-white shadow-2xs'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    Satuan (Per Pcs)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSalesType('BUNDLE')}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                      salesType === 'BUNDLE'
+                        ? 'bg-purple-600 text-white shadow-2xs'
+                        : 'text-purple-700 bg-purple-50 hover:bg-purple-100'
+                    }`}
+                  >
+                    <Boxes className="w-3.5 h-3.5" />
+                    <span>Paket Bundling (Combo)</span>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+            {/* HEADER METADATA: PEMBELI, NO. PESANAN / RESI, BAYAR */}
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+              <div className="flex items-center gap-2 text-slate-800 font-bold text-xs uppercase tracking-wider">
+                <User className="w-4 h-4 text-emerald-600" />
+                <span>2. Detail Pembeli & Informasi Transaksi ({getPlatformLabel(salesPlatform)})</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                
+                {/* Nama Pembeli / Pemesan */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Nama Pembeli / Pemesan *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Walk-in Customer / Pelanggan Shopee"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none font-medium"
+                  />
+                </div>
+
+                {/* No. Nota / No. Pesanan Marketplace */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    {salesPlatform !== 'OFFLINE' ? `No. Pesanan / Resi (${salesPlatform})` : 'No. Nota / Faktur (Opsional)'}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={salesPlatform !== 'OFFLINE' ? `Contoh: 260827-SPX-001` : 'Contoh: NOTA-2026-001'}
+                    value={invoiceNumber}
+                    onChange={(e) => setInvoiceNumber(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono"
+                  />
+                </div>
+
+                {/* Metode Pembayaran */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Metode Pembayaran
+                  </label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  >
+                    <option value="CASH">Tunai (Cash)</option>
+                    <option value="TRANSFER">Transfer Bank</option>
+                    <option value="QRIS">QRIS / E-Wallet</option>
+                    <option value="MARKETPLACE">Marketplace Escrow / Rekber</option>
+                  </select>
+                </div>
+
+              </div>
+            </div>
+
+            {/* FORM BODY BASED ON SALES TYPE (SATUAN VS BUNDLING) */}
+            {salesType === 'SINGLE' ? (
+              /* SATUAN (PER PCS) FORM */
+              <form onSubmit={handlePrepareSingleSubmit} className="space-y-4">
+                
+                {/* Step 3: Select Product */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                      3. Pilih / Cari Produk yang Dijual
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsScannerOpen(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded-xl text-xs font-semibold transition active:scale-95 cursor-pointer shadow-2xs"
+                    >
+                      <Camera className="w-4 h-4 text-sky-600" />
+                      <span>Scan Barcode</span>
+                    </button>
+                  </div>
+
+                  <ProductSearchPicker
+                    products={products}
+                    selectedProductId={selectedProductId}
+                    onSelectProduct={(prod) => setSelectedProductId(prod.id)}
+                    placeholder="🔍 Cari Produk (Ketik Nama, SKU, Merk, Kategori)..."
+                    label=""
+                    showStockInfo={true}
+                  />
+                </div>
+
+                {/* Product Preview Card */}
+                {selectedProduct && (
+                  <div className={`p-3.5 rounded-xl border flex items-center justify-between transition ${
+                    isInsufficient ? 'bg-rose-50/80 border-rose-300' : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 flex-shrink-0">
+                        <Package className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-sm">{selectedProduct.name}</h4>
+                        <p className="text-xs text-slate-400 font-mono">
+                          Merk: <span className="text-indigo-600 font-semibold">{selectedProduct.brand || 'NDK Packaging'}</span> | SKU: {selectedProduct.sku}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <span className="text-[10px] text-slate-400 block uppercase font-semibold">Stok Fisik Tersedia</span>
+                      <span className={`text-sm font-extrabold ${isInsufficient ? 'text-rose-600' : 'text-slate-800'}`}>
+                        {selectedProduct.currentStock} Pcs
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Quantity Stepper */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Kuantitas Dijual (Qty Pcs) *
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setQty(Math.max(1, Number(qty) - 1))}
+                      className="w-12 h-12 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-lg flex items-center justify-center active:scale-95 transition cursor-pointer"
+                    >
+                      <Minus className="w-5 h-5" />
+                    </button>
+                    
+                    <input
+                      type="number"
+                      min="1"
+                      max={currentAvailable || undefined}
+                      required
+                      value={qty}
+                      onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
+                      className="flex-1 h-12 text-center text-lg font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-900"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => setQty(Number(qty) + 1)}
+                      className="w-12 h-12 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-lg flex items-center justify-center active:scale-95 transition cursor-pointer"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Catatan Transaksi (Opsional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: Packing kayu via Kurir Instant"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none font-medium"
+                  />
+                </div>
+
+                {/* Simulation Preview */}
+                {selectedProduct && (
+                  <div className={`p-3 rounded-xl border text-xs flex justify-between items-center ${
+                    isInsufficient ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-slate-50 text-slate-700 border-slate-200'
+                  }`}>
+                    <span>Sisa Stok Fisik Setelah Transaksi:</span>
+                    <span className={`font-bold text-sm ${isInsufficient ? 'text-rose-600' : 'text-slate-900'}`}>
+                      {currentAvailable - Number(qty)} Pcs
+                    </span>
+                  </div>
+                )}
+
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  disabled={!selectedProduct || isInsufficient}
+                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-xl text-sm shadow-md shadow-emerald-600/20 transition active:scale-98 cursor-pointer mt-2"
+                >
+                  Proses Penjualan Satuan [{getPlatformLabel(salesPlatform)}] ({qty} Pcs)
+                </button>
+
+              </form>
+            ) : (
+              /* PAKET BUNDLING (COMBO) FORM */
+              <form onSubmit={handlePrepareBundlingSubmit} className="space-y-4">
+                
+                {/* Bundle Name & Price */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                      Nama Paket Bundling *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Contoh: Paket Combo 3 Botol + Tutup"
+                      value={bundleName}
+                      onChange={(e) => setBundleName(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
                     />
                   </div>
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                      Metode Pembayaran
+                      Harga Jual Paket (Rp) (Opsional)
                     </label>
-                    <select
-                      value={paymentMethod}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                      className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    <input
+                      type="number"
+                      placeholder={`Default: Rp ${bundleRegularTotal.toLocaleString('id-ID')}`}
+                      value={bundleCustomPrice}
+                      onChange={(e) => setBundleCustomPrice(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-purple-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Bundle Component Items */}
+                <div className="space-y-2.5 pt-1">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                      Komponen Isi Paket ({bundleItems.length} Produk)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleAddBundleComponent}
+                      className="flex items-center gap-1 px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-lg text-xs font-bold active:scale-95 transition cursor-pointer"
                     >
-                      <option value="CASH">Tunai (Cash)</option>
-                      <option value="TRANSFER">Transfer Bank</option>
-                      <option value="QRIS">QRIS / E-Wallet</option>
-                    </select>
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Tambah Komponen</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {bundleItems.map((item, idx) => {
+                      const compProd = products.find(p => p.id === item.productId);
+                      const isCompInsufficient = (Number(item.qty) || 0) > (Number(compProd?.currentStock) || 0);
+
+                      return (
+                        <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                          <div className="flex-1">
+                            <ProductSearchPicker
+                              products={products}
+                              selectedProductId={item.productId}
+                              onSelectProduct={(p) => handleUpdateBundleComponent(idx, 'productId', p.id)}
+                              placeholder="🔍 Cari Komponen Produk (Nama, SKU, Merk)..."
+                              label=""
+                              showStockInfo={true}
+                            />
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-500">Qty:</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.qty}
+                              onChange={(e) => handleUpdateBundleComponent(idx, 'qty', Math.max(1, Number(e.target.value)))}
+                              className="w-20 px-2.5 py-1.5 text-center bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                            />
+                            <span className="text-xs text-slate-500 font-semibold">Pcs</span>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveBundleComponent(idx)}
+                              className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition active:scale-95 cursor-pointer ml-auto sm:ml-0"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          {isCompInsufficient && (
+                            <span className="text-[10px] font-bold text-rose-600 block sm:hidden">
+                              Stok tidak mencukupi (Tersisa {compProd?.currentStock} Pcs)
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {selectedProduct && Number(selectedProduct.price) > 0 && (
-                  <div className="p-3 bg-white rounded-xl border border-emerald-200 flex items-center justify-between text-xs">
-                    <div>
-                      <span className="text-slate-500">Harga Satuan:</span>
-                      <strong className="text-slate-800 ml-1">Rp {Number(selectedProduct.price).toLocaleString('id-ID')} / Pcs</strong>
-                    </div>
-                    <div>
-                      <span className="text-emerald-700 font-bold">Total Pembayaran:</span>
-                      <strong className="text-base font-black text-emerald-700 ml-1.5">
-                        Rp {(Number(selectedProduct.price) * Number(qty)).toLocaleString('id-ID')}
-                      </strong>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Quantity Stepper */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                Kuantitas Keluar (Qty Pcs) *
-              </label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setQty(Math.max(1, Number(qty) - 1))}
-                  className="w-12 h-12 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-lg flex items-center justify-center active:scale-95 transition cursor-pointer"
-                >
-                  <Minus className="w-5 h-5" />
-                </button>
-                
-                <input
-                  type="number"
-                  min="1"
-                  max={currentAvailable || undefined}
-                  required
-                  value={qty}
-                  onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
-                  className="flex-1 h-12 text-center text-lg font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:outline-none text-slate-900"
-                />
-
-                <button
-                  type="button"
-                  onClick={() => setQty(Number(qty) + 1)}
-                  className="w-12 h-12 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-lg flex items-center justify-center active:scale-95 transition cursor-pointer"
-                >
-                  <Plus className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Notes & Staff User */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                  Petugas Pelaksana (Staff)
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                {/* Notes */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Catatan Transaksi (Opsional)
+                  </label>
                   <input
                     type="text"
-                    value={user}
-                    onChange={(e) => setUser(e.target.value)}
-                    className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-rose-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                  Catatan Transaksi (Opsional)
-                </label>
-                <div className="relative">
-                  <FileText className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Keterangan tambahan..."
+                    placeholder="Contoh: Paket promo spesial TikTok Live"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none font-medium"
                   />
                 </div>
-              </div>
-            </div>
 
-            {/* Stock Reduction Simulation */}
-            {selectedProduct && (
-              <div className={`p-3 rounded-xl border text-xs flex justify-between items-center ${
-                isInsufficient ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-slate-50 text-slate-700 border-slate-200'
-              }`}>
-                <span>Sisa Stok Fisik Setelah Transaksi:</span>
-                <span className={`font-bold text-sm ${isInsufficient ? 'text-rose-600' : 'text-slate-900'}`}>
-                  {currentAvailable - Number(qty)} Pcs
-                </span>
-              </div>
+                <button
+                  type="submit"
+                  disabled={isBundleStockInsufficient}
+                  className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-xl text-sm shadow-md shadow-purple-600/20 transition active:scale-98 cursor-pointer mt-2"
+                >
+                  Proses Penjualan Paket Bundling [{getPlatformLabel(salesPlatform)}]
+                </button>
+
+              </form>
             )}
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={!selectedProduct || isInsufficient}
-              className={`w-full py-3.5 text-white font-bold rounded-xl text-sm shadow-md transition active:scale-98 cursor-pointer mt-2 ${
-                isTransferMode 
-                  ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/20' 
-                  : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
-              } disabled:bg-slate-200 disabled:text-slate-400`}
-            >
-              {isTransferMode 
-                ? `Kirim Stok Mutasi ke Cabang (${qty} Pcs)` 
-                : `Proses Penjualan Satuan (${qty} Pcs)`}
-            </button>
-
-          </form>
-        )}
-
-        {/* ========================================================================= */}
-        {/* VIEW 3: CUSTOM BUNDLING SALE                                              */}
-        {/* ========================================================================= */}
-        {outboundMode === 'CUSTOM_BUNDLING' && (
-          <form onSubmit={handlePrepareBundlingSubmit} className="space-y-4 pt-2">
-            
-            <div className="p-3.5 bg-purple-50/80 border border-purple-200 rounded-xl flex items-start gap-2.5 text-xs text-purple-900">
-              <Boxes className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold">Penjualan Paket Bundling Combo:</p>
-                <p className="text-[11px] text-purple-800 mt-0.5">
-                  Gabungkan beberapa produk per pcs menjadi satu paket penjualan. Stok masing-masing barang akan otomatis terpotong sesuai kuantitas komponennya.
-                </p>
-              </div>
-            </div>
-
-            {/* Bundle Name & Price */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                  Nama Paket Bundling *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Paket Hemat 3 Botol + Tutup"
-                  value={bundleName}
-                  onChange={(e) => setBundleName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                  Harga Jual Paket (Rp) (Opsional)
-                </label>
-                <input
-                  type="number"
-                  placeholder={`Default: Rp ${bundleRegularTotal.toLocaleString('id-ID')}`}
-                  value={bundleCustomPrice}
-                  onChange={(e) => setBundleCustomPrice(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-purple-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Bundle Component Items */}
-            <div className="space-y-2.5 pt-1">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                  Komponen Isi Paket ({bundleItems.length} Produk)
-                </label>
-                <button
-                  type="button"
-                  onClick={handleAddBundleComponent}
-                  className="flex items-center gap-1 px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-lg text-xs font-bold active:scale-95 transition cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>+ Tambah Komponen</span>
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                {bundleItems.map((item, idx) => {
-                  const compProd = products.find(p => p.id === item.productId);
-                  const isCompInsufficient = (Number(item.qty) || 0) > (Number(compProd?.currentStock) || 0);
-
-                  return (
-                    <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                      <div className="flex-1">
-                        <select
-                          value={item.productId}
-                          onChange={(e) => handleUpdateBundleComponent(idx, 'productId', e.target.value)}
-                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                        >
-                          {products.map(p => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} [{p.brand || 'Generic'}] (Stok: {p.currentStock} Pcs)
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-500">Qty:</span>
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.qty}
-                          onChange={(e) => handleUpdateBundleComponent(idx, 'qty', Math.max(1, Number(e.target.value)))}
-                          className="w-20 px-2.5 py-1.5 text-center bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                        />
-                        <span className="text-xs text-slate-500 font-semibold">Pcs</span>
-
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveBundleComponent(idx)}
-                          className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition active:scale-95 cursor-pointer ml-auto sm:ml-0"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      {isCompInsufficient && (
-                        <span className="text-[10px] font-bold text-rose-600 block sm:hidden">
-                          Stok tidak mencukupi (Tersisa {compProd?.currentStock} Pcs)
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Customer & Payment for Bundling */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                  Nama Pembeli / Pelanggan
-                </label>
-                <input
-                  type="text"
-                  placeholder="Contoh: Walk-in Customer"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                  Metode Pembayaran
-                </label>
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                >
-                  <option value="CASH">Tunai (Cash)</option>
-                  <option value="TRANSFER">Transfer Bank</option>
-                  <option value="QRIS">QRIS / E-Wallet</option>
-                </select>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isBundleStockInsufficient}
-              className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-xl text-sm shadow-md shadow-purple-600/20 transition active:scale-98 cursor-pointer mt-2"
-            >
-              Proses Penjualan Paket Bundling
-            </button>
-
-          </form>
+          </div>
         )}
 
       </div>
@@ -1236,6 +1618,16 @@ export default function StockOut({
         buttonText="✓ Selesai & Tutup"
       />
 
+      {/* INTERACTIVE CUSTOM ALERT MODAL */}
+      <CustomAlertModal
+        isOpen={Boolean(alertModal)}
+        onClose={() => setAlertModal(null)}
+        title={alertModal?.title}
+        message={alertModal?.message}
+        type={alertModal?.type}
+      />
+
     </div>
   );
 }
+
