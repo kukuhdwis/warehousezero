@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Bell, X } from 'lucide-react';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -14,42 +15,58 @@ import LoginView from './components/LoginView';
 import { getStoredUser, logoutUser } from './services/authService';
 import { 
   fetchProducts, 
+  subscribeProducts,
   createProduct, 
   updateProduct, 
   deleteProduct, 
   fetchTransactions, 
+  subscribeStockMovements,
   recordStockMovement,
   fetchBranches,
+  subscribeBranches,
   createBranch,
   updateBranch,
   deleteBranch,
   clearAllBranches,
   fetchUsers,
+  subscribeUsers,
   createUser,
   updateUser,
   deleteUser,
   fetchBrands,
+  subscribeBrands,
   createBrand,
   deleteBrand,
   fetchMachineCategories,
+  subscribeMachineCategories,
   createMachineCategory,
   deleteMachineCategory,
   fetchBranchInventories,
+  subscribeBranchInventories,
   requestBranchInventory,
+  requestBatchBranchInventory,
   approveBranchInventory,
+  approveBatchBranchInventory,
   rejectBranchInventory,
+  rejectBatchBranchInventory,
   updateBranchInventory,
 
   fetchNotifications,
+  subscribeNotifications,
   markNotificationAsRead,
   markAllNotificationsAsRead,
   fetchTransfers,
+  subscribeTransfers,
   createStockTransfer,
   confirmTransferReceipt,
+  confirmBatchTransferReceipt,
+  rejectBatchTransferReceipt,
   fetchStockRequests,
+  subscribeStockRequests,
   createStockRequest,
   rejectStockRequest,
-  fulfillStockRequest
+  fulfillStockRequest,
+  playNotificationSound
 } from './services/dataService';
 
 import BottomNav from './components/BottomNav';
@@ -65,8 +82,9 @@ export default function App() {
   const [notifications, setNotifications] = useState([]);
   const [transfers, setTransfers] = useState([]);
   const [stockRequests, setStockRequests] = useState([]);
-  const [outboundInitialRequestData, setOutboundInitialRequestData] = useState(null);
   const [inboundInitialTab, setInboundInitialTab] = useState('INCOMING_DELIVERIES');
+  const [outboundInitialRequestData, setOutboundInitialRequestData] = useState(null);
+  const [productsInitialTab, setProductsInitialTab] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [branches, setBranches] = useState([]);
   const [brands, setBrands] = useState([]);
@@ -77,12 +95,14 @@ export default function App() {
   const [globalSuccessPopup, setGlobalSuccessPopup] = useState(null);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [backToast, setBackToast] = useState(null);
-
+  const [liveToastNotif, setLiveToastNotif] = useState(null);
+  const prevNotifIdsRef = useRef(new Set());
+  const isInitialNotifLoadRef = useRef(true);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [prods, txs, branchList, userList, brandList, categoryList, invList, notifList, transferList, reqList] = await Promise.all([
+      const results = await Promise.allSettled([
         fetchProducts(),
         fetchTransactions(),
         fetchBranches(),
@@ -95,21 +115,25 @@ export default function App() {
         fetchStockRequests(currentUser?.branchId)
       ]);
 
-      setBranches(branchList);
-      setUsers(userList);
-      setBrands(brandList);
-      setMachineCategories(categoryList);
-      setProducts(prods);
-      setBranchInventories(invList);
-      setNotifications(notifList);
-      setTransfers(transferList);
-      setStockRequests(reqList);
+      const [prodsRes, txsRes, branchRes, userRes, brandRes, catRes, invRes, notifRes, transRes, reqRes] = results;
 
-      if (currentUser && currentUser.role === 'STAFF_BRANCH' && currentUser.branchId !== 'ALL') {
-        // Scoped transactions to this branch
-        setTransactions(txs.filter(t => !t.branchId || t.branchId === currentUser.branchId));
-      } else {
-        setTransactions(txs);
+      if (branchRes.status === 'fulfilled') setBranches(branchRes.value || []);
+      if (userRes.status === 'fulfilled') setUsers(userRes.value || []);
+      if (brandRes.status === 'fulfilled') setBrands(brandRes.value || []);
+      if (catRes.status === 'fulfilled') setMachineCategories(catRes.value || []);
+      if (prodsRes.status === 'fulfilled') setProducts(prodsRes.value || []);
+      if (invRes.status === 'fulfilled') setBranchInventories(invRes.value || []);
+      if (notifRes.status === 'fulfilled') setNotifications(notifRes.value || []);
+      if (transRes.status === 'fulfilled') setTransfers(transRes.value || []);
+      if (reqRes.status === 'fulfilled') setStockRequests(reqRes.value || []);
+
+      if (txsRes.status === 'fulfilled') {
+        const txs = txsRes.value || [];
+        if (currentUser && currentUser.role === 'STAFF_BRANCH' && currentUser.branchId !== 'ALL') {
+          setTransactions(txs.filter(t => !t.branchId || t.branchId === currentUser.branchId));
+        } else {
+          setTransactions(txs);
+        }
       }
     } catch (e) {
       console.error("Error loading data:", e);
@@ -122,6 +146,86 @@ export default function App() {
     if (currentUser) {
       loadData();
     }
+  }, [currentUser]);
+
+  // Full Realtime Live Data Stream Across All Collections (Seamless Zero-Refresh)
+  useEffect(() => {
+    if (!currentUser) return;
+
+    // 1. Live Notifications with Sound & Toast Detection
+    const unsubNotifs = subscribeNotifications(currentUser, (liveNotifs) => {
+      setNotifications(liveNotifs);
+      const currentIds = new Set(liveNotifs.map(n => n.id));
+      if (!isInitialNotifLoadRef.current) {
+        const newlyArrived = liveNotifs.find(n => !n.isRead && !prevNotifIdsRef.current.has(n.id));
+        if (newlyArrived) {
+          playNotificationSound();
+          setLiveToastNotif(newlyArrived);
+          setTimeout(() => setLiveToastNotif(null), 6000);
+        }
+      } else {
+        isInitialNotifLoadRef.current = false;
+      }
+      prevNotifIdsRef.current = currentIds;
+    });
+
+    // 2. Live Master Products
+    const unsubProducts = subscribeProducts((liveProds) => {
+      setProducts(liveProds);
+    });
+
+    // 3. Live Stock Movements / Transactions
+    const unsubMovements = subscribeStockMovements(currentUser, (liveMovements) => {
+      setTransactions(liveMovements);
+    });
+
+    // 4. Live Inbound / Outbound Transfers
+    const unsubTransfers = subscribeTransfers(currentUser, (liveTransfers) => {
+      setTransfers(liveTransfers);
+    });
+
+    // 5. Live Branch Inventories & Approval State
+    const unsubBranchInv = subscribeBranchInventories(currentUser, (liveInventories) => {
+      setBranchInventories(liveInventories);
+    });
+
+    // 6. Live Stock Requests (Branch <-> HQ)
+    const unsubRequests = subscribeStockRequests(currentUser, (liveRequests) => {
+      setStockRequests(liveRequests);
+    });
+
+    // 7. Live Branches Master
+    const unsubBranches = subscribeBranches((liveBranches) => {
+      setBranches(liveBranches);
+    });
+
+    // 8. Live Brands Master
+    const unsubBrands = subscribeBrands((liveBrands) => {
+      setBrands(liveBrands);
+    });
+
+    // 9. Live Machine Categories
+    const unsubMachineCats = subscribeMachineCategories((liveCats) => {
+      setMachineCategories(liveCats);
+    });
+
+    // 10. Live Users Master (Admin only)
+    const unsubUsers = subscribeUsers(currentUser, (liveUsers) => {
+      setUsers(liveUsers);
+    });
+
+    return () => {
+      unsubNotifs();
+      unsubProducts();
+      unsubMovements();
+      unsubTransfers();
+      unsubBranchInv();
+      unsubRequests();
+      unsubBranches();
+      unsubBrands();
+      unsubMachineCats();
+      unsubUsers();
+    };
   }, [currentUser]);
 
   // Mobile / Browser Hardware Back Button Handler (Requirement 6)
@@ -224,39 +328,44 @@ export default function App() {
   };
 
   // Handlers for Branch Inventory Requests & Approval Flow
-  const handleRequestBranchInventory = async (requestData) => {
-    await requestBranchInventory(requestData, currentUser);
+  const handleRequestBranchInventory = async (requestDataOrList) => {
+    const list = Array.isArray(requestDataOrList) ? requestDataOrList : [requestDataOrList];
+    await requestBatchBranchInventory(list, currentUser);
     await loadData();
   };
 
-  const handleApproveBranchInventory = async (id, adminUser) => {
-    const matched = branchInventories.find(b => b.id === id);
-    await approveBranchInventory(id, adminUser);
+  const handleApproveBranchInventory = async (idOrItems, adminUser) => {
+    const list = Array.isArray(idOrItems) ? idOrItems : [idOrItems];
+    await approveBatchBranchInventory(list, adminUser);
     await loadData();
-    if (matched) {
-      setGlobalSuccessPopup({
-        title: "Pengajuan Inventaris Disetujui!",
-        message: `Inventaris untuk "${matched.productName}" telah diverifikasi dan resmi aktif di ${matched.branchName || 'Cabang'}.`,
-        details: [
-          { label: "Cabang", value: matched.branchName || 'Cabang' },
-          { label: "Produk", value: matched.productName },
-          { label: "Stok Aktif", value: `+${matched.stockQuantity} Pcs`, highlight: true }
-        ]
-      });
-    }
-  };
-
-  const handleRejectBranchInventory = async (id, adminUser, reason) => {
-    const matched = branchInventories.find(b => b.id === id);
-    await rejectBranchInventory(id, adminUser, reason);
-    await loadData();
+    const count = list.length;
+    const firstItem = typeof list[0] === 'object' ? list[0] : branchInventories.find(b => b.id === list[0]);
+    const branchName = firstItem?.branchName || 'Cabang';
     setGlobalSuccessPopup({
-      title: "Pengajuan Inventaris Ditolak",
-      message: `Pengajuan inventaris cabang telah ditolak dengan alasan resmi yang terkirim ke cabang.`,
+      title: "Pengajuan Inventaris Disetujui! 🎉",
+      message: `${count} produk inventaris dari ${branchName} telah diverifikasi dan resmi aktif di database cabang.`,
       details: [
-        { label: "Cabang", value: matched?.branchName || 'Cabang' },
-        { label: "Produk", value: matched?.productName || 'Produk' },
-        { label: "Alasan Penolakan", value: `"${reason}"`, highlight: true }
+        { label: "Cabang", value: branchName },
+        { label: "Total Disetujui", value: `${count} Produk`, highlight: true },
+        { label: "Status", value: "✓ Resmi Aktif" }
+      ]
+    });
+  };
+
+  const handleRejectBranchInventory = async (idOrItems, adminUser, reason) => {
+    const list = Array.isArray(idOrItems) ? idOrItems : [idOrItems];
+    await rejectBatchBranchInventory(list, adminUser, reason);
+    await loadData();
+    const count = list.length;
+    const firstItem = typeof list[0] === 'object' ? list[0] : branchInventories.find(b => b.id === list[0]);
+    const branchName = firstItem?.branchName || 'Cabang';
+    setGlobalSuccessPopup({
+      title: "Pengajuan Inventaris Ditolak ⚠️",
+      message: `${count} pengajuan inventaris dari ${branchName} telah ditolak dengan catatan alasan resmi.`,
+      details: [
+        { label: "Cabang", value: branchName },
+        { label: "Total Ditolak", value: `${count} Produk` },
+        { label: "Alasan Penolakan", value: `"${reason || '-'}"`, highlight: true }
       ]
     });
   };
@@ -332,22 +441,43 @@ export default function App() {
     await loadData();
   };
 
-  // Handler for Branch Confirming Central Transfer Receipt
-  const handleConfirmTransfer = async (transferId, notes) => {
-    const matched = transfers.find(t => t.id === transferId);
-    const result = await confirmTransferReceipt(transferId, currentUser, notes);
+  // Handler for Branch Confirming Central Transfer Receipt (Single or Batch)
+  const handleConfirmTransfer = async (transferIdOrItems, notes) => {
+    const list = Array.isArray(transferIdOrItems) ? transferIdOrItems : [transferIdOrItems];
+    const result = await confirmBatchTransferReceipt(list, currentUser, notes);
     await loadData();
-    if (matched) {
-      setGlobalSuccessPopup({
-        title: "Paket Kiriman Berhasil Diterima!",
-        message: "Stok fisik barang telah diverifikasi dan langsung aktif di inventaris cabang Anda.",
-        details: [
-          { label: "Barang Diterima", value: `${matched.qty} Pcs "${matched.productName}"` },
-          { label: "No. Surat Jalan", value: matched.deliveryNote, highlight: true },
-          { label: "Status", value: "Diterima & Aktif di Cabang" }
-        ]
-      });
-    }
+    const count = list.length;
+    const firstItem = typeof list[0] === 'object' ? list[0] : transfers.find(t => t.id === list[0]);
+    const deliveryNote = firstItem?.deliveryNote || '-';
+    setGlobalSuccessPopup({
+      title: "Paket Kiriman Berhasil Diterima! 📦",
+      message: `${count} produk kiriman dari Kantor Pusat telah diverifikasi dan resmi aktif di inventaris cabang Anda.`,
+      details: [
+        { label: "Total Barang", value: `${count} Jenis Produk`, highlight: true },
+        { label: "No. Surat Jalan", value: deliveryNote },
+        { label: "Status", value: "✓ Diterima & Aktif di Cabang" }
+      ]
+    });
+    return result;
+  };
+
+  // Handler for Branch Rejecting Central Transfer (Single or Batch)
+  const handleRejectTransfer = async (transferIdOrItems, reason) => {
+    const list = Array.isArray(transferIdOrItems) ? transferIdOrItems : [transferIdOrItems];
+    const result = await rejectBatchTransferReceipt(list, currentUser, reason);
+    await loadData();
+    const count = list.length;
+    const firstItem = typeof list[0] === 'object' ? list[0] : transfers.find(t => t.id === list[0]);
+    const deliveryNote = firstItem?.deliveryNote || '-';
+    setGlobalSuccessPopup({
+      title: "Paket Kiriman Ditolak / Retur ⚠️",
+      message: `${count} barang kiriman dari Pusat (No. Surat Jalan: ${deliveryNote}) telah ditolak dengan alasan resmi.`,
+      details: [
+        { label: "Total Barang", value: `${count} Produk` },
+        { label: "No. Surat Jalan", value: deliveryNote },
+        { label: "Alasan Penolakan", value: `"${reason || '-'}"`, highlight: true }
+      ]
+    });
     return result;
   };
 
@@ -480,7 +610,13 @@ export default function App() {
     : products;
 
   const handleNavigate = (tab, contextData = null) => {
-    if (tab === 'stock-out' && contextData) {
+    if (tab === 'products') {
+      if (contextData?.tab) {
+        setProductsInitialTab(contextData.tab);
+      } else {
+        setProductsInitialTab(null);
+      }
+    } else if (tab === 'stock-out' && contextData) {
       let matchedRequest = null;
       if (contextData.metaId) {
         matchedRequest = stockRequests.find(r => r.id === contextData.metaId);
@@ -563,6 +699,7 @@ export default function App() {
                   branches={branches}
                   brands={brands}
                   machineCategories={machineCategories}
+                  initialTab={productsInitialTab}
                   onCreateProduct={handleCreateProduct}
                   onUpdateProduct={handleUpdateProduct}
                   onDeleteProduct={handleDeleteProduct}
@@ -588,6 +725,7 @@ export default function App() {
                   initialTab={inboundInitialTab}
                   onRecordMovement={handleRecordMovement}
                   onConfirmTransfer={handleConfirmTransfer}
+                  onRejectTransfer={handleRejectTransfer}
                   onRequestStock={handleRequestStock}
                 />
               )}
@@ -681,6 +819,46 @@ export default function App() {
       {backToast && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-2xl z-[999] animate-bounce backdrop-blur-sm border border-slate-700">
           {backToast}
+        </div>
+      )}
+
+      {/* REALTIME FLOATING NOTIFICATION TOAST */}
+      {liveToastNotif && (
+        <div 
+          onClick={() => {
+            handleNavigate(
+              liveToastNotif.type === 'STOCK_TRANSFER_INCOMING' ? 'stock-in' :
+              liveToastNotif.type === 'INVENTORY_REQUEST' ? 'products' :
+              liveToastNotif.type === 'STOCK_REQUEST_SUBMITTED' ? 'stock-out' : 'dashboard',
+              { tab: liveToastNotif.type === 'INVENTORY_REQUEST' ? 'APPROVAL_REQUESTS' : undefined }
+            );
+            setLiveToastNotif(null);
+          }}
+          className="fixed top-5 right-5 z-[9999] max-w-sm w-full bg-slate-900/95 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl border border-amber-400/40 animate-in slide-in-from-top-4 duration-300 cursor-pointer hover:border-amber-400 transition"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center flex-shrink-0 font-bold shadow-md shadow-amber-500/30 animate-bounce">
+              <Bell className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-400">Pemberitahuan Baru 🔴</span>
+                <button 
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setLiveToastNotif(null); }}
+                  className="text-slate-400 hover:text-white p-0.5 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <h5 className="font-bold text-xs text-white truncate mt-0.5">{liveToastNotif.title}</h5>
+              <p className="text-[11px] text-slate-300 line-clamp-2 mt-0.5 leading-snug">{liveToastNotif.message}</p>
+              <div className="flex items-center gap-1 text-[10px] text-amber-300 font-semibold mt-1.5">
+                <span>Klik untuk langsung membuka</span>
+                <span>→</span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

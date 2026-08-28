@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import GlobalSuccessModal from './GlobalSuccessModal';
 import CustomAlertModal from './CustomAlertModal';
+import ConfirmationModal from './ConfirmationModal';
 
 export default function BranchManagement({ 
   currentUser, 
@@ -38,6 +39,8 @@ export default function BranchManagement({
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isConfirmSaveOpen, setIsConfirmSaveOpen] = useState(false);
+  const [isExecutingSave, setIsExecutingSave] = useState(false);
   const [editingBranch, setEditingBranch] = useState(null);
   const [deleteConfirmBranch, setDeleteConfirmBranch] = useState(null);
   const [isDeleteAllConfirmOpen, setIsDeleteAllConfirmOpen] = useState(false);
@@ -119,7 +122,7 @@ export default function BranchManagement({
     setIsModalOpen(true);
   };
 
-  const handleSubmit = async (e) => {
+  const handlePreSubmitBranch = (e) => {
     e.preventDefault();
     setFormError('');
 
@@ -128,6 +131,11 @@ export default function BranchManagement({
       return;
     }
 
+    setIsConfirmSaveOpen(true);
+  };
+
+  const handleExecuteSaveBranch = async () => {
+    setIsExecutingSave(true);
     try {
       if (editingBranch) {
         await onUpdateBranch(editingBranch.id, {
@@ -135,13 +143,13 @@ export default function BranchManagement({
           ...formData
         });
       } else {
-        // Auto-generate code internally
         const generatedCode = `CB-${Math.floor(100 + Math.random() * 900)}`;
         await onCreateBranch({
           code: generatedCode,
           ...formData
         });
       }
+      setIsConfirmSaveOpen(false);
       setIsModalOpen(false);
 
       setSuccessModal({
@@ -157,6 +165,9 @@ export default function BranchManagement({
       });
     } catch (err) {
       setFormError(err.message || 'Gagal menyimpan data cabang.');
+      setIsConfirmSaveOpen(false);
+    } finally {
+      setIsExecutingSave(false);
     }
   };
 
@@ -563,7 +574,7 @@ export default function BranchManagement({
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 text-sm overflow-y-auto flex-1">
+            <form onSubmit={handlePreSubmitBranch} className="p-5 sm:p-6 space-y-4 text-sm overflow-y-auto flex-1">
               
               {formError && (
                 <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2">
@@ -670,75 +681,61 @@ export default function BranchManagement({
 
       {/* DELETE CONFIRMATION MODAL */}
       {deleteConfirmBranch && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-100 p-6 space-y-4 animate-in zoom-in-95 duration-200">
-            <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-            <div className="text-center">
-              <h3 className="text-base font-bold text-slate-900">Hapus Cabang Gudang?</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Apakah Anda yakin ingin menghapus data cabang <strong>{deleteConfirmBranch.name}</strong>?
-              </p>
-            </div>
-            <div className="flex items-center justify-center gap-2 pt-2">
-              <button
-                onClick={() => setDeleteConfirmBranch(null)}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer"
-              >
-                Batalkan
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-md shadow-rose-600/20 transition cursor-pointer"
-              >
-                Ya, Hapus
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmationModal
+          isOpen={Boolean(deleteConfirmBranch)}
+          onClose={() => setDeleteConfirmBranch(null)}
+          onConfirm={handleConfirmDelete}
+          title="Konfirmasi Hapus Cabang Gudang"
+          subtitle="Tindakan ini akan menghapus data cabang dari sistem."
+          type="DANGER"
+          confirmText="Ya, Hapus Cabang"
+          cancelText="Batal"
+          summaryItems={[
+            { label: "Nama Cabang", value: deleteConfirmBranch.name, highlight: true },
+            { label: "Alamat / Lokasi", value: deleteConfirmBranch.address || '-' },
+            { label: "PIC Penanggung Jawab", value: deleteConfirmBranch.pic || '-' },
+            { label: "Status", value: deleteConfirmBranch.status === 'ACTIVE' ? 'Aktif' : 'Non-Aktif' }
+          ]}
+          warningNote="PERINGATAN: Menghapus cabang dapat mempengaruhi akun staff cabang dan riwayat transfer barang yang terhubung."
+        />
       )}
+
+      {/* SAVE / UPDATE BRANCH CONFIRMATION MODAL */}
+      <ConfirmationModal
+        isOpen={isConfirmSaveOpen}
+        onClose={() => setIsConfirmSaveOpen(false)}
+        onConfirm={handleExecuteSaveBranch}
+        title={editingBranch ? "Konfirmasi Ubah Data Cabang" : "Konfirmasi Daftarkan Cabang Baru"}
+        subtitle="Pastikan data nama, lokasi, dan penanggung jawab cabang sudah benar."
+        type="PRIMARY"
+        confirmText={editingBranch ? "Ya, Simpan Perubahan" : "Ya, Daftarkan Cabang"}
+        cancelText="← Cek Kembali"
+        isLoading={isExecutingSave}
+        summaryItems={[
+          { label: "Nama Gudang / Cabang", value: formData.name, highlight: true },
+          { label: "Alamat Lokasi", value: formData.address || '-' },
+          { label: "PIC Penanggung Jawab", value: formData.pic || '-' },
+          { label: "No. Kontak Telepon", value: formData.phone || '-' },
+          { label: "Status Operasional", value: formData.status === 'ACTIVE' ? '🟢 Aktif' : '🔴 Non-Aktif' }
+        ]}
+      />
 
       {/* CONFIRM DELETE ALL BRANCHES MODAL */}
       {isDeleteAllConfirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-100 animate-in zoom-in-95">
-            <div className="flex items-center gap-3 text-rose-600">
-              <div className="p-2.5 bg-rose-50 rounded-xl">
-                <Trash2 className="w-6 h-6 text-rose-600" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-base">Hapus SEMUA Data Cabang?</h3>
-                <p className="text-xs text-slate-500 font-medium">Tindakan ini tidak dapat dibatalkan</p>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200">
-              Apakah Anda yakin ingin menghapus <strong className="text-rose-700 font-bold">SELURUH data cabang ({branches.length} Cabang)</strong> di database secara permanen?
-            </p>
-
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsDeleteAllConfirmOpen(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (onClearAllBranches) onClearAllBranches();
-                  setIsDeleteAllConfirmOpen(false);
-                }}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-600/20 transition cursor-pointer flex items-center gap-1.5"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Ya, Hapus Semua Cabang</span>
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmationModal
+          isOpen={isDeleteAllConfirmOpen}
+          onClose={() => setIsDeleteAllConfirmOpen(false)}
+          onConfirm={() => {
+            if (onClearAllBranches) onClearAllBranches();
+            setIsDeleteAllConfirmOpen(false);
+          }}
+          title="Hapus SEMUA Data Cabang?"
+          subtitle="Tindakan darurat ini akan menghapus seluruh data cabang."
+          type="DANGER"
+          confirmText="Ya, Hapus Semua Cabang"
+          cancelText="Batal"
+          warningNote={`Anda akan menghapus ${branches.length} cabang gudang secara permanen dari database.`}
+        />
       )}
 
       {/* UNIVERSAL SUCCESS POP-UP MODAL */}

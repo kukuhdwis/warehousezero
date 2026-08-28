@@ -71,11 +71,66 @@ export default function BranchMonitoring({
     ? getBranchStaff(selectedBranch)
     : users;
 
+  const isPusatSelected = selectedBranch && (
+    selectedBranch.isPusat === true || 
+    selectedBranch.code === 'GUDANG-PUSAT' || 
+    (selectedBranch.name || '').toLowerCase().includes('gudang utama pusat')
+  );
+
   // Branch Inventories belonging to selected branch (or all)
-  const branchInventoryItems = branchInventories.filter(bi => {
-    if (selectedBranchId === 'ALL') return true;
-    return bi.branchId === selectedBranchId;
-  });
+  // GUDANG UTAMA PUSAT: Directly uses master products catalog!
+  const branchInventoryItems = React.useMemo(() => {
+    if (selectedBranchId === 'ALL') {
+      return branchInventories;
+    }
+    if (isPusatSelected) {
+      return products.map(p => ({
+        id: p.id,
+        productId: p.id,
+        productName: p.name,
+        sku: p.sku,
+        brand: p.brand || 'Generic',
+        category: p.category || 'General',
+        stockQuantity: Number(p.currentStock) || 0,
+        minStock: Number(p.minStock) || 5,
+        unit: p.unit || 'Pcs',
+        price: Number(p.price) || 0,
+        status: 'APPROVED',
+        branchId: selectedBranch.id,
+        branchName: selectedBranch.name,
+        isMasterProduct: true
+      }));
+    }
+
+    // Match all items for this branch by ID, code, or name
+    const branchItems = branchInventories.filter(bi => {
+      if (!bi) return false;
+      if (bi.branchId === selectedBranchId) return true;
+      if (selectedBranch) {
+        if (bi.branchId === selectedBranch.id) return true;
+        if (selectedBranch.code && bi.branchId === selectedBranch.code) return true;
+        if (bi.branchName && selectedBranch.name && bi.branchName.trim().toLowerCase() === selectedBranch.name.trim().toLowerCase()) return true;
+      }
+      return false;
+    });
+
+    // Deduplicate by SKU / productId if any duplicates exist
+    const deduplicatedMap = new Map();
+    for (const item of branchItems) {
+      const key = item.sku || item.productId || item.id;
+      if (!deduplicatedMap.has(key)) {
+        deduplicatedMap.set(key, item);
+      } else {
+        const existing = deduplicatedMap.get(key);
+        const existingDate = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+        const itemDate = new Date(item.updatedAt || item.createdAt || 0).getTime();
+        if (itemDate >= existingDate) {
+          deduplicatedMap.set(key, item);
+        }
+      }
+    }
+    return Array.from(deduplicatedMap.values());
+  }, [selectedBranchId, isPusatSelected, products, branchInventories, selectedBranch]);
 
   // Filter items by search & stock status
   const filteredInventories = branchInventoryItems.filter(item => {
@@ -180,17 +235,17 @@ export default function BranchMonitoring({
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-xl sm:text-2xl font-bold tracking-tight">
-                      Gudang {selectedBranch.name}
+                      {selectedBranch.name.toLowerCase().startsWith('gudang') ? selectedBranch.name : `Gudang ${selectedBranch.name}`}
                     </h2>
                     <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                      {selectedBranch.status || 'Aktif'}
+                      {isPusatSelected ? '⭐ Master HQ' : (selectedBranch.status || 'Aktif')}
                     </span>
                   </div>
                   
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-300 mt-2">
                     <span className="flex items-center gap-1">
                       <User className="w-3.5 h-3.5 text-sky-400" />
-                      PIC: <strong className="text-white">{selectedBranch.pic || '-'}</strong>
+                      PIC: <strong className="text-white">{selectedBranch.pic || selectedBranch.managerName || '-'}</strong>
                     </span>
                     {selectedBranch.phone && (
                       <span className="flex items-center gap-1">
@@ -252,10 +307,12 @@ export default function BranchMonitoring({
             <div>
               <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
                 <Boxes className="w-5 h-5 text-sky-600" />
-                <span>Daftar Stok Fisik Barang di {selectedBranch.name}</span>
+                <span>{isPusatSelected ? `Daftar Stok Fisik Master di ${selectedBranch.name}` : `Daftar Stok Fisik Barang di ${selectedBranch.name}`}</span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Stok fisik yang telah diajukan cabang dan diverifikasi/disetujui oleh Kantor Pusat.
+                {isPusatSelected 
+                  ? 'Stok fisik induk katalog master di Gudang Utama Pusat (Master Hub).' 
+                  : 'Stok fisik yang telah diajukan cabang dan diverifikasi/disetujui oleh Kantor Pusat.'}
               </p>
             </div>
 
@@ -308,9 +365,13 @@ export default function BranchMonitoring({
                 <Inbox className="w-7 h-7" />
               </div>
               <div className="max-w-sm mx-auto">
-                <h4 className="font-bold text-slate-800 text-sm sm:text-base">Gudang Cabang Ini Belum Memiliki Data Barang</h4>
+                <h4 className="font-bold text-slate-800 text-sm sm:text-base">
+                  {isPusatSelected ? 'Belum Ada Produk di Katalog Master' : 'Gudang Cabang Ini Belum Memiliki Data Barang'}
+                </h4>
                 <p className="text-xs text-slate-400 mt-1">
-                  Inventaris barang akan otomatis terdata secara real-time saat staf cabang mengajukan inventaris produk dan telah disetujui oleh Pusat.
+                  {isPusatSelected 
+                    ? 'Silakan tambahkan produk master baru melalui menu Master Data Produk.' 
+                    : 'Inventaris barang akan otomatis terdata secara real-time saat staf cabang mengajukan inventaris produk dan telah disetujui oleh Pusat.'}
                 </p>
               </div>
             </div>

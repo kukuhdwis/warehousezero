@@ -418,3 +418,228 @@ export const createStockTransfer = functions.https.onCall(async (data, context) 
     return { success: true, transferId: transferRef.id, totalValue: totalTransferValue };
   });
 });
+
+// ============================================================================
+// 6. SYSTEM USER LIFECYCLE MANAGEMENT (AUTH + FIRESTORE SYNC)
+// ============================================================================
+
+const isCallerAdmin = async (context: functions.https.CallableContext): Promise<boolean> => {
+  if (!context.auth) return false;
+  const tokenRole = ((context.auth.token.role || '') as string).toLowerCase();
+  if (tokenRole === 'admin') return true;
+
+  // Check Firestore users document
+  const callerDoc = await db.doc(`users/${context.auth.uid}`).get();
+  if (callerDoc.exists && ((callerDoc.data()?.role || '') as string).toUpperCase() === 'ADMIN') {
+    return true;
+  }
+
+  // Initial bootstrap check
+  const usersCount = (await db.collection('users').limit(2).get()).size;
+  if (usersCount <= 1) return true;
+
+  return false;
+};
+
+export const createSystemUser = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Wajib login untuk mendaftarkan pengguna baru.');
+  }
+
+  const isAdmin = await isCallerAdmin(context);
+  if (!isAdmin) {
+    throw new functions.https.HttpsError('permission-denied', 'Hanya Administrator yang memiliki wewenang membuat pengguna baru.');
+  }
+
+  const { email, password, name, role, branchId, branchName, phone, status } = data;
+
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const cleanPassword = (password || '').trim();
+  const cleanName = (name || '').trim() || cleanEmail.split('@')[0];
+  const userRole = (role || 'STAFF_BRANCH').toUpperCase();
+
+  if (!cleanEmail) {
+    throw new functions.https.HttpsError('invalid-argument', 'Email wajib diisi.');
+  }
+
+  if (!cleanPassword || cleanPassword.length < 6) {
+    throw new functions.https.HttpsError('invalid-argument', 'Kata sandi wajib diisi minimal 6 karakter.');
+  }
+
+  try {
+    // 1. Create / Update User in Firebase Authentication
+    let userRecord: admin.auth.UserRecord;
+    try {
+      userRecord = await admin.auth().createUser({
+        email: cleanEmail,
+        password: cleanPassword,
+        displayName: cleanName,
+        phoneNumber: phone && phone.startsWith('+') ? phone : undefined,
+        disabled: status === 'INACTIVE'
+      });
+    } catch (createErr: any) {
+      if (createErr.code === 'auth/email-already-exists') {
+        userRecord = await admin.auth().getUserByEmail(cleanEmail);
+        await admin.auth().updateUser(userRecord.uid, {
+          password: cleanPassword,
+          displayName: cleanName,
+          disabled: status === 'INACTIVE'
+        });
+      } else {
+        throw createErr;
+      }
+    }
+
+    // 2. Set Custom Claims for instant 0ms role checking
+    await admin.auth().setCustomUserClaims(userRecord.uid, {
+      role: userRole,
+      branch_id: userRole === 'ADMIN' ? 'ALL' : (branchId || 'ALL'),
+      branch_name: userRole === 'ADMIN' ? 'Semua Cabang (Pusat)' : (branchName || 'Cabang'),
+      claims_version: Date.now()
+    });
+
+    // 3. Save to Firestore Database using UID as Document ID (Direct Key-Value O(1) Lookup)
+    const userDocRef = db.doc(`users/${userRecord.uid}`);
+    const userPayload = {
+      id: userRecord.uid,
+      uid: userRecord.uid,
+      name: cleanName,
+      email: cleanEmail,
+      role: userRole,
+      branchId: userRole === 'ADMIN' ? 'ALL' : (branchId || 'ALL'),
+      branchName: userRole === 'ADMIN' ? 'Semua Cabang (Pusat)' : (branchName || 'Cabang'),
+      phone: phone || '',
+      status: status || 'ACTIVE',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await userDocRef.set(userPayload, { merge: true });
+
+    return {
+      success: true,
+      message: `Pengguna ${cleanName} (${cleanEmail}) berhasil didaftarkan.`,
+      user: {
+        ...userPayload,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    };
+  } catch (err: any) {
+    console.error('Error creating system user:', err);
+    throw new functions.https.HttpsError(
+      'internal',
+      err.message || 'Gagal mendaftarkan pengguna baru di server.'
+    );
+  }
+});
+
+export const updateSystemUser = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Wajib login.');
+  }
+
+  const isAdmin = await isCallerAdmin(context);
+  if (!isAdmin) {
+    throw new functions.https.HttpsError('permission-denied', 'Hanya Administrator yang dapat memperbarui pengguna.');
+  }
+
+  const { targetUid, name, email, role, branchId, branchName, phone, status, newPassword } = data;
+
+  if (!targetUid) {
+    throw new functions.https.HttpsError('invalid-argument', 'targetUid wajib diisi.');
+  }
+
+  const userRole = (role || 'STAFF_BRANCH').toUpperCase();
+
+  try {
+    // 1. Update Firebase Authentication
+    const authUpdatePayload: admin.auth.UpdateRequest = {};
+    if (name) authUpdatePayload.displayName = name.trim();
+    if (newPassword && newPassword.trim().length >= 6) authUpdatePayload.password = newPassword.trim();
+    if (status) authUpdatePayload.disabled = status === 'INACTIVE';
+
+    if (Object.keys(authUpdatePayload).length > 0) {
+      try {
+        await admin.auth().updateUser(targetUid, authUpdatePayload);
+      } catch (authErr: any) {
+        console.warn('Warning updating auth user:', authErr);
+      }
+    }
+
+    // 2. Update Custom Claims
+    await admin.auth().setCustomUserClaims(targetUid, {
+      role: userRole,
+      branch_id: userRole === 'ADMIN' ? 'ALL' : (branchId || 'ALL'),
+      branch_name: userRole === 'ADMIN' ? 'Semua Cabang (Pusat)' : (branchName || 'Cabang'),
+      claims_version: Date.now()
+    });
+
+    // 3. Update Firestore Document
+    const updateDocPayload: any = {
+      ...(name ? { name: name.trim() } : {}),
+      ...(email ? { email: email.trim().toLowerCase() } : {}),
+      ...(role ? { role: userRole } : {}),
+      branchId: userRole === 'ADMIN' ? 'ALL' : (branchId || 'ALL'),
+      branchName: userRole === 'ADMIN' ? 'Semua Cabang (Pusat)' : (branchName || 'Cabang'),
+      ...(phone !== undefined ? { phone: phone } : {}),
+      ...(status ? { status: status } : {}),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.doc(`users/${targetUid}`).set(updateDocPayload, { merge: true });
+
+    return {
+      success: true,
+      message: 'Data pengguna berhasil diperbarui.',
+      user: { id: targetUid, uid: targetUid, ...updateDocPayload }
+    };
+  } catch (err: any) {
+    console.error('Error updating system user:', err);
+    throw new functions.https.HttpsError('internal', err.message || 'Gagal memperbarui pengguna.');
+  }
+});
+
+export const deleteSystemUser = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Wajib login.');
+  }
+
+  const isAdmin = await isCallerAdmin(context);
+  if (!isAdmin) {
+    throw new functions.https.HttpsError('permission-denied', 'Hanya Administrator yang dapat menghapus pengguna.');
+  }
+
+  const { targetUid } = data;
+  if (!targetUid) {
+    throw new functions.https.HttpsError('invalid-argument', 'targetUid wajib diisi.');
+  }
+
+  if (targetUid === context.auth.uid) {
+    throw new functions.https.HttpsError('failed-precondition', 'Anda tidak dapat menghapus akun Anda sendiri saat sedang aktif login.');
+  }
+
+  try {
+    // 1. Delete from Firebase Authentication
+    try {
+      await admin.auth().deleteUser(targetUid);
+    } catch (authErr: any) {
+      if (authErr.code !== 'auth/user-not-found') {
+        console.warn('Warning deleting auth user:', authErr);
+      }
+    }
+
+    // 2. Delete from Firestore users collection
+    await db.doc(`users/${targetUid}`).delete();
+    await db.doc(`user_profiles/${targetUid}`).delete();
+
+    return {
+      success: true,
+      message: 'Pengguna berhasil dihapus permanen dari Authentication dan Database.'
+    };
+  } catch (err: any) {
+    console.error('Error deleting system user:', err);
+    throw new functions.https.HttpsError('internal', err.message || 'Gagal menghapus pengguna.');
+  }
+});
+

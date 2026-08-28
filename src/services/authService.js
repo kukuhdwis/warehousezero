@@ -1,9 +1,64 @@
 // Authentication service for NDK Warehouse WMS
-import { fetchUsers } from './dataService';
-import { auth } from './firebase';
-import { onIdTokenChanged } from 'firebase/auth';
+import { initializeApp, getApps } from 'firebase/app';
+import { auth, db, isFirebaseConfigured, firebaseConfig } from './firebase';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword,
+  signOut, 
+  onIdTokenChanged 
+} from 'firebase/auth';
+import { collection, doc, getDoc, query, where, getDocs } from 'firebase/firestore';
 
 const STORAGE_KEY = 'wms_user';
+
+/**
+ * Register a new user into Firebase Authentication directly from client side
+ * Uses direct Firebase Auth REST API to ensure 100% stateless reliability without session conflicts!
+ */
+export const registerUserInFirebaseAuth = async (email, password) => {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const cleanPassword = (password || '').trim();
+
+  if (!cleanEmail || !cleanPassword) {
+    throw new Error('Email dan kata sandi wajib diisi.');
+  }
+
+  if (cleanPassword.length < 6) {
+    throw new Error('Kata sandi minimal 6 karakter sesuai standar keamanan Firebase.');
+  }
+
+  try {
+    const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${firebaseConfig.apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: cleanEmail,
+        password: cleanPassword,
+        returnSecureToken: true
+      })
+    });
+    
+    const data = await res.json();
+    if (data.error) {
+      const errMsg = data.error.message || '';
+      if (errMsg.includes('EMAIL_EXISTS')) {
+        console.warn(`User ${cleanEmail} sudah ada di Firebase Authentication.`);
+        return null;
+      }
+      if (errMsg.includes('WEAK_PASSWORD')) {
+        throw new Error('Kata sandi terlalu lemah. Gunakan minimal 6 karakter.');
+      }
+      if (errMsg.includes('INVALID_EMAIL')) {
+        throw new Error('Format alamat email tidak valid.');
+      }
+      throw new Error(`Firebase Auth error: ${errMsg}`);
+    }
+    return data.localId; // The new Firebase Auth UID
+  } catch (err) {
+    console.error("Error in registerUserInFirebaseAuth:", err);
+    throw err;
+  }
+};
 
 export const getStoredUser = () => {
   try {
@@ -15,36 +70,103 @@ export const getStoredUser = () => {
   }
 };
 
+/**
+ * Secure User Login using Firebase Authentication
+ */
 export const loginUser = async (email, password) => {
   const cleanEmail = (email || '').trim().toLowerCase();
   const cleanPassword = (password || '').trim();
 
-  // Retrieve current users from data service / local storage
-  const users = await fetchUsers();
-
-  const foundUser = users.find(
-    (u) => (u.email || '').toLowerCase() === cleanEmail && (u.password === cleanPassword || (!u.password && cleanPassword === 'admin'))
-  );
-
-  if (!foundUser) {
-    throw new Error('Email atau kata sandi tidak valid. Silakan periksa kembali kredensial Anda.');
+  if (!cleanEmail || !cleanPassword) {
+    throw new Error('Email dan kata sandi wajib diisi.');
   }
 
-  if (foundUser.status === 'INACTIVE') {
+  if (!isFirebaseConfigured() || !auth) {
+    throw new Error('Koneksi Firebase Authentication belum terkonfigurasi. Silakan periksa file .env.');
+  }
+
+  let firebaseUser = null;
+  let idTokenResult = null;
+
+  try {
+    // 1. Authenticate with Firebase Authentication
+    const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
+    firebaseUser = userCredential.user;
+    idTokenResult = await firebaseUser.getIdTokenResult(true);
+  } catch (authError) {
+    console.error('Firebase Auth login error:', authError);
+    if (
+      authError.code === 'auth/user-not-found' ||
+      authError.code === 'auth/wrong-password' ||
+      authError.code === 'auth/invalid-credential' ||
+      authError.code === 'auth/invalid-email'
+    ) {
+      throw new Error('Email atau kata sandi tidak valid. Silakan periksa kembali kredensial Anda.');
+    }
+    if (authError.code === 'auth/too-many-requests') {
+      throw new Error('Terlalu banyak percobaan login yang gagal. Silakan tunggu beberapa saat atau hubungi administrator.');
+    }
+    if (authError.code === 'auth/user-disabled') {
+      throw new Error('Akun Anda telah dinonaktifkan. Silakan hubungi administrator sistem.');
+    }
+    throw new Error(`Gagal masuk ke sistem: ${authError.message || 'Terjadi kesalahan pada server autentikasi.'}`);
+  }
+
+  // 2. Retrieve user profile details from Firestore using Direct O(1) UID Lookup
+  let profileData = {};
+  try {
+    if (db) {
+      // Fast Direct Key-Value Lookup (O(1))
+      const userDocRef = doc(db, 'users', firebaseUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      if (userDocSnap.exists()) {
+        profileData = { id: userDocSnap.id, ...userDocSnap.data() };
+      } else {
+        // Fallback search by email if document ID is not yet matching UID
+        const q = query(collection(db, 'users'), where('email', '==', cleanEmail));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          profileData = { id: snap.docs[0].id, ...snap.docs[0].data() };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Gagal memuat detail profil tambahan dari Firestore:', err);
+  }
+
+  // 3. Check if user is marked INACTIVE in Firestore profile
+  if (profileData.status === 'INACTIVE') {
+    if (auth) await signOut(auth);
+    localStorage.removeItem(STORAGE_KEY);
     throw new Error('Akun Anda dinonaktifkan oleh Administrator. Silakan hubungi admin sistem.');
   }
 
-  const { password: _, ...userSession } = foundUser;
+  // 4. Construct secure session compatible with App.jsx
+  const claims = idTokenResult?.claims || {};
+  const userSession = {
+    uid: firebaseUser.uid,
+    email: firebaseUser.email,
+    name: profileData.name || firebaseUser.displayName || cleanEmail.split('@')[0],
+    role: claims.role || profileData.role || 'STAFF_BRANCH',
+    branchId: claims.branch_id || profileData.branchId || 'ALL',
+    branchName: profileData.branchName || (claims.branch_name) || (profileData.role === 'ADMIN' ? 'Semua Cabang (Pusat)' : 'Gudang Cabang'),
+    phone: profileData.phone || '',
+    status: profileData.status || 'ACTIVE'
+  };
+
   localStorage.setItem(STORAGE_KEY, JSON.stringify(userSession));
   return userSession;
 };
 
+/**
+ * Logout User and clear Firebase Auth & local storage
+ */
 export const logoutUser = async () => {
   if (auth) {
     try {
-      await auth.signOut();
+      await signOut(auth);
     } catch (e) {
-      console.warn("Firebase signout warning:", e);
+      console.warn('Firebase signout warning:', e);
     }
   }
   localStorage.removeItem(STORAGE_KEY);
@@ -61,16 +183,16 @@ export const setupAuthTokenListener = (onClaimsChanged) => {
     if (user) {
       try {
         const idTokenResult = await user.getIdTokenResult(true); // Force Refresh = true
-        console.log("Active Custom Claims:", idTokenResult.claims);
         if (onClaimsChanged && typeof onClaimsChanged === 'function') {
           onClaimsChanged(idTokenResult.claims, user);
         }
       } catch (err) {
-        console.error("Error refreshing ID token claims:", err);
+        console.error('Error refreshing ID token claims:', err);
       }
     }
   });
 
   return unsubscribe;
 };
+
 

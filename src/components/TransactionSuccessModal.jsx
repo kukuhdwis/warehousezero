@@ -94,17 +94,36 @@ export default function TransactionSuccessModal({
                 Rincian Barang & Kuantitas Fisik
               </span>
               
-              {isBundling && transaction.items ? (
+              {transaction.items && transaction.items.length > 0 ? (
                 <div className="space-y-2">
-                  <div className="font-extrabold text-sm text-purple-950 flex items-center gap-1.5">
-                    <Boxes className="w-4 h-4 text-purple-600 flex-shrink-0" />
-                    <span>{transaction.bundleName || transaction.productName}</span>
+                  <div className="font-extrabold text-sm text-slate-900 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Boxes className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      <span>{isBundling ? (transaction.bundleName || transaction.productName) : `Daftar Barang (${transaction.items.length} Jenis Produk)`}</span>
+                    </div>
+                    <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-lg">
+                      Total: {transaction.qty} Pcs
+                    </span>
                   </div>
                   <div className="bg-white p-3 rounded-xl border border-slate-200 divide-y divide-slate-100 text-xs space-y-1.5">
                     {transaction.items.map((it, idx) => (
-                      <div key={idx} className="flex justify-between items-center py-1 first:pt-0 last:pb-0">
-                        <span className="text-slate-700 font-medium">{it.productName}</span>
-                        <span className="font-extrabold text-purple-900 bg-purple-50 px-2 py-0.5 rounded">{it.qty} Pcs</span>
+                      <div key={idx} className="flex justify-between items-center py-1.5 first:pt-0 last:pb-0">
+                        <div>
+                          <div className="text-slate-800 font-bold">{it.productName}</div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            SKU: {it.sku} {it.price ? `• @ Rp ${(Number(it.price) || 0).toLocaleString('id-ID')}` : ''}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-extrabold text-emerald-900 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                            {it.qty} Pcs
+                          </span>
+                          {it.price ? (
+                            <div className="text-[11px] font-bold text-slate-700 mt-0.5">
+                              Rp {((Number(it.price) || 0) * Number(it.qty)).toLocaleString('id-ID')}
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     ))}
                   </div>

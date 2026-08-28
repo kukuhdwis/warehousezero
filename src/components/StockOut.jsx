@@ -201,6 +201,9 @@ export default function StockOut({
   const [isBatchTransferMode, setIsBatchTransferMode] = useState(false);
   const [transferCart, setTransferCart] = useState([]);
 
+  // Multi-Item Sales Cart State (Requirement: Retail & Store Multi-Item Outbound)
+  const [salesCart, setSalesCart] = useState([]);
+
   const selectedProduct = products.find(p => p.id === selectedProductId || p.sku === selectedProductId);
   const currentAvailable = Number(selectedProduct?.currentStock) || 0;
   const isInsufficient = Number(qty) > currentAvailable;
@@ -255,9 +258,66 @@ export default function StockOut({
     setTransferCart(updated);
   };
 
-
   const handleRemoveFromTransferCart = (index) => {
     setTransferCart(transferCart.filter((_, i) => i !== index));
+  };
+
+  // Helper: Add product to sales cart (Multi-Item POS)
+  const handleAddItemToSalesCart = (product) => {
+    if (!product) return;
+    const maxStock = Number(product.currentStock) || 0;
+    const existingIdx = salesCart.findIndex(item => item.productId === product.id);
+
+    if (existingIdx !== -1) {
+      const updated = [...salesCart];
+      if (updated[existingIdx].qty + 1 > maxStock) {
+        showAlert("Stok Produk Terbatas ⚠️", `Stok produk "${product.name}" terbatas hanya ${maxStock} Pcs.`, "WARNING");
+        return;
+      }
+      updated[existingIdx].qty += 1;
+      setSalesCart(updated);
+    } else {
+      if (maxStock <= 0) {
+        showAlert("Stok Produk Habis 📦", `Stok produk "${product.name}" saat ini habis (0 Pcs).`, "WARNING");
+        return;
+      }
+      setSalesCart([
+        ...salesCart,
+        {
+          productId: product.id,
+          sku: product.sku,
+          productName: product.name,
+          brand: product.brand || 'Generic',
+          price: Number(product.price) || 0,
+          currentStock: maxStock,
+          qty: 1
+        }
+      ]);
+    }
+  };
+
+  const handleUpdateSalesCartQty = (index, newQty) => {
+    const updated = [...salesCart];
+    const item = updated[index];
+    const maxStock = Number(item.currentStock) || 0;
+    const val = Number(newQty);
+    if (val > maxStock) {
+      showAlert("Kuantitas Melebihi Stok ⚠️", `Kuantitas penjualan melebihi stok fisik yang tersedia! Maksimal ${maxStock} Pcs.`, "WARNING");
+      updated[index].qty = maxStock;
+    } else {
+      updated[index].qty = Math.max(1, val);
+    }
+    setSalesCart(updated);
+  };
+
+  const handleUpdateSalesCartPrice = (index, newPrice) => {
+    const updated = [...salesCart];
+    updated[index].price = Math.max(0, Number(newPrice) || 0);
+    setSalesCart(updated);
+  };
+
+  const handleRemoveFromSalesCart = (index) => {
+    setSalesCart(salesCart.filter((_, i) => i !== index));
   };
 
   // Scanner handler
@@ -270,7 +330,7 @@ export default function StockOut({
     if (matched) {
       if (outboundMode === 'STOCK_TRANSFER_TO_BRANCH' && isBatchTransferMode) {
         handleAddItemToTransferCart(matched);
-      } else if (outboundMode === 'CUSTOM_BUNDLING') {
+      } else if (outboundMode === 'CUSTOM_BUNDLING' || salesType === 'BUNDLE') {
         const existingIdx = bundleItems.findIndex(bi => bi.productId === matched.id);
         if (existingIdx !== -1) {
           const updated = [...bundleItems];
@@ -280,7 +340,8 @@ export default function StockOut({
           setBundleItems([...bundleItems, { productId: matched.id, qty: 1 }]);
         }
       } else {
-        setSelectedProductId(matched.id);
+        // Sales Mode (Satuan & Multi-Item)
+        handleAddItemToSalesCart(matched);
       }
     } else {
       showAlert("Barcode Tidak Ditemukan 🔍", `Produk dengan SKU/Barcode "${scannedText}" tidak ditemukan di database.`, "WARNING");
@@ -359,69 +420,123 @@ export default function StockOut({
     }
   };
 
-  // Step 1: Open Confirmation Modal Before Processing Single Item Outbound
+  // Step 1: Open Confirmation Modal Before Processing Outbound Sale / Single Transfer
   const handlePrepareSingleSubmit = (e) => {
     e.preventDefault();
-    if (!selectedProduct) {
-      showAlert("Produk Belum Dipilih", "Silakan pilih produk terlebih dahulu!", "WARNING");
-      return;
-    }
-    if (Number(qty) <= 0) {
-      showAlert("Kuantitas Tidak Valid", "Jumlah kuantitas (Pcs) harus lebih besar dari 0!", "WARNING");
-      return;
-    }
-    if (isInsufficient) {
-      showAlert("Stok Tidak Mencukupi 📦", `Stok tidak mencukupi! Stok tersedia hanya ${currentAvailable} Pcs.`, "WARNING");
-      return;
-    }
-
-    let finalNotes = '';
-    let movementTypeData = {};
 
     if (isTransferMode) {
       // Pusat Transfer to Branch
+      if (!selectedProduct) {
+        showAlert("Produk Belum Dipilih", "Silakan pilih produk terlebih dahulu!", "WARNING");
+        return;
+      }
+      if (Number(qty) <= 0) {
+        showAlert("Kuantitas Tidak Valid", "Jumlah kuantitas (Pcs) harus lebih besar dari 0!", "WARNING");
+        return;
+      }
+      if (isInsufficient) {
+        showAlert("Stok Tidak Mencukupi 📦", `Stok tidak mencukupi! Stok tersedia hanya ${currentAvailable} Pcs.`, "WARNING");
+        return;
+      }
+
       const targetBranch = branches.find(b => b.id === targetBranchId);
       const targetBranchName = targetBranch?.name || 'Cabang Tujuan';
       const sjNo = invoiceNumber || `SJ-HQ-${Math.floor(1000 + Math.random() * 9000)}`;
 
-      finalNotes = `Pengiriman Mutasi ke: ${targetBranchName} (${qty} Pcs) • No. Surat Jalan: ${sjNo}${notes ? ` • Catatan: ${notes}` : ''}`;
-      movementTypeData = {
+      const finalNotes = `Pengiriman Mutasi ke: ${targetBranchName} (${qty} Pcs) • No. Surat Jalan: ${sjNo}${notes ? ` • Catatan: ${notes}` : ''}`;
+      const payload = {
+        productId: selectedProduct.id,
+        sku: selectedProduct.sku,
+        productName: selectedProduct.name,
+        type: 'OUT',
+        qty: Number(qty),
+        unit: 'Pcs',
+        notes: finalNotes,
+        user: user || currentUser?.name || 'Staff',
         transactionType: 'STOCK_TRANSFER_TO_BRANCH',
         targetBranchId: targetBranchId,
         targetBranchName: targetBranchName,
         deliveryNote: sjNo
       };
-    } else {
-      // Retail Sale (Satuan Per Pcs - Offline / Marketplace)
-      const unitPrice = Number(selectedProduct.price) || 0;
-      const totalPrice = unitPrice * Number(qty);
-      const platformName = getPlatformLabel(salesPlatform);
-      const defaultPrefix = salesPlatform !== 'OFFLINE' ? `${salesPlatform}-` : 'NOTA-';
-      const notaNo = invoiceNumber || `${defaultPrefix}${Math.floor(100000 + Math.random() * 900000)}`;
-      const locationLabel = isBranchStaff ? currentUser?.branchName || 'Cabang' : 'Pusat';
 
-      finalNotes = `Penjualan Satuan (${platformName} • ${locationLabel} • ${qty} Pcs) • Pembeli: ${customerName || 'Walk-in Customer'} • No. Nota/Pesanan: ${notaNo} • Bayar: ${paymentMethod}${notes ? ` • ${notes}` : ''}`;
-      movementTypeData = {
-        transactionType: 'RETAIL_PCS',
-        salesPlatform: salesPlatform,
-        platformName: platformName,
-        customerName: customerName || 'Walk-in Customer',
-        invoiceNumber: notaNo,
-        paymentMethod: paymentMethod,
-        totalPrice: totalPrice
-      };
+      setPendingConfirm(payload);
+      return;
     }
 
+    // ==========================================
+    // RETAIL SALES (MULTI-ITEM LIST CART)
+    // ==========================================
+    if (salesCart.length === 0) {
+      // Fallback: If user picked via single product picker
+      if (selectedProduct) {
+        if (Number(qty) <= 0) {
+          showAlert("Kuantitas Tidak Valid", "Jumlah kuantitas (Pcs) harus lebih besar dari 0!", "WARNING");
+          return;
+        }
+        if (isInsufficient) {
+          showAlert("Stok Tidak Mencukupi 📦", `Stok tidak mencukupi! Stok tersedia hanya ${currentAvailable} Pcs.`, "WARNING");
+          return;
+        }
+        // Auto add to salesCart and continue
+        const item = {
+          productId: selectedProduct.id,
+          sku: selectedProduct.sku,
+          productName: selectedProduct.name,
+          brand: selectedProduct.brand || 'Generic',
+          price: Number(selectedProduct.price) || 0,
+          currentStock: currentAvailable,
+          qty: Number(qty)
+        };
+        salesCart.push(item);
+      } else {
+        showAlert("Daftar Barang Masih Kosong 🛒", "Silakan pilih atau scan minimal 1 barang untuk dijual!", "WARNING");
+        return;
+      }
+    }
+
+    // Validate stock for each item in cart
+    const insufficientItem = salesCart.find(i => (Number(i.qty) || 0) > (Number(i.currentStock) || 0));
+    if (insufficientItem) {
+      showAlert("Stok Tidak Mencukupi 📦", `Stok produk "${insufficientItem.productName}" tidak mencukupi! Tersedia: ${insufficientItem.currentStock} Pcs, Diminta: ${insufficientItem.qty} Pcs.`, "WARNING");
+      return;
+    }
+
+    const platformName = getPlatformLabel(salesPlatform);
+    const defaultPrefix = salesPlatform !== 'OFFLINE' ? `${salesPlatform}-` : 'NOTA-';
+    const notaNo = invoiceNumber || `${defaultPrefix}${Math.floor(100000 + Math.random() * 900000)}`;
+    const locationLabel = isBranchStaff ? currentUser?.branchName || 'Cabang' : 'Pusat';
+    
+    const totalPcs = salesCart.reduce((acc, i) => acc + (Number(i.qty) || 0), 0);
+    const grandTotal = salesCart.reduce((acc, i) => acc + ((Number(i.price) || 0) * (Number(i.qty) || 0)), 0);
+    const itemsSummary = salesCart.map(item => `${item.qty}x ${item.productName}`).join(' + ');
+
+    const finalNotes = `Penjualan (${platformName} • ${locationLabel} • ${salesCart.length} Jenis Produk • Total ${totalPcs} Pcs) • [${itemsSummary}] • Pembeli: ${customerName || 'Walk-in Customer'} • No. Nota: ${notaNo} • Bayar: ${paymentMethod}${notes ? ` • ${notes}` : ''}`;
+
     const payload = {
-      productId: selectedProduct.id,
-      sku: selectedProduct.sku,
-      productName: selectedProduct.name,
+      productId: salesCart.length === 1 ? salesCart[0].productId : 'MULTI-ITEM-SALE',
+      sku: salesCart.length === 1 ? salesCart[0].sku : 'MULTI-ITEM',
+      productName: salesCart.length === 1 ? salesCart[0].productName : `[PENJUALAN] ${salesCart.length} Jenis Barang`,
       type: 'OUT',
-      qty: Number(qty),
+      qty: totalPcs,
       unit: 'Pcs',
       notes: finalNotes,
       user: user || currentUser?.name || 'Staff',
-      ...movementTypeData
+      transactionType: 'RETAIL_PCS',
+      salesPlatform: salesPlatform,
+      platformName: platformName,
+      customerName: customerName || 'Walk-in Customer',
+      invoiceNumber: notaNo,
+      paymentMethod: paymentMethod,
+      totalPrice: grandTotal,
+      isMultiItem: true,
+      items: salesCart.map(item => ({
+        productId: item.productId,
+        productName: item.productName,
+        sku: item.sku,
+        brand: item.brand,
+        price: Number(item.price) || 0,
+        qty: Number(item.qty) || 1
+      }))
     };
 
     setPendingConfirm(payload);
@@ -484,6 +599,12 @@ export default function StockOut({
           });
         }
         setTransferCart([]);
+      } else if (pendingConfirm.isMultiItem && pendingConfirm.items) {
+        await onRecordMovement({
+          ...pendingConfirm,
+          items: pendingConfirm.items
+        });
+        setSalesCart([]);
       } else if (pendingConfirm.transactionType === 'CUSTOM_BUNDLING' && pendingConfirm.bundleItems) {
         await onRecordMovement({
           ...pendingConfirm,
@@ -729,56 +850,54 @@ export default function StockOut({
         
         {/* OUTBOUND MODE SELECTOR (2 MAIN OPTIONS) */}
         <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-            Pilih Jenis Pengeluaran Barang (Outbound)
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+            Jenis Pengeluaran (Outbound)
           </label>
-          <div className={`grid gap-3 ${!isBranchStaff ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+          <div className={`grid gap-2.5 ${!isBranchStaff ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
             
             {/* OPSI 1: MUTASI KE CABANG (PUSAT ONLY) */}
             {!isBranchStaff && (
               <button
                 type="button"
                 onClick={() => setOutboundMode('STOCK_TRANSFER_TO_BRANCH')}
-                className={`p-4 rounded-2xl border text-left transition cursor-pointer flex items-start gap-3.5 ${
+                className={`p-3 sm:p-3.5 rounded-2xl border text-left transition cursor-pointer flex items-center gap-3 ${
                   outboundMode === 'STOCK_TRANSFER_TO_BRANCH'
                     ? 'border-indigo-500 bg-indigo-50/70 ring-2 ring-indigo-500/20 text-indigo-950 shadow-xs'
                     : 'border-slate-200 hover:bg-slate-50 text-slate-600'
                 }`}
               >
-                <div className={`p-2.5 rounded-xl flex-shrink-0 ${outboundMode === 'STOCK_TRANSFER_TO_BRANCH' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 text-slate-500'}`}>
-                  <Truck className="w-5 h-5" />
+                <div className={`p-2 rounded-xl flex-shrink-0 ${outboundMode === 'STOCK_TRANSFER_TO_BRANCH' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 text-slate-500'}`}>
+                  <Truck className="w-4 h-4" />
                 </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-sm">1. Kirim ke Cabang</span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-full">Mutasi Stok</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-bold text-xs sm:text-sm truncate">Kirim ke Cabang</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-full flex-shrink-0">Mutasi</span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">Kirim mutasi stok dari gudang pusat ke cabang dengan Surat Jalan.</p>
+                  <p className="text-[11px] text-slate-500 truncate mt-0.5">Pengiriman stok pusat ke cabang</p>
                 </div>
               </button>
             )}
 
-            {/* OPSI 2: PENJUALAN PRODUK (SATUAN & BUNDLING - ALL PLATFORMS) */}
+            {/* OPSI 2: PENJUALAN PRODUK */}
             <button
               type="button"
               onClick={() => setOutboundMode('RETAIL_PCS')}
-              className={`p-4 rounded-2xl border text-left transition cursor-pointer flex items-start gap-3.5 ${
+              className={`p-3 sm:p-3.5 rounded-2xl border text-left transition cursor-pointer flex items-center gap-3 ${
                 outboundMode === 'RETAIL_PCS'
                   ? 'border-emerald-500 bg-emerald-50/70 ring-2 ring-emerald-500/20 text-emerald-950 shadow-xs'
                   : 'border-slate-200 hover:bg-slate-50 text-slate-600'
               }`}
             >
-              <div className={`p-2.5 rounded-xl flex-shrink-0 ${outboundMode === 'RETAIL_PCS' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-100 text-slate-500'}`}>
-                <ShoppingBag className="w-5 h-5" />
+              <div className={`p-2 rounded-xl flex-shrink-0 ${outboundMode === 'RETAIL_PCS' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-100 text-slate-500'}`}>
+                <ShoppingBag className="w-4 h-4" />
               </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-bold text-sm">{!isBranchStaff ? '2. Penjualan Produk' : '1. Penjualan Produk'}</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full">Satuan & Combo</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="font-bold text-xs sm:text-sm truncate">Penjualan Produk</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full flex-shrink-0">Kasir / Toko</span>
                 </div>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Penjualan toko fisik atau marketplace (Shopee, Tokopedia, TikTok Shop).
-                </p>
+                <p className="text-[11px] text-slate-500 truncate mt-0.5">Toko offline & pesanan online</p>
               </div>
             </button>
 
@@ -987,117 +1106,135 @@ export default function StockOut({
           <div className="space-y-5 pt-2">
             
             {/* SUB-HEADER: PLATFORM & FORMAT SELECTION CONTAINER */}
-            <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-4">
+            <div className="p-3 sm:p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-3">
               
               {/* PLATFORM PENJUALAN SELECTOR */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-emerald-950 mb-2">
-                  1. Pilih Platform / Channel Penjualan
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-emerald-950">
+                    Platform Penjualan
+                  </label>
+                  <span className="text-[10px] font-bold text-emerald-800 bg-white/90 px-2 py-0.5 rounded-md border border-emerald-200">
+                    {getPlatformLabel(salesPlatform)}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
                   
                   {/* Toko Fisik / Offline */}
                   <button
                     type="button"
                     onClick={() => setSalesPlatform('OFFLINE')}
-                    className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-2 cursor-pointer ${
+                    title="Toko Fisik / Offline"
+                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
                       salesPlatform === 'OFFLINE'
-                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs ring-2 ring-slate-900/20'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    <Store className="w-4 h-4 text-emerald-400" />
-                    <span>Toko Fisik / Offline</span>
+                    <Store className={`w-4 h-4 ${salesPlatform === 'OFFLINE' ? 'text-emerald-400' : 'text-slate-600'}`} />
+                    <span className="text-[10px] sm:text-xs">Toko</span>
                   </button>
 
                   {/* Shopee */}
                   <button
                     type="button"
                     onClick={() => setSalesPlatform('SHOPEE')}
-                    className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-2 cursor-pointer ${
+                    title="Shopee"
+                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
                       salesPlatform === 'SHOPEE'
-                        ? 'bg-orange-600 text-white border-orange-600 shadow-xs'
+                        ? 'bg-orange-600 text-white border-orange-600 shadow-xs ring-2 ring-orange-500/20'
                         : 'bg-white text-orange-700 border-orange-200 hover:bg-orange-50'
                     }`}
                   >
-                    <ShoppingBag className="w-4 h-4" />
-                    <span>Shopee</span>
+                    <svg className="w-4 h-4 fill-current flex-shrink-0" viewBox="0 0 24 24">
+                      <path d="M19 7h-2.5V5.5A4.5 4.5 0 0012 1a4.5 4.5 0 00-4.5 4.5V7H5a2 2 0 00-2 2v11a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2zm-9.5-1.5A2.5 2.5 0 0112 3a2.5 2.5 0 012.5 2.5V7h-5V5.5zm4.8 8.8c0 1.5-1.1 2.5-2.7 2.5-1.3 0-2.3-.7-2.6-1.7l1.4-.6c.2.6.7 1 1.2 1 .7 0 1.2-.4 1.2-1 0-.6-.4-.9-1.4-1.3-1.6-.6-2.3-1.3-2.3-2.4 0-1.4 1.1-2.4 2.5-2.4 1.1 0 2 .5 2.4 1.4l-1.3.6c-.2-.5-.6-.8-1.1-.8-.6 0-1 .4-1 .9 0 .5.3.8 1.3 1.2 1.7.6 2.4 1.3 2.4 2.6z"/>
+                    </svg>
+                    <span className="text-[10px] sm:text-xs">Shopee</span>
                   </button>
 
                   {/* Tokopedia */}
                   <button
                     type="button"
                     onClick={() => setSalesPlatform('TOKOPEDIA')}
-                    className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-2 cursor-pointer ${
+                    title="Tokopedia"
+                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
                       salesPlatform === 'TOKOPEDIA'
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs ring-2 ring-emerald-500/20'
                         : 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50'
                     }`}
                   >
-                    <Store className="w-4 h-4" />
-                    <span>Tokopedia</span>
+                    <svg className="w-4 h-4 fill-current flex-shrink-0" viewBox="0 0 24 24">
+                      <path d="M12 2C6.48 2 2 6.48 2 12c0 4.42 2.87 8.17 6.84 9.49.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.15-1.11-1.46-1.11-1.46-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.89 1.52 2.34 1.08 2.91.83.09-.65.35-1.08.63-1.33-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02.8-.22 1.65-.33 2.5-.33.85 0 1.7.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10.02 10.02 0 0022 12c0-5.52-4.48-10-10-10z"/>
+                    </svg>
+                    <span className="text-[10px] sm:text-xs">Tokopedia</span>
                   </button>
 
                   {/* TikTok Shop */}
                   <button
                     type="button"
                     onClick={() => setSalesPlatform('TIKTOK')}
-                    className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-2 cursor-pointer ${
+                    title="TikTok Shop"
+                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
                       salesPlatform === 'TIKTOK'
-                        ? 'bg-slate-950 text-white border-slate-950 shadow-xs'
-                        : 'bg-white text-slate-800 border-slate-200 hover:bg-slate-100'
+                        ? 'bg-slate-950 text-white border-slate-950 shadow-xs ring-2 ring-slate-900/20'
+                        : 'bg-white text-slate-800 border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    <Sparkles className="w-4 h-4 text-rose-400" />
-                    <span>TikTok Shop</span>
+                    <svg className="w-4 h-4 fill-current flex-shrink-0" viewBox="0 0 24 24">
+                      <path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.245V2h-3.445v13.672a2.896 2.896 0 0 1-2.891 2.868 2.896 2.896 0 0 1-2.892-2.868 2.896 2.896 0 0 1 2.892-2.869c.356 0 .695.068 1.008.192V9.45a6.31 6.31 0 0 0-1.008-.08C5.972 9.37 3 12.339 3 15.872 3 19.405 5.972 22.37 9.491 22.37c3.518 0 6.474-2.857 6.474-6.39V8.898a8.21 8.21 0 0 0 4.887 1.587V7.04a4.814 4.814 0 0 1-1.263-.354z"/>
+                    </svg>
+                    <span className="text-[10px] sm:text-xs">TikTok</span>
                   </button>
 
                   {/* Direct / Other */}
                   <button
                     type="button"
                     onClick={() => setSalesPlatform('OTHER')}
-                    className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-2 cursor-pointer col-span-2 sm:col-span-1 ${
+                    title="Lainnya / Direct"
+                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
                       salesPlatform === 'OTHER'
-                        ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                        ? 'bg-sky-600 text-white border-sky-600 shadow-xs ring-2 ring-sky-500/20'
                         : 'bg-white text-sky-700 border-sky-200 hover:bg-sky-50'
                     }`}
                   >
                     <Tag className="w-4 h-4" />
-                    <span>Lainnya / Direct</span>
+                    <span className="text-[10px] sm:text-xs">Direct</span>
                   </button>
 
                 </div>
               </div>
 
-              {/* FORMAT JENIS PENJUALAN: SATUAN VS BUNDLING */}
-              <div className="flex items-center justify-between pt-1 border-t border-emerald-200/80">
-                <div>
-                  <h4 className="font-bold text-emerald-950 text-xs">Format Barang Penjualan</h4>
-                  <p className="text-[11px] text-emerald-800">Jual per produk satuan atau gabungan paket bundling combo.</p>
-                </div>
-                <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-emerald-300 shadow-2xs">
+              {/* FORMAT PENJUALAN: SATUAN VS BUNDLING (MINIMALIS) */}
+              <div className="flex items-center justify-between pt-2 border-t border-emerald-200/70">
+                <span className="text-xs font-bold text-emerald-950">Format Penjualan</span>
+                <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-emerald-200 shadow-2xs">
                   <button
                     type="button"
                     onClick={() => setSalesType('SINGLE')}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
                       salesType === 'SINGLE'
                         ? 'bg-emerald-600 text-white shadow-2xs'
                         : 'text-slate-600 hover:bg-slate-100'
                     }`}
                   >
-                    Satuan (Per Pcs)
+                    <span>( Satuan )</span>
+                    {salesCart.length > 0 && (
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${salesType === 'SINGLE' ? 'bg-emerald-800 text-white' : 'bg-emerald-100 text-emerald-800'}`}>
+                        {salesCart.length}
+                      </span>
+                    )}
                   </button>
                   <button
                     type="button"
                     onClick={() => setSalesType('BUNDLE')}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
                       salesType === 'BUNDLE'
                         ? 'bg-purple-600 text-white shadow-2xs'
                         : 'text-purple-700 bg-purple-50 hover:bg-purple-100'
                     }`}
                   >
-                    <Boxes className="w-3.5 h-3.5" />
-                    <span>Paket Bundling (Combo)</span>
+                    <span>( Bundling )</span>
                   </button>
                 </div>
               </div>
@@ -1162,129 +1299,221 @@ export default function StockOut({
               </div>
             </div>
 
-            {/* FORM BODY BASED ON SALES TYPE (SATUAN VS BUNDLING) */}
+            {/* FORM BODY BASED ON SALES TYPE (SATUAN / MULTI-ITEM VS BUNDLING) */}
             {salesType === 'SINGLE' ? (
-              /* SATUAN (PER PCS) FORM */
+              /* MULTI-ITEM SALES LIST CART FORM */
               <form onSubmit={handlePrepareSingleSubmit} className="space-y-4">
                 
-                {/* Step 3: Select Product */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
+                {/* Step 3: Search & Add Products */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
                     <span className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                      3. Pilih / Cari Produk yang Dijual
+                      3. Pilih / Scan Produk yang Dijual
                     </span>
                     <button
                       type="button"
                       onClick={() => setIsScannerOpen(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded-xl text-xs font-semibold transition active:scale-95 cursor-pointer shadow-2xs"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer shadow-2xs"
                     >
-                      <Camera className="w-4 h-4 text-sky-600" />
-                      <span>Scan Barcode</span>
+                      <Camera className="w-4 h-4" />
+                      <span>Scan Barcode (+1)</span>
                     </button>
                   </div>
 
                   <ProductSearchPicker
                     products={products}
-                    selectedProductId={selectedProductId}
-                    onSelectProduct={(prod) => setSelectedProductId(prod.id)}
-                    placeholder="🔍 Cari Produk (Ketik Nama, SKU, Merk, Kategori)..."
+                    selectedProductId=""
+                    onSelectProduct={(prod) => handleAddItemToSalesCart(prod)}
+                    placeholder="🔍 Ketik Nama Produk, SKU, Merk untuk menambah ke daftar nota penjualan..."
                     label=""
                     showStockInfo={true}
                   />
                 </div>
 
-                {/* Product Preview Card */}
-                {selectedProduct && (
-                  <div className={`p-3.5 rounded-xl border flex items-center justify-between transition ${
-                    isInsufficient ? 'bg-rose-50/80 border-rose-300' : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 flex-shrink-0">
-                        <Package className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-slate-900 text-sm">{selectedProduct.name}</h4>
-                        <p className="text-xs text-slate-400 font-mono">
-                          Merk: <span className="text-indigo-600 font-semibold">{selectedProduct.brand || 'NDK Packaging'}</span> | SKU: {selectedProduct.sku}
+                {/* Step 4: Multi-Item Sales Cart Table */}
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
+                  <div className="p-3 bg-slate-50/90 border-b border-slate-200 flex items-center justify-between">
+                    <span className="font-bold text-xs text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <ShoppingBag className="w-4 h-4 text-emerald-600" />
+                      <span>Daftar Barang Penjualan ({salesCart.length} Jenis Produk Dipilih)</span>
+                    </span>
+                    {salesCart.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSalesCart([])}
+                        className="text-[11px] font-bold text-rose-600 hover:text-rose-800 transition cursor-pointer"
+                      >
+                        Kosongkan Daftar
+                      </button>
+                    )}
+                  </div>
+
+                  {salesCart.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 space-y-2">
+                      <Boxes className="w-10 h-10 mx-auto text-slate-300 stroke-1" />
+                      <p className="text-xs font-semibold text-slate-600">Belum ada barang di daftar penjualan nota ini.</p>
+                      <p className="text-[11px] text-slate-400 max-w-md mx-auto">
+                        Gunakan kotak pencarian di atas atau tombol <strong>Scan Barcode</strong> untuk memasukkan barang-barang yang dibeli pelanggan.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-100/80 text-slate-600 font-semibold uppercase">
+                          <tr>
+                            <th className="px-4 py-2.5">Produk & Merk</th>
+                            <th className="px-3 py-2.5 text-center">Stok Fisik</th>
+                            <th className="px-3 py-2.5 text-center w-36">Qty Jual (Pcs)</th>
+                            <th className="px-3 py-2.5 text-right w-36">Harga Satuan (Rp)</th>
+                            <th className="px-3 py-2.5 text-right">Subtotal (Rp)</th>
+                            <th className="px-3 py-2.5 text-right">Aksi</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {salesCart.map((item, idx) => {
+                            const isItemOverStock = (Number(item.qty) || 0) > (Number(item.currentStock) || 0);
+                            const itemSubtotal = (Number(item.price) || 0) * (Number(item.qty) || 0);
+
+                            return (
+                              <tr key={item.productId} className={`hover:bg-slate-50 ${isItemOverStock ? 'bg-rose-50/50' : ''}`}>
+                                <td className="px-4 py-3">
+                                  <div className="font-bold text-slate-900">{item.productName}</div>
+                                  <div className="text-[11px] font-mono text-slate-400">
+                                    SKU: {item.sku} | <span className="text-indigo-600 font-semibold">{item.brand}</span>
+                                  </div>
+                                </td>
+                                
+                                <td className="px-3 py-3 text-center">
+                                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                                    item.currentStock <= 0 
+                                      ? 'bg-rose-100 text-rose-800' 
+                                      : 'bg-slate-100 text-slate-700'
+                                  }`}>
+                                    {item.currentStock} Pcs
+                                  </span>
+                                </td>
+
+                                <td className="px-3 py-3 text-center">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateSalesCartQty(idx, (Number(item.qty) || 1) - 1)}
+                                      className="w-7 h-7 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold flex items-center justify-center transition active:scale-95 cursor-pointer"
+                                    >
+                                      -
+                                    </button>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      max={item.currentStock}
+                                      value={item.qty}
+                                      onChange={(e) => handleUpdateSalesCartQty(idx, Math.max(1, Number(e.target.value)))}
+                                      className={`w-14 py-1 border rounded-lg text-center font-extrabold text-xs focus:ring-2 focus:ring-emerald-500 ${
+                                        isItemOverStock 
+                                          ? 'bg-rose-50 border-rose-400 text-rose-700' 
+                                          : 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                                      }`}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateSalesCartQty(idx, (Number(item.qty) || 1) + 1)}
+                                      className="w-7 h-7 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold flex items-center justify-center transition active:scale-95 cursor-pointer"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                  {isItemOverStock && (
+                                    <span className="text-[10px] font-bold text-rose-600 block mt-0.5">
+                                      Max: {item.currentStock} Pcs
+                                    </span>
+                                  )}
+                                </td>
+
+                                <td className="px-3 py-3 text-right">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={item.price}
+                                    onChange={(e) => handleUpdateSalesCartPrice(idx, e.target.value)}
+                                    className="w-28 py-1 px-2 text-right bg-white border border-slate-200 rounded-lg font-medium text-xs focus:ring-2 focus:ring-emerald-500"
+                                  />
+                                </td>
+
+                                <td className="px-3 py-3 text-right font-black text-emerald-900 text-xs">
+                                  Rp {itemSubtotal.toLocaleString('id-ID')}
+                                </td>
+
+                                <td className="px-3 py-3 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveFromSalesCart(idx)}
+                                    className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                    title="Hapus barang ini dari nota"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Step 5: Summary & Notes */}
+                {salesCart.length > 0 && (
+                  <div className="p-4 bg-gradient-to-r from-emerald-50/80 via-teal-50/50 to-white border border-emerald-200 rounded-2xl space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-bold text-emerald-950 uppercase tracking-wider block">
+                          Ringkasan Tagihan Nota Penjualan
+                        </span>
+                        <p className="text-[11px] text-emerald-800">
+                          {salesCart.length} Jenis Produk • Total {salesCart.reduce((sum, i) => sum + (Number(i.qty) || 0), 0)} Pcs Fisik
                         </p>
                       </div>
+
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold uppercase text-slate-500 block">Total Tagihan (Grand Total)</span>
+                        <span className="text-xl sm:text-2xl font-black text-emerald-800">
+                          Rp {salesCart.reduce((sum, i) => sum + ((Number(i.price) || 0) * (Number(i.qty) || 0)), 0).toLocaleString('id-ID')}
+                        </span>
+                      </div>
                     </div>
-                    <div className="text-right flex-shrink-0">
-                      <span className="text-[10px] text-slate-400 block uppercase font-semibold">Stok Fisik Tersedia</span>
-                      <span className={`text-sm font-extrabold ${isInsufficient ? 'text-rose-600' : 'text-slate-800'}`}>
-                        {selectedProduct.currentStock} Pcs
-                      </span>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                        Catatan Transaksi (Opsional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Contoh: Packing kayu / Titipan via Kurir Instant"
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
                     </div>
-                  </div>
-                )}
-
-                {/* Quantity Stepper */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Kuantitas Dijual (Qty Pcs) *
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setQty(Math.max(1, Number(qty) - 1))}
-                      className="w-12 h-12 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-lg flex items-center justify-center active:scale-95 transition cursor-pointer"
-                    >
-                      <Minus className="w-5 h-5" />
-                    </button>
-                    
-                    <input
-                      type="number"
-                      min="1"
-                      max={currentAvailable || undefined}
-                      required
-                      value={qty}
-                      onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
-                      className="flex-1 h-12 text-center text-lg font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-900"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() => setQty(Number(qty) + 1)}
-                      className="w-12 h-12 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-lg flex items-center justify-center active:scale-95 transition cursor-pointer"
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Notes */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                    Catatan Transaksi (Opsional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Contoh: Packing kayu via Kurir Instant"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none font-medium"
-                  />
-                </div>
-
-                {/* Simulation Preview */}
-                {selectedProduct && (
-                  <div className={`p-3 rounded-xl border text-xs flex justify-between items-center ${
-                    isInsufficient ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-slate-50 text-slate-700 border-slate-200'
-                  }`}>
-                    <span>Sisa Stok Fisik Setelah Transaksi:</span>
-                    <span className={`font-bold text-sm ${isInsufficient ? 'text-rose-600' : 'text-slate-900'}`}>
-                      {currentAvailable - Number(qty)} Pcs
-                    </span>
                   </div>
                 )}
 
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  disabled={!selectedProduct || isInsufficient}
-                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-xl text-sm shadow-md shadow-emerald-600/20 transition active:scale-98 cursor-pointer mt-2"
+                  disabled={salesCart.length === 0 || salesCart.some(i => (Number(i.qty) || 0) > (Number(i.currentStock) || 0))}
+                  className={`w-full py-3.5 rounded-xl font-bold text-sm text-white shadow-lg transition flex items-center justify-center gap-2 cursor-pointer mt-2 ${
+                    salesCart.length === 0 || salesCart.some(i => (Number(i.qty) || 0) > (Number(i.currentStock) || 0))
+                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
+                      : 'bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] shadow-emerald-600/20'
+                  }`}
                 >
-                  Proses Penjualan Satuan [{getPlatformLabel(salesPlatform)}] ({qty} Pcs)
+                  <CheckCircle className="w-4 h-4" />
+                  <span>
+                    {salesCart.length === 0 
+                      ? 'Pilih Barang untuk Memproses Penjualan' 
+                      : `Proses Penjualan [${getPlatformLabel(salesPlatform)}] (${salesCart.length} Jenis Produk • Total ${salesCart.reduce((sum, i) => sum + (Number(i.qty) || 0), 0)} Pcs • Rp ${salesCart.reduce((sum, i) => sum + ((Number(i.price) || 0) * (Number(i.qty) || 0)), 0).toLocaleString('id-ID')})`}
+                  </span>
                 </button>
 
               </form>

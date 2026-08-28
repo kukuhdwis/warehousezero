@@ -18,6 +18,9 @@ import {
   X, 
   Boxes, 
   Check,
+  Ban,
+  ChevronDown,
+  ChevronUp,
   Trash2
 } from 'lucide-react';
 import ScannerModal from './ScannerModal';
@@ -25,6 +28,7 @@ import TransactionSuccessModal from './TransactionSuccessModal';
 import GlobalSuccessModal from './GlobalSuccessModal';
 import ProductSearchPicker from './ProductSearchPicker';
 import CustomAlertModal from './CustomAlertModal';
+import ConfirmationModal from './ConfirmationModal';
 
 
 export default function StockIn({ 
@@ -36,6 +40,7 @@ export default function StockIn({
   initialTab = 'INCOMING_DELIVERIES',
   onRecordMovement, 
   onConfirmTransfer, 
+  onRejectTransfer,
   onRequestStock 
 }) {
   const isBranchStaff = currentUser?.role === 'STAFF_BRANCH';
@@ -57,9 +62,22 @@ export default function StockIn({
     }
   }, [initialTab]);
 
+  // Confirmation Modal States
+  const [pendingConfirmBatchInbound, setPendingConfirmBatchInbound] = useState(null);
+  const [pendingConfirmRequest, setPendingConfirmRequest] = useState(null);
+  const [isExecutingAction, setIsExecutingAction] = useState(false);
+
+  // Incoming Delivery (HQ -> Branch) States
+  const [expandedPackages, setExpandedPackages] = useState({});
+  const [confirmingPackageGroup, setConfirmingPackageGroup] = useState(null);
+  const [confirmingSingleTransfer, setConfirmingSingleTransfer] = useState(null);
+  const [rejectingTransferTarget, setRejectingTransferTarget] = useState(null);
+  const [transferRejectReason, setTransferRejectReason] = useState('');
+  const [transferRejectError, setTransferRejectError] = useState('');
+
   // Request Stock Form State (Branch -> Pusat)
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
-  const [reqProductId, setReqProductId] = useState(products[0]?.id || '');
+  const [reqProductId, setReqProductId] = useState('');
   const [reqQty, setReqQty] = useState(10);
   const [reqNotes, setReqNotes] = useState('');
   const [isSubmittingReq, setIsSubmittingReq] = useState(false);
@@ -130,19 +148,42 @@ export default function StockIn({
     setInboundManifest(inboundManifest.filter((_, i) => i !== index));
   };
 
-  const handleBatchManifestSubmit = async (e) => {
+  // Pre-submit validation before opening Inbound Batch Confirmation Dialog
+  const handlePreSubmitBatchManifest = (e) => {
     e.preventDefault();
     if (inboundManifest.length === 0) {
       showAlert("List Barang Kosong 📋", "Pilih minimal 1 produk ke dalam list penerimaan barang!", "WARNING");
       return;
     }
+    for (const item of inboundManifest) {
+      if (!item.qty_in || Number(item.qty_in) <= 0) {
+        showAlert("Kuantitas Tidak Valid", `Kuantitas untuk "${item.productName}" harus lebih besar dari 0!`, "WARNING");
+        return;
+      }
+    }
+    const batchDeliveryNote = deliveryNoteNumber.trim() || `SJ-PABRIK-${Date.now().toString().slice(-6)}`;
+    const totalQty = inboundManifest.reduce((acc, i) => acc + (Number(i.qty_in) || 0), 0);
+
+    setPendingConfirmBatchInbound({
+      items: [...inboundManifest],
+      deliveryNote: batchDeliveryNote,
+      totalQty,
+      notes: notes.trim(),
+      user: user || currentUser?.name || 'Staff Pusat'
+    });
+  };
+
+  // Execute Inbound Batch Save to Database after confirmation
+  const handleExecuteBatchManifest = async () => {
+    if (!pendingConfirmBatchInbound) return;
+    setIsExecutingAction(true);
 
     try {
-      const batchDeliveryNote = deliveryNoteNumber.trim() || `SJ-PABRIK-${Date.now().toString().slice(-6)}`;
-      const summaryText = inboundManifest.map(item => `${item.qty_in}x ${item.productName}`).join(' + ');
+      const { items, deliveryNote, totalQty, notes: noteText, user: userName } = pendingConfirmBatchInbound;
+      const summaryText = items.map(item => `${item.qty_in}x ${item.productName}`).join(' + ');
       
-      for (const item of inboundManifest) {
-        const itemNotes = `Penerimaan Barang Masuk Gudang Pusat • ${item.productName} (${item.qty_in} Pcs)${item.supplier ? ` • Supplier: ${item.supplier}` : ''}${item.invoiceNo ? ` • No. Faktur: ${item.invoiceNo}` : ''}${notes.trim() ? ` • Catatan: ${notes.trim()}` : ''}`;
+      for (const item of items) {
+        const itemNotes = `Penerimaan Barang Masuk Gudang Pusat • ${item.productName} (${item.qty_in} Pcs)${item.supplier ? ` • Supplier: ${item.supplier}` : ''}${item.invoiceNo ? ` • No. Faktur: ${item.invoiceNo}` : ''}${noteText ? ` • Catatan: ${noteText}` : ''}`;
 
         await onRecordMovement({
           productId: item.productId,
@@ -153,28 +194,29 @@ export default function StockIn({
           unit: 'Pcs',
           notes: itemNotes,
           source: item.supplier || 'PABRIK_PRODUKSI_PUSAT',
-          deliveryNote: item.invoiceNo || batchDeliveryNote,
-          user: user || currentUser?.name || 'Staff Pusat'
+          deliveryNote: item.invoiceNo || deliveryNote,
+          user: userName
         });
       }
 
-      const totalQty = inboundManifest.reduce((acc, i) => acc + (Number(i.qty_in) || 0), 0);
-
       setSuccessModalData({
-        productName: `${inboundManifest.length} Jenis Produk Inbound`,
+        productName: `${items.length} Jenis Produk Inbound`,
         sku: 'BATCH-INBOUND',
         type: 'IN',
         qty: totalQty,
-        notes: `Penerimaan ${inboundManifest.length} jenis barang ke gudang pusat [${summaryText}]${notes.trim() ? ` • Catatan: ${notes.trim()}` : ''}`,
-        deliveryNote: batchDeliveryNote,
-        user: user || currentUser?.name || 'Staff Pusat'
+        notes: `Penerimaan ${items.length} jenis barang ke gudang pusat [${summaryText}]${noteText ? ` • Catatan: ${noteText}` : ''}`,
+        deliveryNote: deliveryNote,
+        user: userName
       });
 
+      setPendingConfirmBatchInbound(null);
       setInboundManifest([]);
       setDeliveryNoteNumber('');
       setNotes('');
     } catch (err) {
       showAlert("Gagal Menyimpan Inbound", err.message, "ERROR");
+    } finally {
+      setIsExecutingAction(false);
     }
   };
 
@@ -202,6 +244,27 @@ export default function StockIn({
     t => t && t.status === 'IN_TRANSIT' && (t.targetBranchId === currentUser?.branchId || t.targetBranchId === 'ALL')
   );
 
+  // Group incoming transfers from HQ by Delivery Note / Surat Jalan
+  const pendingByDeliveryNote = React.useMemo(() => {
+    const groups = {};
+    for (const trf of pendingTransfers) {
+      const key = trf.deliveryNote || trf.id;
+      if (!groups[key]) {
+        groups[key] = {
+          deliveryNote: trf.deliveryNote || 'SJ-PENGIRIMAN',
+          senderName: trf.senderName || 'Staff Pusat',
+          sentAt: trf.sentAt,
+          notes: trf.notes || '',
+          items: [],
+          totalQty: 0
+        };
+      }
+      groups[key].items.push(trf);
+      groups[key].totalQty += Number(trf.qty) || 0;
+    }
+    return Object.values(groups);
+  }, [pendingTransfers]);
+
   // Completed received transfers for this branch
   const receivedTransfers = safeTransfers.filter(
     t => t && t.status === 'RECEIVED' && (t.targetBranchId === currentUser?.branchId || t.targetBranchId === 'ALL')
@@ -226,48 +289,74 @@ export default function StockIn({
     }
   };
 
-  const [confirmingReceiptTransfer, setConfirmingReceiptTransfer] = useState(null);
-
-  // One-click Confirm Receipt of Central Transfer by Branch
-  const handleOpenConfirmReceiptModal = (transfer) => {
-    setConfirmingReceiptTransfer(transfer);
+  // Toggle expand for a Delivery Note Package
+  const toggleExpandPackage = (key) => {
+    setExpandedPackages(prev => ({
+      ...prev,
+      [key]: prev[key] === false ? true : false
+    }));
   };
 
-  const handleExecuteConfirmReceipt = async () => {
-    if (!confirmingReceiptTransfer) return;
-    const transfer = confirmingReceiptTransfer;
-
+  // Execute Batch Package Receipt Confirmation
+  const handleExecuteConfirmPackageGroup = async () => {
+    if (!confirmingPackageGroup) return;
+    setIsExecutingAction(true);
     try {
-      setConfirmingTransferId(transfer.id);
       if (onConfirmTransfer) {
-        await onConfirmTransfer(transfer.id, 'Barang fisik telah diperiksa & diterima dalam kondisi baik.');
-        
-        // Show Transaction Success Pop-Up
-        setSuccessModalData({
-          productId: transfer.productId,
-          sku: transfer.sku,
-          productName: transfer.productName,
-          type: 'IN',
-          qty: Number(transfer.qty),
-          unit: 'Pcs',
-          notes: `Penerimaan Kiriman dari Kantor Pusat (Pcs) • No. Surat Jalan: ${transfer.deliveryNote}`,
-          source: 'KANTOR_PUSAT',
-          deliveryNote: transfer.deliveryNote,
-          targetBranchName: transfer.targetBranchName,
-          user: currentUser?.name || 'Staff Cabang'
-        });
+        await onConfirmTransfer(confirmingPackageGroup.items, 'Seluruh paket kiriman telah diverifikasi dan diterima dalam kondisi baik.');
       }
-      setConfirmingReceiptTransfer(null);
+      setConfirmingPackageGroup(null);
     } catch (err) {
-      showAlert("Gagal Mengonfirmasi Penerimaan ⚠️", err.message, "ERROR");
+      showAlert("Gagal Mengonfirmasi Paket", err.message || "Terjadi kesalahan saat menerima paket.", "ERROR");
     } finally {
-      setConfirmingTransferId(null);
+      setIsExecutingAction(false);
     }
   };
 
+  // Execute Single Item Receipt Confirmation
+  const handleExecuteConfirmSingleTransfer = async () => {
+    if (!confirmingSingleTransfer) return;
+    setIsExecutingAction(true);
+    try {
+      if (onConfirmTransfer) {
+        await onConfirmTransfer([confirmingSingleTransfer], 'Barang telah diperiksa dan diterima dalam kondisi baik.');
+      }
+      setConfirmingSingleTransfer(null);
+    } catch (err) {
+      showAlert("Gagal Mengonfirmasi", err.message || "Terjadi kesalahan saat menerima barang.", "ERROR");
+    } finally {
+      setIsExecutingAction(false);
+    }
+  };
 
-  // Submit Stock Request to Central Office (Branch -> HQ)
-  const handleSubmitStockRequest = async (e) => {
+  // Execute Batch or Single Transfer Rejection
+  const handleExecuteRejectTransfer = async () => {
+    if (!rejectingTransferTarget) return;
+    const reason = transferRejectReason.trim();
+    if (!reason) {
+      setTransferRejectError("Mohon tuliskan deskripsi / alasan penolakan atau retur barang.");
+      return;
+    }
+    setIsExecutingAction(true);
+    try {
+      if (onRejectTransfer) {
+        const itemsToReject = rejectingTransferTarget.type === 'GROUP' 
+          ? rejectingTransferTarget.data.items 
+          : [rejectingTransferTarget.data];
+        await onRejectTransfer(itemsToReject, reason);
+      }
+      setRejectingTransferTarget(null);
+      setTransferRejectReason('');
+      setTransferRejectError('');
+    } catch (err) {
+      showAlert("Gagal Menolak Kiriman", err.message || "Terjadi kesalahan saat menolak kiriman.", "ERROR");
+    } finally {
+      setIsExecutingAction(false);
+    }
+  };
+
+  // Pre-submit validation before opening Request Stock Confirmation Dialog
+  const handlePreSubmitStockRequest = (e) => {
     e.preventDefault();
     const targetP = safeProducts.find(p => p.id === reqProductId) || safeProducts[0];
     if (!targetP) {
@@ -279,30 +368,36 @@ export default function StockIn({
       return;
     }
 
-    setIsSubmittingReq(true);
-    try {
-      const payload = {
-        productId: targetP.id,
-        sku: targetP.sku,
-        productName: targetP.name,
-        brand: targetP.brand,
-        qty: Number(reqQty),
-        notes: reqNotes.trim()
-      };
+    const payload = {
+      productId: targetP.id,
+      sku: targetP.sku,
+      productName: targetP.name,
+      brand: targetP.brand || 'Generic',
+      qty: Number(reqQty),
+      notes: reqNotes.trim()
+    };
+    setPendingConfirmRequest(payload);
+  };
 
+  // Execute Stock Request Save to Database after confirmation
+  const handleExecuteStockRequest = async () => {
+    if (!pendingConfirmRequest) return;
+    setIsExecutingAction(true);
+    try {
       if (onRequestStock) {
-        await onRequestStock(payload);
+        await onRequestStock(pendingConfirmRequest);
       }
 
       setIsRequestModalOpen(false);
       setReqNotes('');
       setReqQty(10);
       setActiveBranchTab('REQUEST_STOCK');
-      setSuccessRequestData(payload);
+      setSuccessRequestData(pendingConfirmRequest);
+      setPendingConfirmRequest(null);
     } catch (err) {
       showAlert("Gagal Mengirim Permintaan", err.message, "ERROR");
     } finally {
-      setIsSubmittingReq(false);
+      setIsExecutingAction(false);
     }
   };
 
@@ -440,76 +535,180 @@ export default function StockIn({
             </button>
           </div>
 
-          {/* TAB 1: INCOMING DELIVERIES FROM HQ */}
+          {/* TAB 1: INCOMING DELIVERIES FROM HQ (GROUPED BY SURAT JALAN) */}
           {activeBranchTab === 'INCOMING_DELIVERIES' && (
             <div className="space-y-4">
-              <div className="bg-amber-50/70 border border-amber-200/80 p-4 rounded-2xl flex items-center justify-between">
+              <div className="bg-amber-50/70 border border-amber-200/80 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <Truck className="w-5 h-5 text-amber-600 flex-shrink-0" />
                   <div>
                     <h4 className="font-bold text-amber-900 text-sm">Paket Kiriman Masuk dari Kantor Pusat</h4>
                     <p className="text-xs text-amber-800 mt-0.5">
-                      Klik <strong>✓ Konfirmasi Paket Diterima</strong> untuk memasukkan barang langsung ke database inventaris cabang Anda.
+                      Kiriman dikelompokkan per Nomor Surat Jalan agar Anda dapat mengonfirmasi atau menolak seluruh paket kiriman sekaligus.
                     </p>
                   </div>
                 </div>
-                {pendingTransfers.length > 0 && (
-                  <span className="px-3 py-1 bg-amber-200/80 text-amber-900 rounded-xl font-extrabold text-xs flex-shrink-0">
-                    {pendingTransfers.length} Menunggu
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 bg-amber-200/80 text-amber-900 rounded-xl font-extrabold text-xs whitespace-nowrap">
+                    {pendingByDeliveryNote.length} Paket Kiriman
                   </span>
-                )}
+                  <span className="px-3 py-1 bg-amber-600 text-white rounded-xl font-extrabold text-xs whitespace-nowrap">
+                    {pendingTransfers.length} Produk Menunggu
+                  </span>
+                </div>
               </div>
 
-              {pendingTransfers.length > 0 ? (
-                <div className="space-y-3">
-                  {pendingTransfers.map(trf => (
-                    <div 
-                      key={trf.id} 
-                      className="bg-white border-2 border-amber-300 p-4 sm:p-5 rounded-2xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition hover:border-amber-400"
-                    >
-                      <div className="flex items-start gap-3.5">
-                        <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-bold flex-shrink-0 shadow-sm">
-                          <Package className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-slate-900 text-base">{trf.productName}</span>
-                            <span className="px-2 py-0.2 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-800">
-                              {trf.brand || 'Generic'}
-                            </span>
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
-                              🚚 Dalam Perjalanan
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-500 mt-1">
-                            No. Surat Jalan: <strong className="text-slate-800 font-mono">{trf.deliveryNote}</strong> • Pengirim: <strong className="text-slate-700">{trf.senderName || 'Staff Pusat'}</strong> ({formatDate(trf.sentAt)})
-                          </p>
-                          <div className="flex items-center gap-3 mt-1.5 text-xs">
-                            <span className="font-semibold text-slate-600">SKU: <strong className="font-mono">{trf.sku}</strong></span>
-                            <span className="text-slate-300">•</span>
-                            <span className="font-extrabold text-emerald-700 text-sm">
-                              Kuantitas Kirim: +{trf.qty} Pcs
-                            </span>
-                          </div>
-                        </div>
-                      </div>
+              {pendingByDeliveryNote.length > 0 ? (
+                <div className="space-y-4">
+                  {pendingByDeliveryNote.map((pkg) => {
+                    const pkgKey = pkg.deliveryNote;
+                    const isExpanded = expandedPackages[pkgKey] !== false; // Default expanded
 
-                      <button
-                        onClick={() => handleOpenConfirmReceiptModal(trf)}
-                        disabled={confirmingTransferId === trf.id}
-
-                        className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap self-stretch sm:self-center"
+                    return (
+                      <div 
+                        key={pkgKey} 
+                        className="bg-white border-2 border-amber-300 rounded-2xl shadow-xs overflow-hidden transition hover:border-amber-400"
                       >
-                        <CheckCircle className="w-4 h-4" />
-                        <span>{confirmingTransferId === trf.id ? 'Memproses...' : '✓ Konfirmasi Paket Diterima'}</span>
-                      </button>
-                    </div>
-                  ))}
+                        {/* Package Header */}
+                        <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-50/50 via-white to-slate-50 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div className="flex items-start gap-3.5">
+                            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-bold shadow-md shadow-amber-500/20 flex-shrink-0">
+                              <Truck className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-mono font-extrabold text-slate-900 text-base sm:text-lg">
+                                  No. Surat Jalan: {pkg.deliveryNote}
+                                </span>
+                                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-900 border border-amber-200 flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  <span>{pkg.items.length} Produk</span>
+                                </span>
+                                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-200">
+                                  Total +{pkg.totalQty} Pcs Fisik
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-500 mt-1">
+                                Pengirim: <strong className="text-slate-700 font-semibold">{pkg.senderName}</strong> • Waktu Dikirim: <span className="text-slate-600">{formatDate(pkg.sentAt)}</span>
+                              </p>
+                              {pkg.notes && (
+                                <p className="text-xs text-slate-600 italic mt-0.5">
+                                  Catatan Pengiriman: "{pkg.notes}"
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Batch Action Buttons */}
+                          <div className="flex items-center gap-2 self-end md:self-center flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRejectingTransferTarget({ type: 'GROUP', data: pkg });
+                                setTransferRejectReason('');
+                                setTransferRejectError('');
+                              }}
+                              className="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-rose-200/60"
+                            >
+                              <Ban className="w-4 h-4" />
+                              <span>Tolak / Retur ({pkg.items.length})</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setConfirmingPackageGroup(pkg)}
+                              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold shadow-md shadow-emerald-600/20 transition active:scale-95 flex items-center gap-2 cursor-pointer"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                              <span>Terima Semua Paket ({pkg.items.length} Produk)</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => toggleExpandPackage(pkgKey)}
+                              className="p-2.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                              title={isExpanded ? "Sembunyikan Rincian Barang" : "Tampilkan Rincian Barang"}
+                            >
+                              {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Package Items Table (Visible when expanded) */}
+                        {isExpanded && (
+                          <div className="p-4 sm:p-5 bg-slate-50/50">
+                            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
+                              <table className="w-full text-left text-xs">
+                                <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-100">
+                                  <tr>
+                                    <th className="px-4 py-3">Nama Produk</th>
+                                    <th className="px-3 py-3">Merk / Brand</th>
+                                    <th className="px-3 py-3 font-mono">SKU</th>
+                                    <th className="px-3 py-3 text-center">Kuantitas Kirim</th>
+                                    <th className="px-3 py-3">Catatan</th>
+                                    <th className="px-4 py-3 text-right">Aksi Satuan</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {pkg.items.map((item) => (
+                                    <tr key={item.id} className="hover:bg-slate-50/80 transition">
+                                      <td className="px-4 py-3 font-bold text-slate-900">
+                                        {item.productName}
+                                      </td>
+                                      <td className="px-3 py-3">
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                          {item.brand || 'Generic'}
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-3 font-mono text-slate-500">{item.sku}</td>
+                                      <td className="px-3 py-3 text-center">
+                                        <span className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                          +{item.qty} Pcs
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-3 text-slate-600 italic">
+                                        {item.notes || '-'}
+                                      </td>
+                                      <td className="px-4 py-3 text-right">
+                                        <div className="flex items-center justify-end gap-1.5">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setRejectingTransferTarget({ type: 'SINGLE', data: item });
+                                              setTransferRejectReason('');
+                                              setTransferRejectError('');
+                                            }}
+                                            className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
+                                            title="Tolak item ini saja"
+                                          >
+                                            <Ban className="w-3 h-3" />
+                                            <span>Tolak</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setConfirmingSingleTransfer(item)}
+                                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition shadow-xs active:scale-95 flex items-center gap-1 cursor-pointer"
+                                            title="Konfirmasi terima item ini saja"
+                                          >
+                                            <Check className="w-3 h-3" />
+                                            <span>Terima</span>
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="bg-white p-10 rounded-2xl border border-slate-200 text-center text-slate-500 space-y-2">
                   <CheckCircle className="w-8 h-8 mx-auto text-emerald-500 stroke-1" />
-                  <p className="text-sm font-bold text-slate-800">Semua kiriman dari Kantor Pusat telah diterima.</p>
                   <p className="text-xs text-slate-400 max-w-md mx-auto">
                     Jika stok fisik di cabang mulai menipis, Anda dapat menekan tombol <strong>+ Request Stok ke Pusat</strong> untuk mengajukan pengiriman baru.
                   </p>
@@ -678,7 +877,7 @@ export default function StockIn({
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 sm:p-6 space-y-5">
 
 
-          <form onSubmit={handleBatchManifestSubmit} className="space-y-4">
+          <form onSubmit={handlePreSubmitBatchManifest} className="space-y-4">
             
             {/* Step 1: Search & Pick Products into Staging List */}
             <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
@@ -897,7 +1096,7 @@ export default function StockIn({
               </button>
             </div>
 
-            <form onSubmit={handleSubmitStockRequest} className="p-6 space-y-4 text-sm">
+            <form onSubmit={handlePreSubmitStockRequest} className="p-6 space-y-4 text-sm">
               
               {/* Product Selection */}
               <div>
@@ -1007,40 +1206,203 @@ export default function StockIn({
         buttonText="✓ Selesai & Tutup"
       />
 
-      {/* INTERACTIVE CONFIRM RECEIPT MODAL */}
-      {confirmingReceiptTransfer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-100 animate-in zoom-in-95">
-            <div className="flex items-center gap-3 text-emerald-600">
-              <div className="p-2.5 bg-emerald-50 rounded-xl">
-                <CheckCircle className="w-6 h-6 text-emerald-600" />
+      {/* ========================================================================= */}
+      {/* CONFIRMATION MODALS                                                       */}
+      {/* ========================================================================= */}
+
+      {/* 1. CONFIRMATION: BATCH INBOUND TO PUSAT */}
+      {pendingConfirmBatchInbound && (
+        <ConfirmationModal
+          isOpen={Boolean(pendingConfirmBatchInbound)}
+          onClose={() => setPendingConfirmBatchInbound(null)}
+          onConfirm={handleExecuteBatchManifest}
+          title="Konfirmasi Penerimaan Barang Masuk"
+          subtitle="Periksa kembali daftar fisik barang sebelum menambah stok gudang pusat."
+          type="SUCCESS"
+          confirmText="Ya, Simpan Barang Masuk"
+          cancelText="← Periksa Lagi"
+          isLoading={isExecutingAction}
+          maxWidth="max-w-xl"
+          summaryItems={[
+            { label: "Lokasi Penerimaan", value: "Gudang Utama Pusat", highlight: true },
+            { label: "Total Jenis Barang", value: `${pendingConfirmBatchInbound.items.length} Produk` },
+            { label: "Total Kuantitas Masuk", value: `+${pendingConfirmBatchInbound.totalQty} Pcs`, color: 'text-emerald-700 font-extrabold text-sm' },
+            { label: "No. Surat Jalan / Batch", value: pendingConfirmBatchInbound.deliveryNote },
+            { label: "Petugas Penerima", value: pendingConfirmBatchInbound.user }
+          ]}
+          itemsList={pendingConfirmBatchInbound.items.map(item => ({
+            name: item.productName,
+            sku: item.sku,
+            brand: item.brand,
+            qty: item.qty_in,
+            unit: 'Pcs',
+            note: item.supplier ? `Supplier: ${item.supplier}` : 'Pabrik Produksi Pusat'
+          }))}
+          itemsTitle="Daftar Barang Masuk:"
+          warningNote="Stok fisik gudang pusat akan langsung bertambah sesuai kuantitas yang dikonfirmasi."
+        />
+      )}
+
+      {/* 2. CONFIRMATION: REQUEST STOCK TO PUSAT */}
+      {pendingConfirmRequest && (
+        <ConfirmationModal
+          isOpen={Boolean(pendingConfirmRequest)}
+          onClose={() => setPendingConfirmRequest(null)}
+          onConfirm={handleExecuteStockRequest}
+          title="Konfirmasi Permintaan Stok ke Pusat"
+          subtitle="Permintaan stok akan tercatat di sistem Kantor Pusat untuk diproses pengirimannya."
+          type="PRIMARY"
+          confirmText="Ya, Kirim Permintaan"
+          cancelText="← Cek Kembali"
+          isLoading={isExecutingAction}
+          summaryItems={[
+            { label: "Cabang Pemohon", value: currentUser?.branchName || 'Cabang', highlight: true },
+            { label: "Nama Produk", value: pendingConfirmRequest.productName },
+            { label: "SKU Produk", value: pendingConfirmRequest.sku },
+            { label: "Jumlah Diminta", value: `+${pendingConfirmRequest.qty} Pcs`, color: 'text-indigo-700 font-bold' },
+            { label: "Catatan Permintaan", value: pendingConfirmRequest.notes || '-' }
+          ]}
+          warningNote="Admin / Staff Pusat akan memverifikasi ketersediaan stok fisik di pusat sebelum mengirimkannya ke cabang Anda."
+        />
+      )}
+
+      {/* 3. CONFIRMATION: BATCH PACKAGE RECEIPT (GROUP) */}
+      {confirmingPackageGroup && (
+        <ConfirmationModal
+          isOpen={Boolean(confirmingPackageGroup)}
+          onClose={() => setConfirmingPackageGroup(null)}
+          onConfirm={handleExecuteConfirmPackageGroup}
+          title={`Konfirmasi Penerimaan Paket (No. SJ: ${confirmingPackageGroup.deliveryNote})`}
+          subtitle="Pastikan seluruh fisik produk dalam paket ini telah tiba dan diperiksa dalam kondisi baik."
+          type="SUCCESS"
+          confirmText={`Ya, Terima Seluruh Paket (${confirmingPackageGroup.items.length} Produk)`}
+          cancelText="Batal"
+          isLoading={isExecutingAction}
+          maxWidth="max-w-xl"
+          summaryItems={[
+            { label: "No. Surat Jalan", value: confirmingPackageGroup.deliveryNote, highlight: true },
+            { label: "Total Jenis Produk", value: `${confirmingPackageGroup.items.length} Produk` },
+            { label: "Total Kuantitas Fisik", value: `+${confirmingPackageGroup.totalQty} Pcs`, color: 'text-emerald-700 font-extrabold text-sm' },
+            { label: "Petugas Pengirim (Pusat)", value: confirmingPackageGroup.senderName },
+            { label: "Cabang Penerima", value: currentUser?.branchName || 'Cabang' }
+          ]}
+          itemsList={confirmingPackageGroup.items.map(item => ({
+            name: item.productName,
+            sku: item.sku,
+            brand: item.brand,
+            qty: item.qty,
+            unit: item.unit || 'Pcs',
+            note: item.notes || '-'
+          }))}
+          itemsTitle="Daftar Produk dalam Paket:"
+          warningNote="Setelah dikonfirmasi, seluruh stok fisik produk di atas akan otomatis aktif dan bertambah di database inventaris cabang Anda."
+        />
+      )}
+
+      {/* 4. CONFIRMATION: SINGLE TRANSFER ITEM RECEIPT */}
+      {confirmingSingleTransfer && (
+        <ConfirmationModal
+          isOpen={Boolean(confirmingSingleTransfer)}
+          onClose={() => setConfirmingSingleTransfer(null)}
+          onConfirm={handleExecuteConfirmSingleTransfer}
+          title="Konfirmasi Penerimaan Produk Ini?"
+          subtitle="Pastikan fisik produk telah diterima dalam kondisi baik."
+          type="SUCCESS"
+          confirmText="Ya, Konfirmasi Terima Produk"
+          cancelText="Batal"
+          isLoading={isExecutingAction}
+          summaryItems={[
+            { label: "Nama Produk", value: confirmingSingleTransfer.productName, highlight: true },
+            { label: "SKU Produk", value: confirmingSingleTransfer.sku },
+            { label: "Jumlah Diterima", value: `+${confirmingSingleTransfer.qty} Pcs`, color: 'text-emerald-700 font-extrabold text-sm' },
+            { label: "No. Surat Jalan", value: confirmingSingleTransfer.deliveryNote || '-' },
+            { label: "Pengirim", value: confirmingSingleTransfer.senderName || 'Kantor Pusat' }
+          ]}
+          warningNote="Stok produk ini akan langsung aktif di database cabang Anda."
+        />
+      )}
+
+      {/* 5. MODAL: DECLINE / RETURN TRANSFER (WITH DESCRIPTION) */}
+      {rejectingTransferTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-rose-50/70">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center">
+                  <Ban className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-base">
+                    {rejectingTransferTarget.type === 'GROUP' 
+                      ? `Tolak / Retur Paket (${rejectingTransferTarget.data.deliveryNote})` 
+                      : `Tolak Produk "${rejectingTransferTarget.data.productName}"`}
+                  </h3>
+                  <p className="text-xs text-rose-600 font-medium">Beri deskripsi / alasan penolakan paket</p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-base">Konfirmasi Penerimaan Paket?</h3>
-                <p className="text-xs text-slate-500 font-medium">Pengiriman Mutasi Stok dari Kantor Pusat</p>
-              </div>
+              <button 
+                onClick={() => setRejectingTransferTarget(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200">
-              Apakah Anda telah menerima <strong className="text-emerald-700 font-extrabold">+{confirmingReceiptTransfer.qty} Pcs "{confirmingReceiptTransfer.productName}"</strong> (No. Surat Jalan: <span className="font-mono font-bold text-slate-900">{confirmingReceiptTransfer.deliveryNote}</span>)? Stok akan langsung aktif di database inventaris cabang Anda.
-            </p>
+            <div className="p-6 space-y-4 text-sm">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+                <div className="text-slate-500">
+                  Target: <strong className="text-slate-800">{rejectingTransferTarget.type === 'GROUP' ? `Paket No. SJ ${rejectingTransferTarget.data.deliveryNote} (${rejectingTransferTarget.data.items.length} Produk, Total +${rejectingTransferTarget.data.totalQty} Pcs)` : `${rejectingTransferTarget.data.productName} (+${rejectingTransferTarget.data.qty} Pcs)`}</strong>
+                </div>
+                <div className="text-slate-500">
+                  Pengirim: <strong className="text-slate-700">{rejectingTransferTarget.type === 'GROUP' ? rejectingTransferTarget.data.senderName : (rejectingTransferTarget.data.senderName || 'Staff Pusat')}</strong>
+                </div>
+              </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setConfirmingReceiptTransfer(null)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={handleExecuteConfirmReceipt}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition cursor-pointer flex items-center gap-1.5"
-              >
-                <CheckCircle className="w-4 h-4" />
-                <span>Ya, Konfirmasi Penerimaan</span>
-              </button>
+              {transferRejectError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{transferRejectError}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Deskripsi / Alasan Retur / Penolakan *
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  placeholder="Contoh: Paket rusak saat pengiriman, barang tidak sampai, kuantitas fisik kurang dari surat jalan..."
+                  value={transferRejectReason}
+                  onChange={(e) => {
+                    setTransferRejectReason(e.target.value);
+                    if (transferRejectError) setTransferRejectError('');
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-rose-500 focus:outline-none transition leading-relaxed"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Deskripsi penolakan ini akan dikirimkan sebagai notifikasi ke Kantor Pusat (HQ).
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setRejectingTransferTarget(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={isExecutingAction}
+                  onClick={handleExecuteRejectTransfer}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-xs transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Ban className="w-3.5 h-3.5" />
+                  <span>{isExecutingAction ? 'Memproses...' : (rejectingTransferTarget.type === 'GROUP' ? `Tolak Semua (${rejectingTransferTarget.data.items.length} Produk)` : 'Tolak Produk Ini')}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

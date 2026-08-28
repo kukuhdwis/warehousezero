@@ -4,17 +4,50 @@
 ![Preview 2](image-1.png)
 ![Preview 3](image-2.png)
 
-[ 🇮🇩 Bahasa Indonesia ](./README.md) | [ 🇬🇧 English Version ](./readme.md)
-
 ---
 
 ## 📌 Ringkasan Proyek
 
-**NDK Warehouse (WarehouseZero)** adalah **Sistem Manajemen Gudang (*Warehouse Management System* / WMS)** tingkat perusahaan (*enterprise-ready*) modern yang dirancang dengan arsitektur **Zero-Trust Backend Mutation**. 
+**NDK Warehouse (WarehouseZero)** adalah **Sistem Manajemen Gudang (*Warehouse Management System* / WMS)** tingkat perusahaan (*enterprise-ready*) modern yang dirancang dengan arsitektur **Zero-Trust Backend Mutation** dan **Full-System Realtime Live Data Stream**.
 
-Di bidang manufaktur dan distribusi, aplikasi ini memastikan konsistensi data inventaris multi-cabang, mencegah nota fiktif, mengisolasi informasi HPP/margin keuntungan, serta dilengkapi sistem pengaman limit kredit (*Credit Ceiling Guard*) dan blokir otomatis tunggakan jatuh tempo (*Overdue Accounts Receivable Guard*).
+Aplikasi ini memastikan konsistensi data inventaris multi-cabang, mencegah nota fiktif, mengisolasi informasi HPP/margin keuntungan, mempercepat alur transfer barang antar-gudang, serta menyediakan notifikasi dan sinkronisasi data langsung tanpa perlu me-refresh halaman (*zero-refresh*).
 
-Aplikasi ini dibangun menggunakan ekosistem teknologi modern: **React 19**, **Vite**, **Tailwind CSS**, **Google Firebase Cloud Firestore V3.0**, dan **Firebase Cloud Functions (TypeScript)**.
+Dibangun menggunakan stack teknologi modern: **React 19**, **Vite 6**, **Tailwind CSS 3**, **Google Firebase Cloud Firestore**, dan **Firebase Cloud Functions (TypeScript)**.
+
+---
+
+## 🔄 Pembaruan & Fitur Terbaru (Changelog)
+
+### ✨ Fitur Baru yang Ditambahkan
+1. **Full-System Realtime Live Data Stream & Live Notification (`onSnapshot`)**:
+   - Seluruh modul data (Notifikasi, Master Produk, Mutasi Stok/Transaksi, Transfer Barang, Permintaan Stok, dan Inventaris Cabang) terhubung via **WebSocket Stream Realtime Firestore**.
+   - Setiap ada mutasi, pengiriman, atau notifikasi baru, data langsung ter-update di layar user lain secara instan (< 50 milidetik).
+   - Dilengkapi **Web Audio Notification Chime** (nada dering halus) dan **Floating Live Notification Toast** di pojok kanan atas layar dengan tautan akses satu klik (*deep-linking*).
+2. **Branch-Grouped Inventory Approvals (Pengelompokan Pengajuan per Cabang)**:
+   - Di menu Persetujuan Inventaris Cabang, pengajuan stok fisik dikelompokkan rapi ke dalam **Card Cabang** masing-masing lengkap dengan akordion rincian produk.
+   - **1-Click "Setujui Semua (Approve All)"**: Admin dapat memverifikasi dan menyetujui seluruh pengajuan suatu cabang sekaligus dalam 1 transaksi batch paralel.
+   - **"Tolak / Decline" dengan Deskripsi Wajib**: Dilengkapi form dialog yang mewajibkan Admin mengisi alasan penolakan yang otomatis terkirim sebagai notifikasi resmi ke cabang.
+3. **Surat Jalan Grouped Inbound (Penerimaan Stok Cabang Terpadu)**:
+   - Kiriman barang dari Pusat dikelompokkan secara otomatis berdasarkan **Nomor Surat Jalan (Delivery Note)**.
+   - **1-Click "Terima Semua Paket"**: Cabang dapat mengonfirmasi penerimaan seluruh produk dalam surat jalan sekaligus, dengan penambahan kuantitas otomatis ke database `branch_inventories`.
+   - **"Tolak / Retur Kiriman"**: Fasilitas penolakan kiriman dengan alasan resmi yang ternotifikasi ke Pusat.
+4. **Universal Interactive Confirmation Modal (`ConfirmationModal.jsx`)**:
+   - Standardisasi modal konfirmasi interaktif Glassmorphism di seluruh aksi sistem (Inbound Manifest, Outbound POS & Transfer, Penyesuaian Stok/Stock Opname, Pembuatan/Edit/Hapus Master Produk, Akun Pengguna, dan Cabang).
+5. **Unified Branch Inventory Physical Stock Registration**:
+   - Penyederhanaan alur pendaftaran stok fisik cabang menjadi 1 alur terpadu dari katalog master resmi.
+   - Otomatisasi pembebasan pengajuan bagi Gudang Utama Pusat sebagai pemilik master katalog.
+6. **Multi-Key Robust Branch Matching & Realtime Monitoring**:
+   - Modul Monitoring Cabang kini mendukung pencocokan cerdas multi-key (ID dokumen Firestore, kode cabang, dan nama cabang) serta mekanisme auto-deduplikasi data stok.
+7. **Consolidated Batch Notifications**:
+   - Pengajuan multi-item menghasilkan 1 notifikasi terpadu untuk mencegah spam notifikasi per item.
+
+---
+
+### 🧹 Fitur & Kode yang Dihapus / Dioptimalkan (*Pruned & Optimized*)
+1. **Dihapus: Pengajuan Inventaris Terpisah / Terpecah**: Menghapus opsi pengajuan bertahap yang redundan menjadi 1 alur input terpadu.
+2. **Dihapus: Eksekusi Serial Lambat (Sequential Loop Writes)**: Menggantikan perulangan penulisan serial yang memicu delay lama dan loading berulang (3x) menjadi eksekusi batch paralel (`Promise.all`) dengan 1 kali sinkronisasi state.
+3. **Dihapus: Native Browser Alerts & Confirmations**: Menghapus seluruh penggunaan `window.confirm()` dan `window.alert()` browser yang kaku, digantikan dengan modal komponen interaktif.
+4. **Dibersihkan: Dokumen Inventaris Duplikat**: Menghapus data duplikasi lama di Firestore dan menstandarkan ID referensi cabang.
 
 ---
 
@@ -58,7 +91,7 @@ Sistem ini menerapkan prinsip **Zero-Trust Backend Mutation**, di mana klien (*w
 ### 🔐 1. Keamanan Firestore Security Rules V3.0
 - **Locked Stock Mutation**: Koleksi `/branch_stocks` dan `/sales_transactions` dikunci dengan aturan `allow write: if false;`, menutup total celah manipulasi stok dari peramban.
 - **Isolasi Harga Privat**: Koleksi `/product_pricings` (HPP/COGS, harga distributor, harga reseller) dipisahkan dari katalog produk umum.
-- **Scoped Read Access**: Staf cabang hanya diizinkan membaca data stok, transaksi, dan surat jalan milik cabang mereka sendiri (`request.auth.token.branch_id == branchId`).
+- **Scoped Read Access**: Staf cabang hanya diizinkan membaca data stok, transaksi, dan surat jalan milik cabang mereka sendiri.
 
 ### ⚡ 2. Core Cloud Functions (Atomic Mutator Engine)
 1. **`processPOSSale`**: Memvalidasi kuantitas item & ketersediaan stok cabang, memotong stok secara atomik (`runTransaction`), dan mencatat nota transaksi penjualan.
@@ -87,16 +120,15 @@ Sistem ini menerapkan prinsip **Zero-Trust Backend Mutation**, di mana klien (*w
 ### 🛒 5. Penjualan Produk Terpadu (Omnichannel POS & Bundling)
 - **Omnichannel Platform Selection**: Mendukung pencatatan transaksi dari berbagai saluran penjualan: **Toko Fisik / Offline (Kasir)**, **Shopee**, **Tokopedia**, **TikTok Shop**, dan **Direct Channel / Lainnya**.
 - **Unified Satuan & Bundling**: Fleksibilitas memilih format penjualan per Pcs (satuan) atau Paket Bundling Combo dalam 1 wadah terpadu.
-- **Pencegahan & Penggabungan Otomatis Duplikasi Barang**: Logika cerdas yang mencegah duplikasi komponen dalam paket bundling. Pemilihan produk yang sudah ada akan otomatis mendeteksi dan menggabungkan kuantitas (`+1 Qty`) ke baris yang ada serta memicu notifikasi modal interaktif.
+- **Pencegahan & Penggabungan Otomatis Duplikasi Barang**: Logika cerdas yang mencegah duplikasi komponen dalam paket bundling.
 - **Detail Transaksi & Pembayaran**: Pencatatan Nama Pembeli/Pemesan, No. Nota/Resi Marketplace, dan Metode Pembayaran (`CASH`, `TRANSFER`, `QRIS`, `MARKETPLACE_ESCROW`).
 
-### 📋 6. Multi-Item Staging Cart & Custom Alert Modal
-- **Staging Cart Inbound & Outbound**: Alur barang masuk (`StockIn.jsx`) dan keluar (`StockOut.jsx`) menggunakan 1 Staging Table terpadu dengan penyuntingan kuantitas langsung secara *inline*.
-- **Pencarian Cepat & Barcode**: Dilengkapi komponen `ProductSearchPicker` dan *Instant Camera Scanner* untuk memindai Barcode/QR Code tanpa modal berulang.
-- **Interactive Glassmorphism Alert Modal**: Seluruh pesan `alert()` bawaan browser diganti dengan `CustomAlertModal.jsx` interaktif berbasis glassmorphism, lencana indikator kategori (Warning, Error, Info), dan desain yang menyatu dengan tema aplikasi.
+### 📋 6. Multi-Item Staging Cart & Custom Modals
+- **Staging Cart Inbound & Outbound**: Alur barang masuk (`StockIn.jsx`) dan keluar (`StockOut.jsx`) menggunakan Staging Table terpadu dengan penyuntingan kuantitas langsung secara *inline*.
+- **Pencarian Cepat & Barcode**: Dilengkapi komponen `ProductSearchPicker` dan *Instant Camera Scanner* untuk memindai Barcode/QR Code.
+- **Universal Confirmation Modal**: Konfirmasi transaksional dengan detail ringkasan dan indikator status.
 
 ---
-
 
 ## 🛠️ Teknologi & Library
 
@@ -104,10 +136,10 @@ Sistem ini menerapkan prinsip **Zero-Trust Backend Mutation**, di mana klien (*w
 | :--- | :--- | :--- |
 | **Frontend Framework** | [React 19](https://react.dev/) + [Vite 6](https://vitejs.dev/) | Framework SPA modern dengan performa tinggi & Fast Refresh |
 | **Styling & UI** | [Tailwind CSS 3](https://tailwindcss.com/) + [Lucide React](https://lucide.dev/) | Responsive Utility-first CSS & Ikonografi modern |
-| **Database & Cloud** | [Google Firebase v11](https://firebase.google.com/) | Cloud Firestore DB real-time & Authentication |
+| **Database & Cloud** | [Google Firebase v11](https://firebase.google.com/) | Cloud Firestore DB real-time (`onSnapshot`) & Authentication |
 | **Backend Mutator Engine** | [Firebase Cloud Functions v5](https://firebase.google.com/docs/functions) | Backend Serverless berbasis TypeScript & Firebase Admin SDK |
-| **Barcode Generator** | [bwip-js](https://github.com/metafloor/bwip-js) | Rendering barcode 1D/2D (Code128, QR) dalam bentuk Canvas / Vector |
-| **Camera Scanner** | [html5-qrcode](https://github.com/mebjas/html5-qrcode) | Pemindaian Barcode & QR Code via kamera perangkat secara real-time |
+| **Barcode Generator** | [bwip-js](https://github.com/metafloor/bwip-js) | Rendering barcode 1D/2D (Code128, QR) Canvas / Vector |
+| **Camera Scanner** | [html5-qrcode](https://github.com/mebjas/html5-qrcode) | Pemindaian Barcode & QR Code via kamera perangkat |
 
 ---
 
@@ -158,8 +190,6 @@ cd ..
 
 ## 🚀 Deployment ke Google Firebase
 
-Untuk menerapkan aturan keamanan Firestore, Cloud Functions backend, dan Web Hosting ke Firebase:
-
 ```bash
 # 1. Login ke Firebase CLI
 npx firebase-tools login
@@ -175,8 +205,6 @@ npx firebase-tools deploy --only hosting
 ```
 
 ---
-
-
 
 ## 📁 Struktur Direktori Proyek
 
@@ -195,45 +223,38 @@ warehousezero/
 │   │   ├── BarcodeModal.jsx    # Modal generator & preview label barcode/QR
 │   │   ├── BottomNav.jsx       # Navigasi bawah untuk tampilan mobile
 │   │   ├── BranchManagement.jsx# CRUD Cabang, Pengaturan Plafon Kredit & Term Payment
-│   │   ├── BranchMonitoring.jsx# Dashboard analitik stok cabang & pemantauan piutang
+│   │   ├── BranchMonitoring.jsx# Dashboard analitik stok cabang & pemantauan realtime
+│   │   ├── ConfirmationModal.jsx# Universal modal konfirmasi aksi transaksional
 │   │   ├── CustomAlertModal.jsx# Modal notifikasi alert interaktif glassmorphism
 │   │   ├── Dashboard.jsx       # Metrik ringkasan KPI & grafik stok
-│   │   ├── GlobalSuccessModal.jsx # Popup konfirmasi sukses universal
-│   │   ├── LoginView.jsx       # Halaman Portal Autentikasi Login
-│   │   ├── Navbar.jsx          # Bar navigasi atas & Pusat Notifikasi Real-time
-│   │   ├── ProductManagement.jsx # Katalog produk, Merek, Kategori & Direct Stock Editing
-│   │   ├── ProductSearchPicker.jsx # Picker pencarian produk cepat berbasis pencarian & filter
-│   │   ├── ScannerModal.jsx    # Modal pemindai QR / Barcode via kamera live
-│   │   ├── Sidebar.jsx         # Bilah navigasi samping (Desktop)
-│   │   ├── StockIn.jsx         # Alur Barang Masuk Manifest Staging Cart & Surat Jalan
-│   │   ├── StockOut.jsx        # Alur Penjualan Omnichannel Terpadu & Transfer Cabang
-│   │   ├── TransactionHistory.jsx # Audit Log riwayat pergerakan stok & ekspor CSV
-│   │   └── UserManagement.jsx  # Manajemen staf, penetapan peran RBAC & Custom Claims
-
-│   ├── services/
-│   │   ├── authService.js      # Pengelola sesi otentikasi & token listener
-│   │   ├── cloudFunctionsService.js # Client caller HTTPS Callable Cloud Functions
-│   │   ├── dataService.js      # Layanan penyimpanan data Firestore & CRUD
-│   │   └── firebase.js         # Inisialisasi Firebase App, Auth, Firestore & Functions
-│   ├── App.jsx                 # Main Application Layout & State Router
-│   ├── index.css               # Pengaturan CSS Global & import Tailwind
-│   └── main.jsx                # React Root Entry Point
-├── package.json                # Pengaturan dependensi frontend
-├── README.md                   # Dokumentasi Utama Proyek (Bahasa Indonesia)
-├── README.id.md                # Salinan Dokumentasi Bahasa Indonesia
-├── readme.md                   # Dokumentasi Versi Bahasa Inggris
-├── tailwind.config.js          # Konfigurasi Tema Tailwind CSS
-└── vite.config.js              # Konfigurasi Bundler Vite
+│   │   ├── GlobalSuccessModal.jsx# Modal notifikasi sukses global
+│   │   ├── LoginView.jsx       # Halaman login otentikasi
+│   │   ├── LogoutConfirmModal.jsx# Modal konfirmasi keluar sistem
+│   │   ├── Navbar.jsx          # Header navigasi, live notifikasi & jam real-time
+│   │   ├── ProductManagement.jsx# Manajemen master produk, brand, kategori & approval cabang
+│   │   ├── ProductSearchPicker.jsx# Komponen pencarian cepat produk
+│   │   ├── ScannerModal.jsx    # Modal pemindai kamera barcode/QR
+│   │   ├── Sidebar.jsx         # Navigasi menu utama desktop
+│   │   ├── StockIn.jsx         # Alur barang masuk gudang (Inbound & transfer surat jalan)
+│   │   ├── StockOut.jsx        # Alur barang keluar (Penjualan POS, Bundling & Transfer Pusat)
+│   │   ├── TransactionHistory.jsx# Tabel & log riwayat mutasi stok
+│   │   ├── TransactionSuccessModal.jsx# Nota struk transaksi sukses
+│   │   └── UserManagement.jsx  # Manajemen akun staf, role & penugasan cabang
+│   ├── services/               # Layanan Data & API
+│   │   ├── authService.js      # Otentikasi Firebase Auth & Token Management
+│   │   ├── cloudFunctionsService.js # Penghubung client ke Firebase Cloud Functions
+│   │   ├── dataService.js      # Operasi Firestore CRUD & Realtime Listeners (onSnapshot)
+│   │   └── firebase.js         # Inisialisasi Firebase App, Auth & Firestore
+│   ├── App.jsx                 # Router utama & state container realtime
+│   ├── index.css               # Styling Tailwind CSS & kustom animasi
+│   └── main.jsx                # Entry point aplikasi React
+├── package.json
+├── vite.config.js
+└── README.md
 ```
-
----
-
-## 👨‍💻 Pengembang
-
-Dikembangkan oleh **[kukuhdwisaputra.site](https://kukuhdwisaputra.site)**.
 
 ---
 
 ## 📄 Lisensi
 
-Proyek ini dirilis di bawah lisensi terbuka [MIT License](LICENSE).
+Hak Cipta © 2026 **NDK Warehouse (WarehouseZero)**. Dikembangkan untuk efisiensi dan keamanan rantai pasok manufaktur dan distribusi multi-cabang.

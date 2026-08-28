@@ -1,4 +1,10 @@
 import { db, isFirebaseConfigured } from "./firebase";
+import { registerUserInFirebaseAuth } from "./authService";
+import { 
+  callCreateSystemUser, 
+  callUpdateSystemUser, 
+  callDeleteSystemUser 
+} from "./cloudFunctionsService";
 import { 
   collection, 
   getDocs, 
@@ -13,7 +19,8 @@ import {
   limit,
   serverTimestamp,
   increment,
-  where 
+  where,
+  onSnapshot
 } from "firebase/firestore";
 
 // Helper to throw explicit error if Firebase is not active
@@ -391,103 +398,161 @@ export const fetchBranchInventories = async (branchId = null) => {
   }
 };
 
-export const requestBranchInventory = async (data, currentUser) => {
+export const requestBatchBranchInventory = async (itemsList, currentUser) => {
   ensureFirebase();
-  const newInventoryRequest = {
-    branchId: currentUser?.branchId || data.branchId,
-    branchName: currentUser?.branchName || data.branchName || 'Cabang',
-    productId: data.productId,
-    sku: data.sku,
-    productName: data.productName,
-    brand: data.brand || 'Generic',
-    unit: 'Pcs',
-    price: Number(data.price) || 0,
-    minStock: Number(data.minStock) || 5,
-    stockQuantity: Number(data.stockQuantity || data.currentStock) || 0,
-    status: 'PENDING_APPROVAL',
-    requestedBy: currentUser?.name || currentUser?.email || 'Staff Cabang',
-    requestedAt: new Date().toISOString()
-  };
+  if (!itemsList || itemsList.length === 0) return [];
+
+  const rawList = Array.isArray(itemsList) ? itemsList : [itemsList];
+  const branchName = rawList[0]?.branchName || currentUser?.branchName || 'Cabang';
+  const branchId = rawList[0]?.branchId || currentUser?.branchId || 'CABANG';
 
   try {
-    const docRef = await addDoc(collection(db, "branch_inventories"), {
-      ...newInventoryRequest,
-      createdAt: serverTimestamp()
+    const promises = rawList.map(async (data) => {
+      const newInventoryRequest = {
+        branchId: branchId,
+        branchName: branchName,
+        productId: data.productId,
+        sku: data.sku,
+        productName: data.productName,
+        brand: data.brand || 'Generic',
+        unit: data.unit || 'Pcs',
+        price: Number(data.price) || 0,
+        minStock: Number(data.minStock) || 5,
+        stockQuantity: Number(data.stockQuantity || data.currentStock) || 0,
+        notes: data.notes || '',
+        status: 'PENDING_APPROVAL',
+        requestedBy: currentUser?.name || currentUser?.email || 'Staff Cabang',
+        requestedAt: new Date().toISOString()
+      };
+
+      const docRef = await addDoc(collection(db, "branch_inventories"), {
+        ...newInventoryRequest,
+        createdAt: serverTimestamp()
+      });
+
+      return { id: docRef.id, ...newInventoryRequest };
     });
-    const created = { id: docRef.id, ...newInventoryRequest };
+
+    const results = await Promise.all(promises);
+
+    // Create exactly ONE consolidated notification for the whole submission batch
+    const productCount = results.length;
+    const totalQty = results.reduce((acc, item) => acc + (Number(item.stockQuantity) || 0), 0);
+    const productPreview = results.slice(0, 2).map(r => `"${r.productName}"`).join(', ') + (productCount > 2 ? ` dan ${productCount - 2} produk lainnya` : '');
 
     await createNotification({
       type: 'INVENTORY_REQUEST',
-      title: 'Pengajuan Inventaris Cabang Baru',
-      message: `${newInventoryRequest.branchName} mengajukan inventaris produk "${newInventoryRequest.productName}" sebanyak ${newInventoryRequest.stockQuantity} Pcs.`,
+      title: 'Pendaftaran Inventaris Cabang 📋',
+      message: `${branchName} mendaftarkan ${productCount} produk (${productPreview}) total ${totalQty} Pcs untuk diverifikasi Pusat.`,
       targetRole: 'ADMIN_AND_PUSAT',
-      metaId: docRef.id,
-      branchId: newInventoryRequest.branchId,
-      branchName: newInventoryRequest.branchName
+      metaId: results[0]?.id || '',
+      branchId: branchId,
+      branchName: branchName
     });
 
-    return created;
+    return results;
   } catch (err) {
-    console.error("Firestore error creating branch inventory request:", err);
+    console.error("Firestore error creating batch branch inventory request:", err);
     throw new Error(`Gagal mengajukan inventaris ke Firestore: ${err.message}`);
   }
 };
 
-export const approveBranchInventory = async (id, adminUser) => {
+export const requestBranchInventory = async (data, currentUser) => {
+  const res = await requestBatchBranchInventory([data], currentUser);
+  return res[0];
+};
+
+export const approveBatchBranchInventory = async (itemsOrIds, adminUser) => {
   ensureFirebase();
+  const list = Array.isArray(itemsOrIds) ? itemsOrIds : [itemsOrIds];
+  if (list.length === 0) return [];
+
   const approvalData = {
     status: 'APPROVED',
-    approvedBy: adminUser?.name || 'Administrator Pusat',
+    approvedBy: adminUser?.name || adminUser?.email || 'Administrator Pusat',
     approvedAt: new Date().toISOString()
   };
 
   try {
-    const docRef = doc(db, "branch_inventories", id);
-    await updateDoc(docRef, approvalData);
+    const promises = list.map(async (itemOrId) => {
+      const id = typeof itemOrId === 'string' ? itemOrId : itemOrId.id;
+      const docRef = doc(db, "branch_inventories", id);
+      await updateDoc(docRef, approvalData);
+      return id;
+    });
+
+    const approvedIds = await Promise.all(promises);
+
+    const firstItem = typeof list[0] === 'object' ? list[0] : null;
+    const branchName = firstItem?.branchName || 'Cabang';
+    const targetBranchId = firstItem?.branchId || 'ALL';
 
     await createNotification({
       type: 'INVENTORY_APPROVED',
       title: 'Pengajuan Inventaris Disetujui! ✅',
-      message: `Pengajuan inventaris untuk cabang telah DISETUJUI oleh Kantor Pusat.`,
+      message: `Pusat telah MENYETUJUI pendaftaran inventaris (${approvedIds.length} produk) untuk ${branchName}. Stok kini resmi aktif.`,
       targetRole: 'STAFF_BRANCH',
-      targetBranchId: 'ALL',
-      metaId: id
+      targetBranchId: targetBranchId,
+      metaId: approvedIds[0]
     });
 
-    return { id, ...approvalData };
+    return approvedIds;
   } catch (err) {
-    console.error("Firestore error approving inventory:", err);
+    console.error("Firestore error approving batch inventory:", err);
     throw new Error(`Gagal menyetujui inventaris di Firestore: ${err.message}`);
   }
 };
 
-export const rejectBranchInventory = async (id, adminUser, reason = 'Kuantitas atau spesifikasi tidak sesuai verifikasi fisik.') => {
+export const approveBranchInventory = async (idOrItem, adminUser) => {
+  const res = await approveBatchBranchInventory([idOrItem], adminUser);
+  return res[0];
+};
+
+export const rejectBatchBranchInventory = async (itemsOrIds, adminUser, reason = 'Kuantitas atau spesifikasi tidak sesuai verifikasi fisik.') => {
   ensureFirebase();
+  const list = Array.isArray(itemsOrIds) ? itemsOrIds : [itemsOrIds];
+  if (list.length === 0) return [];
+
   const rejectionData = {
     status: 'REJECTED',
-    rejectionReason: reason,
-    rejectedBy: adminUser?.name || 'Administrator Pusat',
+    rejectionReason: reason || 'Kuantitas atau spesifikasi tidak sesuai verifikasi fisik.',
+    rejectedBy: adminUser?.name || adminUser?.email || 'Administrator Pusat',
     rejectedAt: new Date().toISOString()
   };
 
   try {
-    const docRef = doc(db, "branch_inventories", id);
-    await updateDoc(docRef, rejectionData);
+    const promises = list.map(async (itemOrId) => {
+      const id = typeof itemOrId === 'string' ? itemOrId : itemOrId.id;
+      const docRef = doc(db, "branch_inventories", id);
+      await updateDoc(docRef, rejectionData);
+      return id;
+    });
+
+    const rejectedIds = await Promise.all(promises);
+
+    const firstItem = typeof list[0] === 'object' ? list[0] : null;
+    const branchName = firstItem?.branchName || 'Cabang';
+    const targetBranchId = firstItem?.branchId || 'ALL';
 
     await createNotification({
       type: 'INVENTORY_REJECTED',
       title: 'Pengajuan Inventaris Ditolak ⚠️',
-      message: `Pengajuan inventaris DITOLAK oleh Pusat. Alasan: ${reason}`,
+      message: `Pengajuan inventaris (${rejectedIds.length} produk) di ${branchName} DITOLAK oleh Pusat. Alasan: "${reason || '-'}"`,
       targetRole: 'STAFF_BRANCH',
-      targetBranchId: 'ALL',
-      metaId: id
+      targetBranchId: targetBranchId,
+      metaId: rejectedIds[0]
     });
 
-    return { id, ...rejectionData };
+    return rejectedIds;
   } catch (err) {
-    console.error("Firestore error rejecting inventory:", err);
+    console.error("Firestore error rejecting batch inventory:", err);
     throw new Error(`Gagal menolak inventaris di Firestore: ${err.message}`);
   }
+};
+
+export const rejectBranchInventory = async (idOrItem, adminUser, reason) => {
+  const res = await rejectBatchBranchInventory([idOrItem], adminUser, reason);
+  return res[0];
 };
 
 export const updateBranchInventory = async (id, updateData) => {
@@ -582,21 +647,263 @@ export const markAllNotificationsAsRead = async (currentUser) => {
 };
 
 // ==========================================
+// REALTIME DATA SUBSCRIPTIONS (FIRESTORE)
+// ==========================================
+
+export const subscribeNotifications = (currentUser, onUpdate) => {
+  ensureFirebase();
+  if (!currentUser) return () => {};
+
+  try {
+    const q = query(collection(db, "notifications"), orderBy("createdAt", "desc"), limit(50));
+    return onSnapshot(q, (snapshot) => {
+      const notifs = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      const filtered = notifs.filter(n => {
+        if (currentUser.role === 'ADMIN' || currentUser.role === 'STAFF_PUSAT') {
+          return n.targetRole === 'ADMIN_AND_PUSAT' || n.targetRole === 'ALL';
+        }
+        if (currentUser.role === 'STAFF_BRANCH') {
+          return (n.targetRole === 'STAFF_BRANCH' && (n.targetBranchId === currentUser.branchId || n.targetBranchId === 'ALL')) || n.targetRole === 'ALL';
+        }
+        return true;
+      });
+      onUpdate(filtered);
+    }, (err) => {
+      console.warn("Realtime notifications listener error:", err);
+    });
+  } catch (err) {
+    console.error("Failed to subscribe notifications:", err);
+    return () => {};
+  }
+};
+
+export const subscribeTransfers = (currentUser, onUpdate) => {
+  ensureFirebase();
+  if (!currentUser) return () => {};
+
+  try {
+    const q = query(collection(db, "stock_transfers"), orderBy("sentAt", "desc"), limit(100));
+    return onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      const filtered = (currentUser?.role === 'STAFF_BRANCH')
+        ? list.filter(t => t.targetBranchId === currentUser.branchId || t.targetBranchId === 'ALL')
+        : list;
+      onUpdate(filtered);
+    }, (err) => {
+      console.warn("Realtime transfers listener error:", err);
+    });
+  } catch (err) {
+    console.error("Failed to subscribe transfers:", err);
+    return () => {};
+  }
+};
+
+export const subscribeBranchInventories = (currentUser, onUpdate) => {
+  ensureFirebase();
+  if (!currentUser) return () => {};
+
+  try {
+    const q = collection(db, "branch_inventories");
+    return onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      const filtered = (currentUser?.role === 'STAFF_BRANCH')
+        ? list.filter(b => b.branchId === currentUser.branchId)
+        : list;
+      onUpdate(filtered);
+    }, (err) => {
+      console.warn("Realtime branch_inventories listener error:", err);
+    });
+  } catch (err) {
+    console.error("Failed to subscribe branch_inventories:", err);
+    return () => {};
+  }
+};
+
+export const subscribeStockRequests = (currentUser, onUpdate) => {
+  ensureFirebase();
+  if (!currentUser) return () => {};
+
+  try {
+    const q = query(collection(db, "stock_requests"), orderBy("requestedAt", "desc"), limit(100));
+    return onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      const filtered = (currentUser?.role === 'STAFF_BRANCH')
+        ? list.filter(r => r.branchId === currentUser.branchId)
+        : list;
+      onUpdate(filtered);
+    }, (err) => {
+      console.warn("Realtime stock_requests listener error:", err);
+    });
+  } catch (err) {
+    console.error("Failed to subscribe stock_requests:", err);
+    return () => {};
+  }
+};
+
+export const subscribeProducts = (onUpdate) => {
+  ensureFirebase();
+  try {
+    const q = collection(db, "products");
+    return onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      onUpdate(list);
+    }, (err) => {
+      console.warn("Realtime products listener error:", err);
+    });
+  } catch (err) {
+    console.error("Failed to subscribe products:", err);
+    return () => {};
+  }
+};
+
+export const subscribeStockMovements = (currentUser, onUpdate) => {
+  ensureFirebase();
+  try {
+    const q = query(collection(db, "stock_movements"), orderBy("createdAt", "desc"), limit(200));
+    return onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      const filtered = (currentUser?.role === 'STAFF_BRANCH')
+        ? list.filter(m => m.branchId === currentUser.branchId || m.source === currentUser.branchId)
+        : list;
+      onUpdate(filtered);
+    }, (err) => {
+      console.warn("Realtime stock_movements listener error:", err);
+    });
+  } catch (err) {
+    console.error("Failed to subscribe stock_movements:", err);
+    return () => {};
+  }
+};
+
+export const subscribeBranches = (onUpdate) => {
+  ensureFirebase();
+  try {
+    const q = collection(db, "branches");
+    return onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      onUpdate(list);
+    }, (err) => {
+      console.warn("Realtime branches listener error:", err);
+    });
+  } catch (err) {
+    console.error("Failed to subscribe branches:", err);
+    return () => {};
+  }
+};
+
+export const subscribeBrands = (onUpdate) => {
+  ensureFirebase();
+  try {
+    const q = collection(db, "brands");
+    return onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      onUpdate(list);
+    }, (err) => {
+      console.warn("Realtime brands listener error:", err);
+    });
+  } catch (err) {
+    console.error("Failed to subscribe brands:", err);
+    return () => {};
+  }
+};
+
+export const subscribeMachineCategories = (onUpdate) => {
+  ensureFirebase();
+  try {
+    const q = collection(db, "machine_categories");
+    return onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      onUpdate(list);
+    }, (err) => {
+      console.warn("Realtime machine_categories listener error:", err);
+    });
+  } catch (err) {
+    console.error("Failed to subscribe machine_categories:", err);
+    return () => {};
+  }
+};
+
+export const subscribeUsers = (currentUser, onUpdate) => {
+  ensureFirebase();
+  if (!currentUser || currentUser.role === 'STAFF_BRANCH') return () => {};
+
+  try {
+    const q = collection(db, "users");
+    return onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      onUpdate(list);
+    }, (err) => {
+      console.warn("Realtime users listener error:", err);
+    });
+  } catch (err) {
+    console.error("Failed to subscribe users:", err);
+    return () => {};
+  }
+};
+
+// Subtle and pleasant Web Audio API notification chime
+export const playNotificationSound = () => {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+    const now = ctx.currentTime;
+
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(587.33, now); // D5
+    osc1.frequency.exponentialRampToValueAtTime(880, now + 0.15); // A5
+    gain1.gain.setValueAtTime(0.1, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.35);
+
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(880, now + 0.12); // A5
+    osc2.frequency.exponentialRampToValueAtTime(1174.66, now + 0.3); // D6
+    gain2.gain.setValueAtTime(0.1, now + 0.12);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.12);
+    osc2.stop(now + 0.5);
+  } catch (e) {
+    // Ignore audio permission error on silent autoplay policy
+  }
+};
+
+// ==========================================
 // STOCK TRANSFERS (FIRESTORE)
 // ==========================================
 
 export const fetchTransfers = async (branchId = null) => {
   ensureFirebase();
   try {
-    let q = query(collection(db, "stock_transfers"), orderBy("sentAt", "desc"));
-    if (branchId && branchId !== 'ALL') {
-      q = query(collection(db, "stock_transfers"), where("targetBranchId", "==", branchId), orderBy("sentAt", "desc"));
-    }
+    const q = query(collection(db, "stock_transfers"), orderBy("sentAt", "desc"));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    if (branchId && branchId !== 'ALL') {
+      return list.filter(t => t.targetBranchId === branchId || t.fromBranchId === branchId);
+    }
+    return list;
   } catch (err) {
     console.error("Firestore error fetching transfers:", err);
-    throw new Error(`Gagal mengambil data Transfer Stok dari Firestore: ${err.message}`);
+    return [];
   }
 };
 
@@ -645,45 +952,186 @@ export const createStockTransfer = async (transferData, currentUser) => {
   }
 };
 
-export const confirmTransferReceipt = async (transferId, receiverUser, receiverNotes = '') => {
+export const confirmBatchTransferReceipt = async (transferListOrIds, receiverUser, receiverNotes = '') => {
   ensureFirebase();
+  const list = Array.isArray(transferListOrIds) ? transferListOrIds : [transferListOrIds];
+  if (list.length === 0) return [];
+
   const updateData = {
     status: 'RECEIVED',
     receiverName: receiverUser?.name || 'Staff Cabang',
-    receiverNotes: receiverNotes,
+    receiverNotes: receiverNotes || 'Barang telah diperiksa & diterima dalam kondisi baik.',
     receivedAt: new Date().toISOString()
   };
 
   try {
-    const docRef = doc(db, "stock_transfers", transferId);
-    await updateDoc(docRef, updateData);
+    const promises = list.map(async (transferOrId) => {
+      const id = typeof transferOrId === 'string' ? transferOrId : transferOrId.id;
+      let transferObj = typeof transferOrId === 'object' ? transferOrId : null;
+      
+      const docRef = doc(db, "stock_transfers", id);
+      if (!transferObj || !transferObj.productId || !transferObj.qty) {
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          transferObj = { id: snap.id, ...snap.data() };
+        }
+      }
 
-    const mov = await recordStockMovement({
-      productId: 'TRANSFER_PROD',
-      sku: 'TRANSFER_SKU',
-      productName: 'Penerimaan Transfer',
-      type: 'IN',
-      qty: 1,
-      unit: 'Pcs',
-      branchId: receiverUser?.branchId || 'CABANG',
-      branchName: receiverUser?.branchName || 'Cabang',
-      source: 'KANTOR_PUSAT',
-      notes: `Konfirmasi Penerimaan Transfer • ${receiverNotes}`,
-      user: receiverUser?.name || 'Staff Cabang'
+      await updateDoc(docRef, updateData);
+
+      const branchId = receiverUser?.branchId || transferObj?.targetBranchId || 'CABANG';
+      const branchName = receiverUser?.branchName || transferObj?.targetBranchName || 'Cabang';
+      const qtyToAdd = Number(transferObj?.qty) || 1;
+      const prodId = transferObj?.productId;
+      const sku = transferObj?.sku;
+
+      // 1. Record stock movement IN for the branch
+      const mov = await recordStockMovement({
+        productId: prodId || 'TRANSFER_PROD',
+        sku: sku || 'TRANSFER_SKU',
+        productName: transferObj?.productName || 'Penerimaan Transfer',
+        type: 'IN',
+        qty: qtyToAdd,
+        unit: transferObj?.unit || 'Pcs',
+        branchId,
+        branchName,
+        source: 'KANTOR_PUSAT',
+        deliveryNote: transferObj?.deliveryNote || '-',
+        notes: `Konfirmasi Penerimaan Kiriman • ${transferObj?.productName || ''} (+${qtyToAdd} Pcs)${receiverNotes ? ` • Catatan: ${receiverNotes}` : ''}`,
+        user: receiverUser?.name || 'Staff Cabang'
+      });
+
+      // 2. Update or create branch inventory record so stock physically increases in branch inventory
+      if (branchId && (prodId || sku)) {
+        let branchInvDoc = null;
+        let branchInvId = null;
+        let currentBranchStock = 0;
+
+        // Query by branchId and SKU
+        if (sku) {
+          const q1 = query(
+            collection(db, "branch_inventories"),
+            where("branchId", "==", branchId),
+            where("sku", "==", sku)
+          );
+          const snap1 = await getDocs(q1);
+          if (!snap1.empty) {
+            branchInvDoc = snap1.docs[0].data();
+            branchInvId = snap1.docs[0].id;
+            currentBranchStock = Number(branchInvDoc.stockQuantity) || 0;
+          }
+        }
+
+        // Query by branchId and productId if not found by SKU
+        if (!branchInvId && prodId) {
+          const q2 = query(
+            collection(db, "branch_inventories"),
+            where("branchId", "==", branchId),
+            where("productId", "==", prodId)
+          );
+          const snap2 = await getDocs(q2);
+          if (!snap2.empty) {
+            branchInvDoc = snap2.docs[0].data();
+            branchInvId = snap2.docs[0].id;
+            currentBranchStock = Number(branchInvDoc.stockQuantity) || 0;
+          }
+        }
+
+        if (branchInvId) {
+          const newQty = currentBranchStock + qtyToAdd;
+          await updateDoc(doc(db, "branch_inventories", branchInvId), {
+            stockQuantity: newQty,
+            status: 'APPROVED',
+            updatedAt: new Date().toISOString()
+          });
+        } else {
+          await addDoc(collection(db, "branch_inventories"), {
+            branchId,
+            branchName,
+            productId: prodId || '',
+            sku: sku || '',
+            productName: transferObj?.productName || 'Produk',
+            brand: transferObj?.brand || 'Generic',
+            price: Number(transferObj?.price) || 0,
+            stockQuantity: qtyToAdd,
+            minStock: 10,
+            unit: transferObj?.unit || 'Pcs',
+            status: 'APPROVED',
+            approvedBy: 'KANTOR_PUSAT (TRANSFER)',
+            approvedAt: new Date().toISOString(),
+            createdAt: serverTimestamp(),
+            updatedAt: new Date().toISOString()
+          });
+        }
+      }
+
+      return { id, ...updateData, movement: mov };
     });
+
+    const results = await Promise.all(promises);
+
+    const firstItem = typeof list[0] === 'object' ? list[0] : null;
+    const deliveryNote = firstItem?.deliveryNote || '-';
+    const branchName = receiverUser?.branchName || firstItem?.targetBranchName || 'Cabang';
 
     await createNotification({
       type: 'STOCK_TRANSFER_RECEIVED',
       title: 'Kiriman Diterima oleh Cabang ✅',
-      message: `Cabang telah mengonfirmasi penerimaan transfer stok.`,
+      message: `${branchName} telah mengonfirmasi penerimaan kiriman (${results.length} produk, No. Surat Jalan: ${deliveryNote}).`,
       targetRole: 'ADMIN_AND_PUSAT',
-      metaId: transferId
+      metaId: results[0]?.id
     });
 
-    return { id: transferId, ...updateData, movement: mov };
+    return results;
   } catch (err) {
-    console.error("Firestore error confirming transfer:", err);
+    console.error("Firestore error confirming batch transfer:", err);
     throw new Error(`Gagal mengonfirmasi penerimaan transfer di Firestore: ${err.message}`);
+  }
+};
+
+export const confirmTransferReceipt = async (transferIdOrObj, receiverUser, receiverNotes = '') => {
+  const results = await confirmBatchTransferReceipt([transferIdOrObj], receiverUser, receiverNotes);
+  return results[0];
+};
+
+export const rejectBatchTransferReceipt = async (transferListOrIds, receiverUser, reason = 'Kuantitas atau kondisi fisik tidak sesuai.') => {
+  ensureFirebase();
+  const list = Array.isArray(transferListOrIds) ? transferListOrIds : [transferListOrIds];
+  if (list.length === 0) return [];
+
+  const updateData = {
+    status: 'REJECTED',
+    rejectionReason: reason || 'Kuantitas atau kondisi fisik tidak sesuai.',
+    rejectedBy: receiverUser?.name || 'Staff Cabang',
+    rejectedAt: new Date().toISOString()
+  };
+
+  try {
+    const promises = list.map(async (transferOrId) => {
+      const id = typeof transferOrId === 'string' ? transferOrId : transferOrId.id;
+      const docRef = doc(db, "stock_transfers", id);
+      await updateDoc(docRef, updateData);
+      return id;
+    });
+
+    const rejectedIds = await Promise.all(promises);
+
+    const firstItem = typeof list[0] === 'object' ? list[0] : null;
+    const deliveryNote = firstItem?.deliveryNote || '-';
+    const branchName = receiverUser?.branchName || firstItem?.targetBranchName || 'Cabang';
+
+    await createNotification({
+      type: 'STOCK_TRANSFER_REJECTED',
+      title: 'Kiriman Ditolak oleh Cabang ⚠️',
+      message: `${branchName} MENOLAK paket kiriman (${rejectedIds.length} produk, No. Surat Jalan: ${deliveryNote}). Alasan: "${reason || '-'}"`,
+      targetRole: 'ADMIN_AND_PUSAT',
+      metaId: rejectedIds[0]
+    });
+
+    return rejectedIds;
+  } catch (err) {
+    console.error("Firestore error rejecting batch transfer:", err);
+    throw new Error(`Gagal menolak paket kiriman di Firestore: ${err.message}`);
   }
 };
 
@@ -694,15 +1142,16 @@ export const confirmTransferReceipt = async (transferId, receiverUser, receiverN
 export const fetchStockRequests = async (branchId = null) => {
   ensureFirebase();
   try {
-    let q = query(collection(db, "stock_requests"), orderBy("requestedAt", "desc"));
-    if (branchId && branchId !== 'ALL') {
-      q = query(collection(db, "stock_requests"), where("branchId", "==", branchId), orderBy("requestedAt", "desc"));
-    }
+    const q = query(collection(db, "stock_requests"), orderBy("requestedAt", "desc"));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    if (branchId && branchId !== 'ALL') {
+      return list.filter(r => r.branchId === branchId);
+    }
+    return list;
   } catch (err) {
     console.error("Firestore error fetching stock requests:", err);
-    throw new Error(`Gagal mengambil data Permintaan Stok dari Firestore: ${err.message}`);
+    return [];
   }
 };
 
@@ -837,7 +1286,7 @@ export const recordStockMovement = async (movementData) => {
   ensureFirebase();
   const isIncrement = movementData.type === 'IN';
   const qtyChange = Number(movementData.qty) || 1;
-  const isBundling = Boolean(movementData.isBundling && movementData.items && movementData.items.length > 0);
+  const hasMultipleItems = Boolean(movementData.items && Array.isArray(movementData.items) && movementData.items.length > 0);
   
   const movement = {
     ...movementData,
@@ -852,7 +1301,7 @@ export const recordStockMovement = async (movementData) => {
     });
 
     // Update product stock in Firestore
-    if (isBundling) {
+    if (hasMultipleItems) {
       for (const item of movementData.items) {
         if (item.productId) {
           const prodRef = doc(db, "products", item.productId);
@@ -1060,25 +1509,49 @@ export const createUser = async (userData) => {
     assignedBranchName = pusatBranch ? pusatBranch.name : "Gudang Utama Pusat";
   }
 
-  const newUser = {
+  const payload = {
     ...userData,
+    email: (userData.email || '').trim().toLowerCase(),
     role: userData.role || "STAFF_BRANCH",
     branchId: assignedBranchId,
     branchName: assignedBranchName,
-    status: userData.status || "ACTIVE",
-    createdAt: new Date().toISOString()
+    status: userData.status || "ACTIVE"
   };
 
   try {
-    const docRef = await addDoc(collection(db, "users"), {
-      ...newUser,
-      createdAt: serverTimestamp()
-    });
+    const result = await callCreateSystemUser(payload);
     await markBootstrapDone();
-    return { id: docRef.id, ...newUser };
-  } catch (err) {
-    console.error("Firestore error creating user:", err);
-    throw new Error(`Gagal membuat Pengguna baru di Firestore: ${err.message}`);
+    return result.user || { id: result.user?.id || Date.now(), ...payload };
+  } catch (fnErr) {
+    console.warn("Cloud function create user fallback, registering via client Firebase Auth:", fnErr);
+    
+    let authUid = null;
+    if (userData.password && userData.password.trim()) {
+      try {
+        authUid = await registerUserInFirebaseAuth(payload.email, userData.password);
+      } catch (authErr) {
+        console.error("Client Firebase Auth registration failed:", authErr);
+        throw authErr;
+      }
+    }
+
+    if (authUid) {
+      const docRef = doc(db, "users", authUid);
+      await setDoc(docRef, {
+        ...payload,
+        uid: authUid,
+        createdAt: serverTimestamp()
+      });
+      await markBootstrapDone();
+      return { id: authUid, uid: authUid, ...payload };
+    } else {
+      const docRef = await addDoc(collection(db, "users"), {
+        ...payload,
+        createdAt: serverTimestamp()
+      });
+      await markBootstrapDone();
+      return { id: docRef.id, ...payload };
+    }
   }
 };
 
@@ -1096,29 +1569,42 @@ export const updateUser = async (id, userData) => {
 
   const updatedData = {
     ...userData,
+    email: (userData.email || '').trim().toLowerCase(),
     ...(assignedBranchId ? { branchId: assignedBranchId, branchName: assignedBranchName } : {}),
     updatedAt: new Date().toISOString()
   };
 
+  // If password was provided on edit, ensure it gets created/synced to Firebase Auth
+  if (userData.password && userData.password.trim()) {
+    try {
+      await registerUserInFirebaseAuth(updatedData.email, userData.password);
+    } catch (authErr) {
+      console.warn("Firebase Auth sync on update warning:", authErr);
+    }
+  }
+
   try {
+    const result = await callUpdateSystemUser({ targetUid: id, ...updatedData });
+    return result.user || { id, ...updatedData };
+  } catch (fnErr) {
+    console.warn("Cloud function update user fallback to direct Firestore:", fnErr);
     const docRef = doc(db, "users", id);
     await updateDoc(docRef, updatedData);
     return { id, ...updatedData };
-  } catch (err) {
-    console.error("Firestore error updating user:", err);
-    throw new Error(`Gagal memperbarui Pengguna di Firestore: ${err.message}`);
   }
 };
 
 export const deleteUser = async (id) => {
   ensureFirebase();
   try {
+    await callDeleteSystemUser(id);
+    await markBootstrapDone();
+    return true;
+  } catch (fnErr) {
+    console.warn("Cloud function delete user fallback to direct Firestore:", fnErr);
     await deleteDoc(doc(db, "users", id));
     await markBootstrapDone();
     return true;
-  } catch (err) {
-    console.error("Firestore error deleting user:", err);
-    throw new Error(`Gagal menghapus Pengguna dari Firestore: ${err.message}`);
   }
 };
 

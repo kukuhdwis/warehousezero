@@ -2,16 +2,32 @@ import React, { useState } from 'react';
 import { History, Download, ArrowDownLeft, ArrowUpRight, Filter, Search, User, Clock, FileText } from 'lucide-react';
 import { exportToCSV } from '../services/dataService';
 
-export default function TransactionHistory({ transactions = [] }) {
+export default function TransactionHistory({ transactions = [], currentUser }) {
+  const isBranchStaff = currentUser?.role === 'STAFF_BRANCH';
+  const branchId = currentUser?.branchId;
+
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState('ALL');
 
-  const filteredTransactions = transactions.filter(tx => {
+  // Branch data isolation: Branch Staff only sees their own branch's transactions!
+  const scopedTransactions = transactions.filter(tx => {
+    if (isBranchStaff && branchId) {
+      return tx.branchId === branchId || tx.targetBranchId === branchId;
+    }
+    if (!isBranchStaff && selectedBranchFilter !== 'ALL') {
+      return tx.branchId === selectedBranchFilter || tx.targetBranchId === selectedBranchFilter;
+    }
+    return true;
+  });
+
+  const filteredTransactions = scopedTransactions.filter(tx => {
     const matchesSearch = 
       tx.productName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       tx.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       tx.notes?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tx.user?.toLowerCase().includes(searchTerm.toLowerCase());
+      tx.user?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      tx.branchName?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesType = typeFilter === 'ALL' || tx.type === typeFilter;
     return matchesSearch && matchesType;
@@ -73,7 +89,7 @@ export default function TransactionHistory({ transactions = [] }) {
               typeFilter === 'ALL' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
-            Semua ({transactions.length})
+            Semua ({scopedTransactions.length})
           </button>
           <button
             onClick={() => setTypeFilter('IN')}

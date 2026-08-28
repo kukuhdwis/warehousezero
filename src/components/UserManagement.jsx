@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import GlobalSuccessModal from './GlobalSuccessModal';
 import CustomAlertModal from './CustomAlertModal';
+import ConfirmationModal from './ConfirmationModal';
 
 export default function UserManagement({ 
   currentUser, 
@@ -40,8 +41,10 @@ export default function UserManagement({
     setAlertModal({ title, message, type });
   };
 
-  // Modal states
+  // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isConfirmSaveOpen, setIsConfirmSaveOpen] = useState(false);
+  const [isExecutingSave, setIsExecutingSave] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [deleteConfirmUser, setDeleteConfirmUser] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -157,7 +160,7 @@ export default function UserManagement({
     });
   };
 
-  const handleSubmit = async (e) => {
+  const handlePreSubmitUser = (e) => {
     e.preventDefault();
     setFormError('');
 
@@ -171,6 +174,11 @@ export default function UserManagement({
       return;
     }
 
+    if (formData.password.trim() && formData.password.trim().length < 6) {
+      setFormError('Kata sandi minimal 6 karakter sesuai standar keamanan.');
+      return;
+    }
+
     // Check email uniqueness among other users
     const existing = users.find(
       u => u.email.toLowerCase() === formData.email.toLowerCase().trim() && (!editingUser || u.id !== editingUser.id)
@@ -179,6 +187,13 @@ export default function UserManagement({
       setFormError('Alamat email sudah digunakan oleh akun lain.');
       return;
     }
+
+    setIsConfirmSaveOpen(true);
+  };
+
+  const handleExecuteSaveUser = async () => {
+    setIsExecutingSave(true);
+    setFormError('');
 
     // Strictly resolve correct branchName from current branch list
     let finalBranchId = formData.branchId;
@@ -213,6 +228,7 @@ export default function UserManagement({
       } else {
         await onCreateUser(payload);
       }
+      setIsConfirmSaveOpen(false);
       setIsModalOpen(false);
 
       setSuccessModal({
@@ -228,6 +244,9 @@ export default function UserManagement({
       });
     } catch (err) {
       setFormError(err.message || 'Gagal menyimpan data pengguna.');
+      setIsConfirmSaveOpen(false);
+    } finally {
+      setIsExecutingSave(false);
     }
   };
 
@@ -655,7 +674,7 @@ export default function UserManagement({
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 text-sm overflow-y-auto flex-1">
+            <form onSubmit={handlePreSubmitUser} className="p-5 sm:p-6 space-y-4 text-sm overflow-y-auto flex-1">
               
               {formError && (
                 <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2">
@@ -710,7 +729,7 @@ export default function UserManagement({
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required={!editingUser}
-                      placeholder={editingUser ? 'Kosongkan jika tidak diubah' : 'Minimal 4 karakter'}
+                      placeholder={editingUser ? 'Kosongkan jika tidak diubah' : 'Minimal 6 karakter'}
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       className="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
@@ -929,34 +948,44 @@ export default function UserManagement({
 
       {/* DELETE CONFIRMATION MODAL */}
       {deleteConfirmUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-100 p-6 space-y-4 animate-in zoom-in-95 duration-200">
-            <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
-              <ShieldAlert className="w-6 h-6" />
-            </div>
-            <div className="text-center">
-              <h3 className="text-base font-bold text-slate-900">Hapus Akun Pengguna?</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Apakah Anda yakin ingin menghapus akun <strong>{deleteConfirmUser.name}</strong> ({deleteConfirmUser.email})?
-              </p>
-            </div>
-            <div className="flex items-center justify-center gap-2 pt-2">
-              <button
-                onClick={() => setDeleteConfirmUser(null)}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer"
-              >
-                Batalkan
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-md shadow-rose-600/20 transition cursor-pointer"
-              >
-                Ya, Hapus
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmationModal
+          isOpen={Boolean(deleteConfirmUser)}
+          onClose={() => setDeleteConfirmUser(null)}
+          onConfirm={handleConfirmDelete}
+          title="Konfirmasi Hapus Akun Pengguna"
+          subtitle="Tindakan ini akan menghapus akun dari sistem."
+          type="DANGER"
+          confirmText="Ya, Hapus Akun"
+          cancelText="Batal"
+          summaryItems={[
+            { label: "Nama Pengguna", value: deleteConfirmUser.name, highlight: true },
+            { label: "Email Akun", value: deleteConfirmUser.email },
+            { label: "Role Akun", value: deleteConfirmUser.role || 'STAFF_BRANCH' },
+            { label: "Penugasan Cabang", value: deleteConfirmUser.branchName || 'Semua Cabang' }
+          ]}
+          warningNote="PERINGATAN: Pengguna tidak akan dapat login lagi ke sistem aplikasi setelah dihapus."
+        />
       )}
+
+      {/* SAVE / UPDATE USER CONFIRMATION MODAL */}
+      <ConfirmationModal
+        isOpen={isConfirmSaveOpen}
+        onClose={() => setIsConfirmSaveOpen(false)}
+        onConfirm={handleExecuteSaveUser}
+        title={editingUser ? "Konfirmasi Ubah Akun Pengguna" : "Konfirmasi Buat Akun Baru"}
+        subtitle="Pastikan informasi nama, email, role, dan penugasan cabang sudah benar."
+        type="PRIMARY"
+        confirmText={editingUser ? "Ya, Simpan Perubahan" : "Ya, Daftarkan Pengguna"}
+        cancelText="← Cek Kembali"
+        isLoading={isExecutingSave}
+        summaryItems={[
+          { label: "Nama Lengkap", value: formData.name.trim(), highlight: true },
+          { label: "Alamat Email", value: formData.email.trim() },
+          { label: "Role / Wewenang", value: formData.role === 'ADMIN' ? '👑 Administrator (Pusat)' : formData.role === 'STAFF_PUSAT' ? '🏢 Staff Gudang Pusat' : '🏬 Staff Gudang Cabang' },
+          { label: "Penugasan Cabang", value: formData.role === 'ADMIN' ? 'Semua Cabang' : formData.branchName || 'Cabang' },
+          { label: "Status Akun", value: formData.status === 'ACTIVE' ? '🟢 Aktif' : '🔴 Non-Aktif' }
+        ]}
+      />
 
       {/* UNIVERSAL SUCCESS POP-UP MODAL */}
       <GlobalSuccessModal

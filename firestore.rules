@@ -1,10 +1,97 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Enable full read and write access for application operations and testing
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Metadata & Initial System Bootstrapping
+    match /system_metadata/{doc} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Master Catalog Data (Produk, Brand, Kategori Mesin, Cabang)
+    match /products/{doc} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /brands/{doc} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /machine_categories/{doc} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /branches/{doc} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Manajemen Pengguna & Profil
+    match /users/{doc} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /user_profiles/{doc} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Operasional Inventaris & Mutasi Stok
+    match /branch_inventories/{doc} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /stock_transfers/{doc} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /stock_requests/{doc} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /stock_movements/{doc} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /notifications/{doc} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Koleksi Sensitif Terkunci (Zero-Trust: Hanya bisa dimodifikasi via Cloud Functions / Admin SDK)
+    match /branch_stocks/{doc} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    match /sales_transactions/{doc} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    match /invoices/{doc} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    match /credit_limit_audit_logs/{doc} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    // Default Deny: Tolak seluruh akses unauthenticated
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }
+
 

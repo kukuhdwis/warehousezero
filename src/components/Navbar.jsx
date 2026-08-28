@@ -76,10 +76,10 @@ export default function Navbar({
         onNavigate('monitoring', { type: 'STOCK_TRANSFER_RECEIVED', metaId: notif.metaId, notif });
       } else if (notif.type === 'INVENTORY_REQUEST') {
         if (currentUser?.role === 'ADMIN' || currentUser?.role === 'STAFF_PUSAT' || currentUser?.role === 'PUSAT') {
-          onNavigate('products', { tab: 'branch-requests', metaId: notif.metaId });
+          onNavigate('products', { tab: 'APPROVAL_REQUESTS', metaId: notif.metaId });
         }
       } else if (notif.type === 'INVENTORY_APPROVED' || notif.type === 'INVENTORY_REJECTED') {
-        onNavigate('products', { tab: 'my-branch' });
+        onNavigate('products', { tab: 'MY_BRANCH_INVENTORY' });
       } else {
         onNavigate('dashboard');
       }
