@@ -245,7 +245,7 @@ export const setUserRoleAndBranch = functions.https.onCall(async (data, context)
     throw new functions.https.HttpsError('permission-denied', 'Hanya Superadmin!');
   }
 
-  const { targetUid, role, branchId, branchType } = data;
+  const { targetUid, role, branchId } = data;
 
   if (!targetUid || !role) {
     throw new functions.https.HttpsError('invalid-argument', 'targetUid dan role wajib diisi.');
