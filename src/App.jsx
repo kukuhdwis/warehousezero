@@ -13,6 +13,7 @@ import BranchMonitoring from './components/BranchMonitoring';
 import BarcodeModal from './components/BarcodeModal';
 import LoginView from './components/LoginView';
 import PublicCatalog from './components/PublicCatalog';
+import LandingPage from './components/LandingPage';
 import { getStoredUser, logoutUser } from './services/authService';
 import { 
   fetchProducts, 
@@ -78,13 +79,32 @@ import LogoutConfirmModal from './components/LogoutConfirmModal';
 export default function App() {
   const [currentUser, setCurrentUser] = useState(getStoredUser());
   
-  // Clean URL Routing for Public Catalog (e.g. /catalog, /catalog/list, /catalog/WZ-2GD-BO-033)
-  const pathname = typeof window !== 'undefined' ? window.location.pathname.toLowerCase() : '';
+  // Clean URL Routing (Manual SPA Routing)
+  const [currentRoute, setCurrentRoute] = useState(() => {
+    const p = typeof window !== 'undefined' ? window.location.pathname.toLowerCase() : '';
+    const sp = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    
+    // Check if Catalog is requested
+    if (
+      p.startsWith('/catalog') || p.startsWith('/katalog') || p.startsWith('/product') ||
+      (sp && (sp.get('catalog') === 'true' || sp.get('sku')))
+    ) {
+      return 'catalog';
+    }
+    
+    // Check if Login is requested
+    if (p.startsWith('/login') || p.startsWith('/admin') || p.startsWith('/staf')) {
+      return 'login';
+    }
+
+    // Check if they are already logged in and at root? 
+    // We can show landing page by default, but let's just stick to 'landing' for root.
+    return 'landing';
+  });
+
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  
   let initialUrlSku = searchParams ? (searchParams.get('sku') || '') : '';
   
-  // Support clean path parameters: /catalog/WZ-2GD-001 or /product/WZ-2GD-001
   if (!initialUrlSku && typeof window !== 'undefined') {
     const segments = window.location.pathname.split('/').filter(Boolean);
     if (segments.length >= 2 && (segments[0] === 'catalog' || segments[0] === 'katalog' || segments[0] === 'product')) {
@@ -94,17 +114,24 @@ export default function App() {
     }
   }
 
-  const isDirectCatalogRequested = Boolean(
-    initialUrlSku || 
-    (searchParams && searchParams.get('catalog') === 'true') || 
-    pathname.startsWith('/catalog') ||
-    pathname.startsWith('/katalog') ||
-    pathname.startsWith('/product')
-  );
-
-  const [isCatalogMode, setIsCatalogMode] = useState(isDirectCatalogRequested);
   const [detectedQrSku, setDetectedQrSku] = useState(initialUrlSku);
   const [isQrActionSheetOpen, setIsQrActionSheetOpen] = useState(Boolean(initialUrlSku && currentUser));
+
+  // Listen to popstate for browser navigation (Back/Forward buttons)
+  useEffect(() => {
+    const handlePopStateRoute = () => {
+      const p = window.location.pathname.toLowerCase();
+      if (p.startsWith('/catalog') || p.startsWith('/katalog') || p.startsWith('/product')) {
+        setCurrentRoute('catalog');
+      } else if (p.startsWith('/login') || p.startsWith('/admin')) {
+        setCurrentRoute('login');
+      } else {
+        setCurrentRoute('landing');
+      }
+    };
+    window.addEventListener('popstate', handlePopStateRoute);
+    return () => window.removeEventListener('popstate', handlePopStateRoute);
+  }, []);
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -345,28 +372,42 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // Tampilkan Public E-Catalog jika mode katalog aktif!
-  if (isCatalogMode) {
+  // Tampilkan Landing Page (Public)
+  if (currentRoute === 'landing') {
+    return <LandingPage />;
+  }
+
+  // Tampilkan Public E-Catalog
+  if (currentRoute === 'catalog') {
     return (
       <PublicCatalog 
         products={products}
         brands={brands}
         machineCategories={machineCategories}
         initialSku={initialUrlSku}
-        onGoToLogin={() => setIsCatalogMode(false)}
+        onGoToLogin={() => {
+          window.history.pushState({}, '', '/login');
+          setCurrentRoute('login');
+        }}
       />
     );
   }
 
-  // Jika belum login -> Tampilkan Halaman Login!
+  // Jika belum login -> Tampilkan Halaman Login (untuk route /login atau route internal jika belum login)
   if (!currentUser) {
     return (
       <LoginView 
         onLoginSuccess={(user) => {
           setCurrentUser(user);
           setActiveTab('dashboard');
+          // Update URL back to / (or dashboard) after successful login
+          window.history.pushState({}, '', '/');
+          setCurrentRoute('dashboard');
         }} 
-        onOpenCatalog={() => setIsCatalogMode(true)}
+        onOpenCatalog={() => {
+          window.history.pushState({}, '', '/catalog');
+          setCurrentRoute('catalog');
+        }}
       />
     );
   }

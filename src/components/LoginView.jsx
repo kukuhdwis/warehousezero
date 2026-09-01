@@ -167,19 +167,20 @@ export default function LoginView({ onLoginSuccess, onOpenCatalog }) {
             </button>
           </form>
 
-          {/* Public Catalog Entry Button */}
-          {onOpenCatalog && (
-            <div className="pt-1">
-              <button
-                type="button"
-                onClick={onOpenCatalog}
-                className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-indigo-500/50 text-slate-300 hover:text-white font-bold rounded-xl text-xs sm:text-sm transition flex items-center justify-center gap-2 cursor-pointer shadow-xs group"
-              >
-                <span className="text-base">🛍️</span>
-                <span>Buka E-Katalog Produk Publik (Tanpa Login)</span>
-              </button>
-            </div>
-          )}
+          {/* Back to Home Button */}
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                window.history.pushState({}, '', '/');
+                window.dispatchEvent(new PopStateEvent('popstate'));
+              }}
+              className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-sky-500/50 text-slate-300 hover:text-white font-bold rounded-xl text-xs sm:text-sm transition flex items-center justify-center gap-2 cursor-pointer shadow-xs group"
+            >
+              <span>←</span>
+              <span>Kembali ke Halaman Utama</span>
+            </button>
+          </div>
 
           {/* Footer Copyright & Author Credit */}
           <div className="pt-6 border-t border-slate-800/80 text-center space-y-1">

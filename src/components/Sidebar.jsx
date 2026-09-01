@@ -164,52 +164,19 @@ export default function Sidebar({
 
       </div>
 
-      {/* Menu Footer: User Profile & Logout (Desktop Only) */}
-      <div className={`p-3 border-t border-slate-200 bg-slate-50/60 space-y-2.5 ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
-        {currentUser && (
-          <div className={`flex items-center gap-2.5 p-2 bg-white rounded-xl border border-slate-200/80 ${isCollapsed ? 'justify-center w-full' : ''}`} title={isCollapsed ? `${currentUser.name} (${currentUser.branchName || 'Semua Cabang'})` : undefined}>
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs flex-shrink-0 ${
-              isAdmin 
-                ? 'bg-sky-100 text-sky-700' 
-                : isStaffPusat
-                  ? 'bg-amber-100 text-amber-700'
-                  : 'bg-emerald-100 text-emerald-700'
-            }`}>
-              {isAdmin ? <ShieldCheck className="w-4 h-4" /> : isStaffPusat ? <Eye className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
-            </div>
-            {!isCollapsed && (
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-slate-800 truncate">{currentUser.name}</p>
-                <p className="text-[10px] text-slate-400 truncate">
-                  {currentUser.branchName || (currentUser.branchId === 'ALL' ? 'Semua Cabang' : currentUser.branchId)}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-
-        <button
-          onClick={onLogout}
-          title={isCollapsed ? "Keluar / Logout" : undefined}
-          className={`w-full flex items-center justify-center gap-2 py-2 px-3 bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-200 text-rose-600 hover:text-rose-700 rounded-xl text-xs font-semibold transition cursor-pointer ${isCollapsed ? 'px-0' : ''}`}
-        >
-          <LogOut className="w-4 h-4 flex-shrink-0" />
-          {!isCollapsed && <span>Keluar / Logout</span>}
-        </button>
-
-        {!isCollapsed && (
-          <p className="text-[10px] text-slate-400 text-center pt-0.5">
-            Created by{' '}
-            <a
-              href="https://kukuhdwisaputra.site"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sky-600 hover:text-sky-700 hover:underline font-medium"
-            >
-              kukuhdwisaputra.site
-            </a>
-          </p>
-        )}
+      {/* Menu Footer: (Desktop Only) */}
+      <div className={`p-3 border-t border-slate-200 bg-slate-50/60 flex justify-center ${isCollapsed ? 'hidden' : ''}`}>
+        <p className="text-[10px] text-slate-400 text-center pt-0.5">
+          Created by{' '}
+          <a
+            href="https://kukuhdwisaputra.site"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sky-600 hover:text-sky-700 hover:underline font-medium"
+          >
+            kukuhdwisaputra.site
+          </a>
+        </p>
       </div>
 
     </aside>
