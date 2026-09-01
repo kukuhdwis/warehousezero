@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Warehouse, Lock, Mail, AlertCircle, LogIn, Eye, EyeOff } from 'lucide-react';
 import { loginUser } from '../services/authService';
 
-export default function LoginView({ onLoginSuccess }) {
+export default function LoginView({ onLoginSuccess, onOpenCatalog }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -166,6 +166,20 @@ export default function LoginView({ onLoginSuccess }) {
               )}
             </button>
           </form>
+
+          {/* Public Catalog Entry Button */}
+          {onOpenCatalog && (
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={onOpenCatalog}
+                className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-indigo-500/50 text-slate-300 hover:text-white font-bold rounded-xl text-xs sm:text-sm transition flex items-center justify-center gap-2 cursor-pointer shadow-xs group"
+              >
+                <span className="text-base">🛍️</span>
+                <span>Buka E-Katalog Produk Publik (Tanpa Login)</span>
+              </button>
+            </div>
+          )}
 
           {/* Footer Copyright & Author Credit */}
           <div className="pt-6 border-t border-slate-800/80 text-center space-y-1">

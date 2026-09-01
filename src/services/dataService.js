@@ -20,7 +20,8 @@ import {
   serverTimestamp,
   increment,
   where,
-  onSnapshot
+  onSnapshot,
+  writeBatch
 } from "firebase/firestore";
 
 // Helper to throw explicit error if Firebase is not active
@@ -320,16 +321,106 @@ export const fetchProducts = async () => {
   }
 };
 
+export const subscribeProducts = (callback) => {
+  ensureFirebase();
+  try {
+    const q = query(collection(db, "products"), orderBy("name", "asc"));
+    return onSnapshot(q, (snapshot) => {
+      const prods = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      callback(prods);
+    }, (err) => {
+      console.error("Firestore real-time error on products:", err);
+    });
+  } catch (err) {
+    console.error("Failed to subscribe products:", err);
+    return () => {};
+  }
+};
+
+// Helper to compress image in browser using Canvas
+export const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.82) => {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith('image/')) {
+      return reject(new Error("File yang dipilih bukan gambar yang valid."));
+    }
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            maxHeight = Math.round((height * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Export as WebP or JPEG
+        const mimeType = canvas.toDataURL('image/webp').startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg';
+        const dataUrl = canvas.toDataURL(mimeType, quality);
+        resolve(dataUrl);
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
+
 export const createProduct = async (productData) => {
   ensureFirebase();
+  const sellingPrice = Number(productData.selling_price ?? productData.sellingPrice ?? productData.price) || 0;
+  const resellerPrice = Number(productData.reseller_price ?? productData.resellerPrice) || 0;
+  const profitAmount = productData.profit_amount !== undefined 
+    ? Number(productData.profit_amount) 
+    : (sellingPrice - resellerPrice);
+  const profitPercentage = productData.profit_percentage !== undefined
+    ? Number(productData.profit_percentage)
+    : (resellerPrice > 0 ? ((profitAmount / resellerPrice) * 100) : 0);
+
+  const engineType = productData.engine_type || productData.engineType || productData.machineCategory || 'Universal / Semua Mesin';
+  const categoryName = productData.category_name || productData.categoryName || 'Downpipe';
+  const sku = (productData.sku || productData.code || productData.barcode || '').trim();
+
   const newProd = {
     ...productData,
-    price: Number(productData.price) || 0,
-    minStock: Number(productData.minStock) || 0,
+    code: sku,
+    sku: sku,
+    barcode: sku,
+    name: (productData.name || '').trim(),
+    engine_type: engineType,
+    car_variant: productData.car_variant || productData.carVariant || '-',
+    category_name: categoryName,
+    spec_sound: productData.spec_sound || productData.specSound || 'Street (Bass)',
+    spec_resonator: productData.spec_resonator !== undefined ? Boolean(productData.spec_resonator) : true,
+    material_finish: productData.material_finish || productData.materialFinish || 'SS Polos',
+    reseller_price: resellerPrice,
+    selling_price: sellingPrice,
+    price: sellingPrice, // Backward compatibility
+    profit_amount: profitAmount,
+    profit_percentage: Math.round(profitPercentage * 100) / 100,
+    imageUrl: productData.imageUrl || productData.image || productData.photoUrl || '',
+    notes: productData.notes || productData.description || '',
+    minStock: Number(productData.minStock) || 5,
     currentStock: Number(productData.currentStock) || 0,
-    machineCategory: productData.machineCategory || productData.kategoriMesin || 'Universal / Semua Mesin',
-    barcode: productData.barcode || productData.sku,
-    unit: 'Pcs',
+    machineCategory: engineType,
+    brand: productData.brand || 'NDK Exhaust',
+    unit: productData.unit || 'Pcs',
+    status: productData.status || 'ACTIVE',
     branchId: 'ALL',
     branchName: 'Semua Cabang (Pusat)',
     updatedAt: new Date().toISOString()
@@ -349,12 +440,44 @@ export const createProduct = async (productData) => {
 
 export const updateProduct = async (id, productData) => {
   ensureFirebase();
+  const sellingPrice = Number(productData.selling_price ?? productData.sellingPrice ?? productData.price) || 0;
+  const resellerPrice = Number(productData.reseller_price ?? productData.resellerPrice) || 0;
+  const profitAmount = productData.profit_amount !== undefined 
+    ? Number(productData.profit_amount) 
+    : (sellingPrice - resellerPrice);
+  const profitPercentage = productData.profit_percentage !== undefined
+    ? Number(productData.profit_percentage)
+    : (resellerPrice > 0 ? ((profitAmount / resellerPrice) * 100) : 0);
+
+  const engineType = productData.engine_type || productData.engineType || productData.machineCategory || 'Universal / Semua Mesin';
+  const categoryName = productData.category_name || productData.categoryName || 'Downpipe';
+  const sku = (productData.sku || productData.code || productData.barcode || '').trim();
+
   const updatedData = {
     ...productData,
-    price: Number(productData.price) || 0,
-    minStock: Number(productData.minStock) || 0,
+    code: sku,
+    sku: sku,
+    barcode: sku,
+    name: (productData.name || '').trim(),
+    engine_type: engineType,
+    car_variant: productData.car_variant || productData.carVariant || '-',
+    category_name: categoryName,
+    spec_sound: productData.spec_sound || productData.specSound || 'Street (Bass)',
+    spec_resonator: productData.spec_resonator !== undefined ? Boolean(productData.spec_resonator) : true,
+    material_finish: productData.material_finish || productData.materialFinish || 'SS Polos',
+    reseller_price: resellerPrice,
+    selling_price: sellingPrice,
+    price: sellingPrice, // Backward compatibility
+    profit_amount: profitAmount,
+    profit_percentage: Math.round(profitPercentage * 100) / 100,
+    imageUrl: productData.imageUrl !== undefined ? productData.imageUrl : (productData.image || productData.photoUrl || ''),
+    notes: productData.notes || productData.description || '',
+    minStock: Number(productData.minStock) || 5,
     currentStock: Number(productData.currentStock) || 0,
-    machineCategory: productData.machineCategory || productData.kategoriMesin || 'Universal / Semua Mesin',
+    machineCategory: engineType,
+    brand: productData.brand || 'NDK Exhaust',
+    unit: productData.unit || 'Pcs',
+    status: productData.status || 'ACTIVE',
     updatedAt: new Date().toISOString()
   };
 
@@ -377,6 +500,121 @@ export const deleteProduct = async (id) => {
     console.error("Firestore error deleting product:", err);
     throw new Error(`Gagal menghapus Produk dari Firestore: ${err.message}`);
   }
+};
+
+export const deleteProductsBatch = async (ids = []) => {
+  ensureFirebase();
+  if (!ids || ids.length === 0) return true;
+  try {
+    const CHUNK_SIZE = 300;
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+      const chunk = ids.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      for (const id of chunk) {
+        batch.delete(doc(db, "products", id));
+      }
+      await batch.commit();
+    }
+    return true;
+  } catch (err) {
+    console.error("Firestore error batch deleting products:", err);
+    throw new Error(`Gagal menghapus beberapa produk dari Firestore: ${err.message}`);
+  }
+};
+
+export const importProductsBatch = async (itemsList, duplicateMode = 'UPDATE', onProgress = null) => {
+  ensureFirebase();
+  if (!itemsList || itemsList.length === 0) {
+    return { total: 0, createdCount: 0, updatedCount: 0, skippedCount: 0 };
+  }
+
+  let createdCount = 0;
+  let updatedCount = 0;
+  let skippedCount = 0;
+
+  // Split into chunks of 300 to stay well under Firestore's 500 batch limit
+  const CHUNK_SIZE = 300;
+  const chunks = [];
+  for (let i = 0; i < itemsList.length; i += CHUNK_SIZE) {
+    chunks.push(itemsList.slice(i, i + CHUNK_SIZE));
+  }
+
+  let processedSoFar = 0;
+
+  for (let c = 0; c < chunks.length; c++) {
+    const currentChunk = chunks[c];
+    const batch = writeBatch(db);
+
+    for (const item of currentChunk) {
+      if (!item.isValid) {
+        skippedCount++;
+        continue;
+      }
+
+      const sellingPrice = Number(item.selling_price ?? item.price) || 0;
+      const resellerPrice = Number(item.reseller_price) || 0;
+      const profitAmount = Number(item.profit_amount) || (sellingPrice - resellerPrice);
+      const profitPercentage = Number(item.profit_percentage) || (resellerPrice > 0 ? ((profitAmount / resellerPrice) * 100) : 0);
+
+      const productPayload = {
+        code: item.sku,
+        sku: item.sku,
+        barcode: item.sku,
+        name: item.name,
+        engine_type: item.engine_type || 'Universal / Semua Mesin',
+        car_variant: item.car_variant || '-',
+        category_name: item.category_name || 'Downpipe',
+        spec_sound: item.spec_sound || 'Street (Bass)',
+        spec_resonator: item.spec_resonator !== undefined ? Boolean(item.spec_resonator) : true,
+        material_finish: item.material_finish || 'SS Polos',
+        reseller_price: resellerPrice,
+        selling_price: sellingPrice,
+        price: sellingPrice,
+        profit_amount: profitAmount,
+        profit_percentage: Math.round(profitPercentage * 100) / 100,
+        notes: item.notes || '',
+        minStock: Number(item.minStock) || 5,
+        currentStock: Number(item.currentStock) || 0,
+        unit: item.unit || 'Pcs',
+        status: item.status || 'ACTIVE',
+        brand: item.brand || 'NDK Exhaust',
+        machineCategory: item.engine_type || 'Universal / Semua Mesin',
+        branchId: 'ALL',
+        branchName: 'Semua Cabang (Pusat)',
+        updatedAt: new Date().toISOString()
+      };
+
+      if (item.isDuplicate) {
+        if (duplicateMode === 'UPDATE' && item.existingId) {
+          const docRef = doc(db, "products", item.existingId);
+          batch.update(docRef, productPayload);
+          updatedCount++;
+        } else {
+          skippedCount++;
+        }
+      } else {
+        const docRef = doc(collection(db, "products"));
+        batch.set(docRef, {
+          ...productPayload,
+          createdAt: serverTimestamp()
+        });
+        createdCount++;
+      }
+    }
+
+    await batch.commit();
+    processedSoFar += currentChunk.length;
+    if (onProgress) {
+      onProgress(Math.round((processedSoFar / itemsList.length) * 100));
+    }
+  }
+
+  return {
+    total: itemsList.length,
+    createdCount,
+    updatedCount,
+    skippedCount
+  };
 };
 
 // ==========================================
@@ -736,23 +974,6 @@ export const subscribeStockRequests = (currentUser, onUpdate) => {
     });
   } catch (err) {
     console.error("Failed to subscribe stock_requests:", err);
-    return () => {};
-  }
-};
-
-export const subscribeProducts = (onUpdate) => {
-  ensureFirebase();
-  try {
-    const q = collection(db, "products");
-    return onSnapshot(q, (snapshot) => {
-      const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-      list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-      onUpdate(list);
-    }, (err) => {
-      console.warn("Realtime products listener error:", err);
-    });
-  } catch (err) {
-    console.error("Failed to subscribe products:", err);
     return () => {};
   }
 };

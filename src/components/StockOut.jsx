@@ -320,31 +320,60 @@ export default function StockOut({
     setSalesCart(salesCart.filter((_, i) => i !== index));
   };
 
+// Helper to parse SKU from raw barcodes or Smart QR URLs
+const parseScannedSKU = (text) => {
+  if (!text) return '';
+  const trimmed = text.trim();
+  if (trimmed.includes('http://') || trimmed.includes('https://') || trimmed.includes('sku=') || trimmed.includes('/catalog/') || trimmed.includes('/product/')) {
+    try {
+      const urlObj = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+      const skuParam = urlObj.searchParams.get('sku');
+      if (skuParam) return decodeURIComponent(skuParam).trim();
+      const parts = urlObj.pathname.split('/').filter(Boolean);
+      if (parts.length >= 2 && (parts[0] === 'catalog' || parts[0] === 'katalog' || parts[0] === 'product') && parts[1] !== 'list') {
+        return decodeURIComponent(parts[1]).trim();
+      }
+    } catch (e) {
+      const match = trimmed.match(/[?&]sku=([^&#]+)/i);
+      if (match && match[1]) return decodeURIComponent(match[1]).trim();
+    }
+  }
+  return trimmed;
+};
+
   // Scanner handler
   const handleScanSuccess = (scannedText) => {
-    const matched = products.find(
-      p => p.sku?.toLowerCase() === scannedText.toLowerCase() || 
-           p.barcode?.toLowerCase() === scannedText.toLowerCase() ||
-           p.id?.toLowerCase() === scannedText.toLowerCase()
-    );
+    if (!scannedText) return;
+    const cleanSku = parseScannedSKU(scannedText).trim().toLowerCase();
+
+    const matched = products.find(p => {
+      const pSku = (p.sku || '').trim().toLowerCase();
+      const pCode = (p.code || '').trim().toLowerCase();
+      const pBarcode = (p.barcode || '').trim().toLowerCase();
+      const pId = (p.id || '').trim().toLowerCase();
+      return pSku === cleanSku || pCode === cleanSku || pBarcode === cleanSku || pId === cleanSku;
+    });
+
     if (matched) {
-      if (outboundMode === 'STOCK_TRANSFER_TO_BRANCH' && isBatchTransferMode) {
+      if (outboundMode === 'STOCK_TRANSFER_TO_BRANCH') {
+        setIsBatchTransferMode(true);
         handleAddItemToTransferCart(matched);
       } else if (outboundMode === 'CUSTOM_BUNDLING' || salesType === 'BUNDLE') {
         const existingIdx = bundleItems.findIndex(bi => bi.productId === matched.id);
         if (existingIdx !== -1) {
           const updated = [...bundleItems];
-          updated[existingIdx].qty += 1;
+          updated[existingIdx].qty = (Number(updated[existingIdx].qty) || 0) + 1;
           setBundleItems(updated);
         } else {
           setBundleItems([...bundleItems, { productId: matched.id, qty: 1 }]);
         }
       } else {
-        // Sales Mode (Satuan & Multi-Item)
+        // Sales Mode (Satuan & Multi-Item POS)
         handleAddItemToSalesCart(matched);
       }
+      setIsScannerOpen(false);
     } else {
-      showAlert("Barcode Tidak Ditemukan 🔍", `Produk dengan SKU/Barcode "${scannedText}" tidak ditemukan di database.`, "WARNING");
+      showAlert("Produk Tidak Ditemukan 🔍", `Produk dengan SKU/Barcode "${parseScannedSKU(scannedText)}" tidak ditemukan di database.`, "WARNING");
     }
   };
 
@@ -962,25 +991,29 @@ export default function StockOut({
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-100/70 text-slate-600 font-semibold uppercase">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="bg-slate-100/80 text-slate-600 font-semibold uppercase border-b border-slate-200">
                         <tr>
-                          <th className="px-4 py-2.5">Produk</th>
-                          <th className="px-3 py-2.5">SKU & Merk</th>
-                          <th className="px-3 py-2.5 text-center">Stok Gudang Pusat</th>
-                          <th className="px-3 py-2.5 text-center w-36">Qty Kirim (Pcs)</th>
-                          <th className="px-4 py-2.5 text-right">Aksi</th>
+                          <th className="px-4 py-2.5 min-w-[200px]">Produk</th>
+                          <th className="px-3 py-2.5 whitespace-nowrap min-w-[140px]">SKU & Merk</th>
+                          <th className="px-3 py-2.5 text-center whitespace-nowrap min-w-[130px]">Stok Gudang Pusat</th>
+                          <th className="px-3 py-2.5 text-center whitespace-nowrap min-w-[140px]">Qty Kirim (Pcs)</th>
+                          <th className="px-4 py-2.5 text-right whitespace-nowrap min-w-[70px]">Aksi</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {transferCart.map((item, idx) => (
                           <tr key={item.productId} className="hover:bg-slate-50">
-                            <td className="px-4 py-3 font-semibold text-slate-900">{item.productName}</td>
-                            <td className="px-3 py-3 font-mono text-slate-500 text-[11px]">
-                              {item.sku} | <span className="text-indigo-600 font-bold">{item.brand}</span>
+                            <td className="px-4 py-3 font-semibold text-slate-900 min-w-[200px]">
+                              <span className="leading-snug">{item.productName}</span>
                             </td>
-                            <td className="px-3 py-3 text-center">
-                              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700">
+                            <td className="px-3 py-3 text-[11px] whitespace-nowrap">
+                              <span className="font-mono text-slate-600 font-bold">{item.sku}</span>
+                              <span className="mx-1 text-slate-300">|</span>
+                              <span className="text-indigo-600 font-bold px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-100">{item.brand || 'Generic'}</span>
+                            </td>
+                            <td className="px-3 py-3 text-center whitespace-nowrap">
+                              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 whitespace-nowrap inline-block">
                                 {item.currentStock} Pcs
                               </span>
                             </td>
@@ -1358,15 +1391,15 @@ export default function StockOut({
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-100/80 text-slate-600 font-semibold uppercase">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead className="bg-slate-100/80 text-slate-600 font-semibold uppercase border-b border-slate-200">
                           <tr>
-                            <th className="px-4 py-2.5">Produk & Merk</th>
-                            <th className="px-3 py-2.5 text-center">Stok Fisik</th>
-                            <th className="px-3 py-2.5 text-center w-36">Qty Jual (Pcs)</th>
-                            <th className="px-3 py-2.5 text-right w-36">Harga Satuan (Rp)</th>
-                            <th className="px-3 py-2.5 text-right">Subtotal (Rp)</th>
-                            <th className="px-3 py-2.5 text-right">Aksi</th>
+                            <th className="px-4 py-2.5 min-w-[200px]">Produk & Merk</th>
+                            <th className="px-3 py-2.5 text-center whitespace-nowrap min-w-[100px]">Stok Fisik</th>
+                            <th className="px-3 py-2.5 text-center whitespace-nowrap min-w-[130px]">Qty Jual (Pcs)</th>
+                            <th className="px-3 py-2.5 text-right whitespace-nowrap min-w-[130px]">Harga Satuan (Rp)</th>
+                            <th className="px-3 py-2.5 text-right whitespace-nowrap min-w-[130px]">Subtotal (Rp)</th>
+                            <th className="px-3 py-2.5 text-right whitespace-nowrap min-w-[70px]">Aksi</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -1376,15 +1409,17 @@ export default function StockOut({
 
                             return (
                               <tr key={item.productId} className={`hover:bg-slate-50 ${isItemOverStock ? 'bg-rose-50/50' : ''}`}>
-                                <td className="px-4 py-3">
-                                  <div className="font-bold text-slate-900">{item.productName}</div>
-                                  <div className="text-[11px] font-mono text-slate-400">
-                                    SKU: {item.sku} | <span className="text-indigo-600 font-semibold">{item.brand}</span>
+                                <td className="px-4 py-3 min-w-[200px]">
+                                  <div className="font-bold text-slate-900 leading-snug">{item.productName}</div>
+                                  <div className="text-[11px] font-mono text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                    <span className="whitespace-nowrap font-bold text-slate-600">SKU: {item.sku}</span>
+                                    <span>|</span>
+                                    <span className="text-indigo-600 font-semibold whitespace-nowrap">{item.brand || 'Generic'}</span>
                                   </div>
                                 </td>
                                 
-                                <td className="px-3 py-3 text-center">
-                                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                                <td className="px-3 py-3 text-center whitespace-nowrap">
+                                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap inline-block ${
                                     item.currentStock <= 0 
                                       ? 'bg-rose-100 text-rose-800' 
                                       : 'bg-slate-100 text-slate-700'

@@ -158,6 +158,9 @@ export default function ProductSearchPicker({
             ) : (
               filteredProducts.map(p => {
                 const isSelected = p.id === selectedProductId;
+                const engine = p.engine_type || p.machineCategory || p.kategoriMesin || 'Universal';
+                const variant = p.car_variant || p.carVariant || '';
+
                 return (
                   <button
                     key={p.id}
@@ -168,14 +171,23 @@ export default function ProductSearchPicker({
                     }`}
                   >
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-xs truncate">{p.name}</span>
-                        <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
-                          {p.brand || 'Generic'}
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80">
+                          {engine}
+                        </span>
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700">
+                          {p.brand || 'NDK Exhaust'}
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                        SKU: {p.sku} | Kategori: {p.machineCategory || p.kategoriMesin || 'Universal'}
+                      <div className="text-[11px] text-slate-400 font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
+                        <span>SKU: {p.sku || p.code}</span>
+                        {variant && (
+                          <>
+                            <span>•</span>
+                            <span className="text-slate-600 font-medium truncate max-w-[180px]">{variant}</span>
+                          </>
+                        )}
                       </div>
                     </div>
 

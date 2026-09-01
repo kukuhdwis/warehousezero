@@ -1,0 +1,511 @@
+import * as XLSX from 'xlsx';
+
+/**
+ * Sanitasi nilai mata uang / angka dari spreadsheet.
+ * Menangani string seperti: "Rp 950.000", "1.250.000,00", " 950,000 ", "Rp. 1.500.000", 950000, dll.
+ */
+export const cleanCurrency = (val) => {
+  if (val === null || val === undefined || val === '') return 0;
+  if (typeof val === 'number') return isNaN(val) ? 0 : Math.max(0, val);
+
+  let str = String(val).trim();
+  // Hapus prefix Rp, rp, RP, spasi
+  str = str.replace(/^[rR][pP]\.?\s*/i, '').trim();
+
+  // Jika ada format desimal Indonesia misal 1.250.000,00
+  if (/\.\d{3},\d{2}$/.test(str)) {
+    str = str.replace(/\./g, '').replace(',', '.');
+  } else if (/,\d{3}\.\d{2}$/.test(str)) {
+    // Format US 1,250,000.00
+    str = str.replace(/,/g, '');
+  } else if (/\.\d{3}$/.test(str)) {
+    // 950.000 atau 1.250.000
+    str = str.replace(/\./g, '');
+  } else if (/,\d{3}$/.test(str)) {
+    // 950,000
+    str = str.replace(/,/g, '');
+  } else {
+    // Hapus karakter selain angka dan titik desimal
+    str = str.replace(/[^0-9.-]/g, '');
+  }
+
+  const num = parseFloat(str);
+  return isNaN(num) ? 0 : Math.max(0, num);
+};
+
+/**
+ * Ekstraksi kode kategori knalpot untuk pembentukan SKU terstandar.
+ */
+export const getCategoryAbbreviation = (categoryName = '', productName = '') => {
+  const text = `${categoryName} ${productName}`.toLowerCase();
+  
+  if (text.includes('downpipe') || text.includes('down pipe')) return 'DP';
+  if (text.includes('frontpipe') || text.includes('front pipe')) return 'FP';
+  if (text.includes('centerpipe') || text.includes('center pipe') || text.includes('midpipe')) return 'CP';
+  if (text.includes('bolt-on') || text.includes('bolt on') || text.includes('bolton')) return 'BO';
+  if (text.includes('full system') || text.includes('full-system') || text.includes('fullvalve') || text.includes('full-valve') || text.includes('full valve')) return 'FS';
+  if (text.includes('muffler') || text.includes('silencer') || text.includes('tailpipe')) return 'MF';
+  if (text.includes('header') || text.includes('manifold')) return 'HD';
+  if (text.includes('resonator') || text.includes('res')) return 'RS';
+  if (text.includes('valvetronic') || text.includes('valve')) return 'VT';
+  if (text.includes('catless') || text.includes('decat')) return 'DC';
+
+  return 'EX';
+};
+
+/**
+ * Format tipe mesin untuk SKU (membersihkan karakter khusus).
+ * Mendukung: 2KD, 2GD/1GD, 4D56, 4N15, ALL, Universal.
+ */
+export const cleanEngineForSKU = (engineType = '') => {
+  if (!engineType) return 'ALL';
+  const clean = engineType.trim().toUpperCase();
+  if (clean === 'ALL' || clean.includes('UNIVERSAL') || clean.includes('SEMUA') || clean === 'GEN') return 'ALL';
+  if (clean.includes('2KD')) return '2KD';
+  if (clean.includes('2GD') || clean.includes('1GD')) return '2GD';
+  if (clean.includes('4D56')) return '4D56';
+  if (clean.includes('4N15')) return '4N15';
+  if (clean.includes('1NZ') || clean.includes('2NR')) return '1NZ';
+  if (clean.includes('L15') || clean.includes('R18')) return 'L15';
+  return clean.replace(/[^A-Z0-9]/g, '').substring(0, 4) || 'ALL';
+};
+
+/**
+ * Generate Smart SKU dengan format: WZ-[MESIN]-[KODE_KAT]-[NOMOR_URUT]
+ * Contoh: WZ-2KD-DP-001, WZ-2GD-BO-002, WZ-4D56-DP-003, WZ-ALL-FS-004
+ */
+export const generateSmartSKU = (engineType, categoryName, productName, existingSKUsSet, startCounter = 1) => {
+  const engineCode = cleanEngineForSKU(engineType);
+  const catCode = getCategoryAbbreviation(categoryName, productName);
+  
+  let counter = startCounter;
+  let skuCandidate = '';
+  
+  while (true) {
+    const formattedNum = String(counter).padStart(3, '0');
+    skuCandidate = `WZ-${engineCode}-${catCode}-${formattedNum}`;
+    if (!existingSKUsSet.has(skuCandidate.toLowerCase())) {
+      existingSKUsSet.add(skuCandidate.toLowerCase());
+      return { sku: skuCandidate, nextCounter: counter + 1 };
+    }
+    counter++;
+  }
+};
+
+/**
+ * Membuat dan mengunduh Template Excel (.xlsx) resmi katalog knalpot klien.
+ */
+export const downloadExhaustTemplate = () => {
+  const headers = [
+    'No',
+    'Kode',
+    'Mesin',
+    'Nama',
+    'Varian Mobil',
+    'Harga Reseller',
+    'Harga Jual',
+    'Profit',
+    'ket',
+    '%'
+  ];
+
+  const sampleRows = [
+    [
+      1,
+      'WZ-2KD-DP-001',
+      '2KD',
+      'Downpipe',
+      'Innova 2.5 / Fortuner 2.5',
+      950000,
+      1250000,
+      300000,
+      'Street Bass SS Polos',
+      '31.58%'
+    ],
+    [
+      2,
+      'WZ-2GD-BO-002',
+      '2GD/1GD',
+      'Bolt-on Muffler',
+      'Innova Reborn / Fortuner VRZ',
+      1200000,
+      1600000,
+      400000,
+      'Finishing Burntip Blue',
+      '33.33%'
+    ],
+    [
+      3,
+      'WZ-2KD-CP-003',
+      '2KD',
+      'Centerpipe Non-Resonator',
+      'Innova / Fortuner / Hilux SC',
+      850000,
+      1150000,
+      300000,
+      'Drag Kering Full Stainless',
+      '35.29%'
+    ],
+    [
+      4,
+      'WZ-4N15-FP-004',
+      '4N15',
+      'Frontpipe Racing',
+      'Pajero Sport Dakar',
+      1100000,
+      1500000,
+      400000,
+      'Drag Sound SS Polos',
+      '36.36%'
+    ],
+    [
+      5,
+      '', // Kosong untuk mendemonstrasikan Auto-Generate SKU
+      '2GD/1GD',
+      'Downpipe + Frontpipe Kit',
+      'Hilux Double Cabin / Single Cabin',
+      1400000,
+      1900000,
+      500000,
+      'Contoh baris tanpa kode (Otomatis dibuatkan SKU)',
+      '35.71%'
+    ]
+  ];
+
+  const worksheetData = [headers, ...sampleRows];
+  const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+
+  // Styling / Lebar Kolom
+  worksheet['!cols'] = [
+    { wch: 6 },  // No
+    { wch: 18 }, // Kode
+    { wch: 14 }, // Mesin
+    { wch: 28 }, // Nama
+    { wch: 34 }, // Varian Mobil
+    { wch: 16 }, // Harga Reseller
+    { wch: 16 }, // Harga Jual
+    { wch: 14 }, // Profit
+    { wch: 32 }, // ket
+    { wch: 10 }  // %
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Katalog Produk');
+
+  // Trigger download file
+  XLSX.writeFile(workbook, 'Template_Import_Katalog_Exhaust_WZ.xlsx');
+};
+
+/**
+ * Parsing file Spreadsheet (XLSX, XLS, CSV) menjadi struktur lembar kerja (worksheet).
+ * Mendukung pembacaan multi-sheet sekaligus.
+ */
+export const readSpreadsheetFile = async (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        
+        const sheetNames = workbook.SheetNames || [];
+        if (sheetNames.length === 0) {
+          throw new Error("File spreadsheet tidak memiliki lembar kerja (worksheet).");
+        }
+
+        const sheetsData = {};
+        sheetNames.forEach(sName => {
+          const ws = workbook.Sheets[sName];
+          sheetsData[sName] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        });
+
+        const activeSheetName = sheetNames[0];
+        const rawAoa = sheetsData[activeSheetName] || [];
+        
+        if (!rawAoa || rawAoa.length < 1) {
+          throw new Error("Spreadsheet kosong atau tidak memiliki data baris.");
+        }
+
+        resolve({
+          rawAoa,
+          sheetNames,
+          sheetsData,
+          activeSheetName
+        });
+      } catch (err) {
+        reject(new Error(`Gagal membaca file spreadsheet: ${err.message}`));
+      }
+    };
+
+    reader.onerror = () => {
+      reject(new Error("Gagal membaca berkas spreadsheet dari perangkat."));
+    };
+
+    reader.readAsArrayBuffer(file);
+  });
+};
+
+/**
+ * Mencari indeks kolom berdasarkan berbagai variasi nama header klien.
+ */
+const findColumnIndex = (headerRow, candidates) => {
+  for (let i = 0; i < headerRow.length; i++) {
+    const colName = String(headerRow[i] || '').trim().toLowerCase();
+    for (const cand of candidates) {
+      if (colName === cand.toLowerCase()) return i;
+    }
+  }
+  // Loose search (includes)
+  for (let i = 0; i < headerRow.length; i++) {
+    const colName = String(headerRow[i] || '').trim().toLowerCase();
+    for (const cand of candidates) {
+      if (colName.includes(cand.toLowerCase())) return i;
+    }
+  }
+  return -1;
+};
+
+/**
+ * Deteksi spesifikasi tambahan dari teks keterangan / nama knalpot
+ */
+export const extractExhaustSpecs = (text = '') => {
+  const lower = text.toLowerCase();
+
+  // Karakter Suara
+  let spec_sound = 'Street (Bass)';
+  if (lower.includes('drag') || lower.includes('kering') || lower.includes('racing')) {
+    spec_sound = 'Drag (Kering)';
+  } else if (lower.includes('silent') || lower.includes('standar') || lower.includes('senyap') || lower.includes('halus')) {
+    spec_sound = 'Silent';
+  } else if (lower.includes('bass') || lower.includes('street')) {
+    spec_sound = 'Street (Bass)';
+  }
+
+  // Resonator
+  const spec_resonator = !lower.includes('non-resonator') && !lower.includes('non resonator') && !lower.includes('tanpa resonator');
+
+  // Finishing / Material
+  let material_finish = 'SS Polos';
+  if (lower.includes('burntip') || lower.includes('burn tip') || lower.includes('blue tip')) {
+    material_finish = 'SS Burntip';
+  } else if (lower.includes('look titanium') || lower.includes('look ti')) {
+    material_finish = 'SS Look Titanium';
+  } else if (lower.includes('titanium') && !lower.includes('look')) {
+    material_finish = 'Titanium Asli';
+  } else if (lower.includes('carbon') || lower.includes('karbon')) {
+    material_finish = 'Carbon Tip';
+  }
+
+  return { spec_sound, spec_resonator, material_finish };
+};
+
+/**
+ * Validasi dan Transformasi baris spreadsheet menjadi format Master Data Produk.
+ * Menghasilkan statistik (total, valid, duplicate, error) dan list item siap import.
+ */
+export const processSpreadsheetData = (rawAoa, existingProducts = [], duplicateMode = 'UPDATE') => {
+  if (!rawAoa || rawAoa.length < 1) {
+    throw new Error("File spreadsheet tidak memiliki data.");
+  }
+
+  // Auto-Discovery Header Row (mencari baris yang memiliki kecocokan nama kolom terbanyak)
+  let headerRowIndex = 0;
+  let maxMatchedCols = -1;
+
+  for (let r = 0; r < Math.min(rawAoa.length, 10); r++) {
+    const row = rawAoa[r] || [];
+    const strRow = row.map(cell => String(cell || '').trim());
+    const matched = ['nama', 'mesin', 'varian', 'harga', 'kode', 'reseller', 'jual', 'profit', 'no']
+      .filter(k => strRow.some(cell => cell.toLowerCase().includes(k))).length;
+    if (matched > maxMatchedCols) {
+      maxMatchedCols = matched;
+      headerRowIndex = r;
+    }
+  }
+
+  const headerRow = (rawAoa[headerRowIndex] || []).map(h => String(h || '').trim());
+  
+  // Mapping indeks kolom
+  const idxNo = findColumnIndex(headerRow, ['no', 'nomor', 'num', '#']);
+  const idxKode = findColumnIndex(headerRow, ['kode', 'sku', 'code', 'kode produk', 'product code']);
+  const idxMesin = findColumnIndex(headerRow, ['mesin', 'engine', 'tipe mesin', 'engine type', 'tipe_mesin']);
+  const idxNama = findColumnIndex(headerRow, ['nama', 'name', 'nama produk', 'product name', 'komponen', 'kategori']);
+  const idxVarian = findColumnIndex(headerRow, ['varian mobil', 'varian', 'mobil', 'car variant', 'kendaraan', 'kompatibilitas', 'tipe mobil']);
+  const idxReseller = findColumnIndex(headerRow, ['harga reseller', 'reseller', 'harga agen', 'harga b2b', 'reseller price', 'hpp']);
+  const idxJual = findColumnIndex(headerRow, ['harga jual', 'harga', 'jual', 'retail', 'selling price', 'harga retail', 'price']);
+  const idxProfit = findColumnIndex(headerRow, ['profit', 'laba', 'margin', 'keuntungan']);
+  const idxKet = findColumnIndex(headerRow, ['ket', 'keterangan', 'notes', 'catatan', 'deskripsi', 'description']);
+  const idxPercent = findColumnIndex(headerRow, ['%', 'persen', 'persentase', 'margin %', 'profit %', 'percentage']);
+
+  // Set existing SKUs untuk deteksi duplikat & auto SKU generator
+  const existingSKUsSet = new Set();
+  const existingProductMapBySKU = new Map();
+  const existingProductMapByNameEngine = new Map();
+
+  existingProducts.forEach(p => {
+    if (p.sku) {
+      const lowerSKU = p.sku.trim().toLowerCase();
+      existingSKUsSet.add(lowerSKU);
+      existingProductMapBySKU.set(lowerSKU, p);
+    }
+    if (p.name && (p.engine_type || p.engineType)) {
+      const key = `${p.name.trim().toLowerCase()}__${(p.engine_type || p.engineType || '').trim().toLowerCase()}`;
+      existingProductMapByNameEngine.set(key, p);
+    }
+  });
+
+  const parsedItems = [];
+  let validCount = 0;
+  let duplicateCount = 0;
+  let errorCount = 0;
+  let autoSkuCount = 0;
+  let startSkuCounter = existingProducts.length + 1;
+
+  for (let r = headerRowIndex + 1; r < rawAoa.length; r++) {
+    const row = rawAoa[r];
+    if (!row || row.every(cell => String(cell || '').trim() === '')) {
+      continue; // Lewati baris kosong
+    }
+
+    const rowNumber = r + 1;
+    const rawNo = idxNo >= 0 ? row[idxNo] : (r - headerRowIndex);
+    const rawKode = idxKode >= 0 ? String(row[idxKode] || '').trim() : '';
+    let rawMesin = idxMesin >= 0 ? String(row[idxMesin] || '').trim() : '';
+    const rawNama = idxNama >= 0 ? String(row[idxNama] || '').trim() : '';
+    const rawVarian = idxVarian >= 0 ? String(row[idxVarian] || '').trim() : '';
+    const rawReseller = idxReseller >= 0 ? row[idxReseller] : '';
+    const rawJual = idxJual >= 0 ? row[idxJual] : '';
+    const rawKet = idxKet >= 0 ? String(row[idxKet] || '').trim() : '';
+
+    // Normalisasi Tipe Mesin jika kosong tetapi terdeteksi di teks nama/varian
+    if (!rawMesin) {
+      const combText = `${rawNama} ${rawVarian}`.toUpperCase();
+      if (combText.includes('2KD')) rawMesin = '2KD';
+      else if (combText.includes('2GD') || combText.includes('1GD')) rawMesin = '2GD/1GD';
+      else if (combText.includes('4D56')) rawMesin = '4D56';
+      else if (combText.includes('4N15')) rawMesin = '4N15';
+      else rawMesin = 'ALL';
+    }
+
+    const resellerPrice = cleanCurrency(rawReseller);
+    const sellingPrice = cleanCurrency(rawJual);
+    
+    // Kalkulasi Profit & Persentase Keuntungan
+    let profitAmount = sellingPrice - resellerPrice;
+    let profitPercentage = resellerPrice > 0 ? ((profitAmount / resellerPrice) * 100) : 0;
+    profitPercentage = Math.round(profitPercentage * 100) / 100;
+
+    // Validasi baris
+    const rowErrors = [];
+    const rowWarnings = [];
+
+    if (!rawNama) {
+      rowErrors.push("Nama Produk / Komponen tidak boleh kosong.");
+    }
+    if (resellerPrice <= 0 && sellingPrice <= 0) {
+      rowWarnings.push("Harga Reseller dan Harga Jual bernilai Rp 0.");
+    } else if (sellingPrice < resellerPrice) {
+      rowWarnings.push("Harga Jual lebih rendah dari Harga Reseller (Margin Negatif).");
+    }
+
+    // SKU Handling
+    let finalSKU = rawKode;
+    let isAutoGeneratedSKU = false;
+
+    if (!finalSKU) {
+      const generated = generateSmartSKU(
+        rawMesin || 'ALL',
+        rawNama,
+        rawNama,
+        existingSKUsSet,
+        startSkuCounter
+      );
+      finalSKU = generated.sku;
+      startSkuCounter = generated.nextCounter;
+      isAutoGeneratedSKU = true;
+      autoSkuCount++;
+    } else {
+      existingSKUsSet.add(finalSKU.toLowerCase());
+    }
+
+    // Duplicate Checking
+    const existingMatch = existingProductMapBySKU.get(finalSKU.toLowerCase()) || 
+      existingProductMapByNameEngine.get(`${rawNama.toLowerCase()}__${rawMesin.toLowerCase()}`);
+    
+    const isDuplicate = Boolean(existingMatch);
+    if (isDuplicate) {
+      duplicateCount++;
+      if (duplicateMode === 'UPDATE') {
+        rowWarnings.push(`SKU / Produk sudah ada (${existingMatch.name}). Data lama akan diperbarui.`);
+      } else {
+        rowWarnings.push(`SKU / Produk sudah ada (${existingMatch.name}). Baris ini akan dilewati.`);
+      }
+    }
+
+    // Ekstraksi spesifikasi tambahan dari keterangan
+    const fullSpecText = `${rawNama} ${rawKet} ${rawVarian}`;
+    const specs = extractExhaustSpecs(fullSpecText);
+
+    // Kategori knalpot
+    let categoryName = 'Downpipe';
+    const lowerNama = rawNama.toLowerCase();
+    if (lowerNama.includes('frontpipe') || lowerNama.includes('front pipe')) categoryName = 'Frontpipe';
+    else if (lowerNama.includes('centerpipe') || lowerNama.includes('center pipe') || lowerNama.includes('midpipe')) categoryName = 'Centerpipe';
+    else if (lowerNama.includes('bolt-on') || lowerNama.includes('bolt on') || lowerNama.includes('bolton')) categoryName = 'Bolt-on';
+    else if (lowerNama.includes('full system') || lowerNama.includes('full-system') || lowerNama.includes('fullvalve') || lowerNama.includes('full-valve') || lowerNama.includes('full valve')) categoryName = 'Full System';
+    else if (lowerNama.includes('muffler') || lowerNama.includes('silencer') || lowerNama.includes('tailpipe')) categoryName = 'Muffler / Silencer';
+    else if (lowerNama.includes('header') || lowerNama.includes('manifold')) categoryName = 'Header / Manifold';
+    else if (lowerNama.includes('resonator')) categoryName = 'Resonator';
+    else if (lowerNama.includes('downpipe')) categoryName = 'Downpipe';
+    else categoryName = rawNama;
+
+    const isValid = rowErrors.length === 0;
+    if (isValid) {
+      validCount++;
+    } else {
+      errorCount++;
+    }
+
+    parsedItems.push({
+      rowNumber,
+      no: rawNo || (r - headerRowIndex),
+      sku: finalSKU,
+      isAutoGeneratedSKU,
+      name: rawNama || 'Produk Tanpa Nama',
+      engine_type: rawMesin || 'ALL',
+      car_variant: rawVarian || '-',
+      category_name: categoryName,
+      spec_sound: specs.spec_sound,
+      spec_resonator: specs.spec_resonator,
+      material_finish: specs.material_finish,
+      reseller_price: resellerPrice,
+      selling_price: sellingPrice,
+      price: sellingPrice, // Backward compatibility
+      profit_amount: profitAmount,
+      profit_percentage: profitPercentage,
+      notes: rawKet || '',
+      minStock: 5,
+      currentStock: 0,
+      unit: 'Pcs',
+      status: 'ACTIVE',
+      brand: 'NDK Exhaust',
+      machineCategory: rawMesin || 'ALL',
+      isDuplicate,
+      existingId: existingMatch?.id || null,
+      isValid,
+      errors: rowErrors,
+      warnings: rowWarnings
+    });
+  }
+
+  return {
+    totalRows: parsedItems.length,
+    validCount,
+    duplicateCount,
+    errorCount,
+    autoSkuCount,
+    duplicateMode,
+    items: parsedItems
+  };
+};

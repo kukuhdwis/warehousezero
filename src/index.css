@@ -25,24 +25,37 @@ body {
 
 /* Scanner Camera Viewport Overrides */
 #interactive-qr-reader {
+  width: 100% !important;
+  min-height: 280px !important;
   border: none !important;
+  position: relative !important;
+  background: #000 !important;
+  border-radius: 1rem !important;
+  overflow: hidden !important;
+}
+
+#interactive-qr-reader__scan_region {
+  width: 100% !important;
+  min-height: 280px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: #000 !important;
 }
 
 #interactive-qr-reader video {
   width: 100% !important;
-  height: 100% !important;
+  min-height: 280px !important;
+  max-height: 380px !important;
   object-fit: cover !important;
-  border-radius: 1rem;
+  border-radius: 1rem !important;
+  display: block !important;
 }
 
-#interactive-qr-reader img[alt="Info icon"],
-#interactive-qr-reader img[alt="Camera menu icon"],
 #interactive-qr-reader__dashboard,
 #interactive-qr-reader__dashboard_section_csr,
-#interactive-qr-reader__dashboard_section_swaplink {
-  display: none !important;
-}
-
-#interactive-qr-reader canvas {
+#interactive-qr-reader__dashboard_section_swaplink,
+#interactive-qr-reader img[alt="Info icon"],
+#interactive-qr-reader img[alt="Camera menu icon"] {
   display: none !important;
 }

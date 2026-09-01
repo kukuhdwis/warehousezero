@@ -175,15 +175,15 @@ export default function TransactionHistory({ transactions = [], currentUser }) {
       {/* DESKTOP TABLE VIEW (Screens >= md) */}
       <div className="hidden md:block bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase border-b border-slate-100">
+          <table className="w-full text-left text-sm border-collapse">
+            <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase border-b border-slate-200">
               <tr>
-                <th className="px-6 py-3.5">Tipe</th>
-                <th className="px-6 py-3.5">Produk & SKU</th>
-                <th className="px-4 py-3.5 text-center">Jumlah (Qty)</th>
-                <th className="px-4 py-3.5">Catatan / Supplier / PO</th>
-                <th className="px-4 py-3.5">Petugas</th>
-                <th className="px-6 py-3.5 text-right">Waktu</th>
+                <th className="px-5 py-3.5 whitespace-nowrap min-w-[110px]">Tipe</th>
+                <th className="px-5 py-3.5 min-w-[200px]">Produk & SKU</th>
+                <th className="px-4 py-3.5 text-center whitespace-nowrap min-w-[110px]">Jumlah (Qty)</th>
+                <th className="px-4 py-3.5 min-w-[160px]">Catatan / Keterangan</th>
+                <th className="px-4 py-3.5 whitespace-nowrap min-w-[120px]">Petugas</th>
+                <th className="px-5 py-3.5 text-right whitespace-nowrap min-w-[140px]">Waktu</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -198,28 +198,32 @@ export default function TransactionHistory({ transactions = [], currentUser }) {
                   const isIn = tx.type === 'IN';
                   return (
                     <tr key={tx.id} className="hover:bg-slate-50/80 transition">
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
                           isIn ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                         }`}>
                           {isIn ? <ArrowDownLeft className="w-3.5 h-3.5" /> : <ArrowUpRight className="w-3.5 h-3.5" />}
                           {isIn ? 'Masuk' : 'Keluar'}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="font-semibold text-slate-800">{tx.productName}</div>
-                        <div className="text-xs text-slate-400 font-mono mt-0.5">SKU: {tx.sku}</div>
+                      <td className="px-5 py-4 min-w-[200px]">
+                        <div className="font-semibold text-slate-800 leading-snug">{tx.productName}</div>
+                        <div className="text-xs text-slate-400 font-mono mt-0.5 whitespace-nowrap">SKU: {tx.sku}</div>
                       </td>
-                      <td className="px-4 py-4 text-center font-bold text-slate-900">
-                        {isIn ? `+${tx.qty}` : `-${tx.qty}`}
+                      <td className="px-4 py-4 text-center font-extrabold text-slate-900 whitespace-nowrap">
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${
+                          isIn ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                        }`}>
+                          {isIn ? `+${tx.qty}` : `-${tx.qty}`}
+                        </span>
                       </td>
-                      <td className="px-4 py-4 text-slate-600 text-xs">
+                      <td className="px-4 py-4 text-slate-600 text-xs min-w-[160px] break-words">
                         {tx.notes || '-'}
                       </td>
-                      <td className="px-4 py-4 text-slate-700 text-xs font-medium">
+                      <td className="px-4 py-4 text-slate-700 text-xs font-medium whitespace-nowrap">
                         {tx.user || '-'}
                       </td>
-                      <td className="px-6 py-4 text-right text-xs text-slate-400">
+                      <td className="px-5 py-4 text-right text-xs text-slate-400 whitespace-nowrap">
                         {new Date(tx.createdAt).toLocaleString('id-ID')}
                       </td>
                     </tr>

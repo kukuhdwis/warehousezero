@@ -261,36 +261,38 @@ export default function Dashboard({
                 🎉 Semua stok dalam kondisi aman di atas batas minimum.
               </div>
             ) : (
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase border-b border-slate-100">
+              <table className="w-full text-left text-sm border-collapse">
+                <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase border-b border-slate-200">
                   <tr>
-                    <th className="px-6 py-3">Produk</th>
-                    <th className="px-4 py-3">Lokasi / Cabang</th>
-                    <th className="px-4 py-3">Stok Saat Ini</th>
-                    <th className="px-4 py-3">Stok Min</th>
-                    <th className="px-6 py-3 text-right">Aksi</th>
+                    <th className="px-6 py-3.5 min-w-[200px]">Produk</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap min-w-[140px]">Lokasi / Cabang</th>
+                    <th className="px-4 py-3.5 text-center whitespace-nowrap min-w-[120px]">Stok Saat Ini</th>
+                    <th className="px-4 py-3.5 text-center whitespace-nowrap min-w-[100px]">Stok Min</th>
+                    <th className="px-6 py-3.5 text-right whitespace-nowrap min-w-[100px]">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {lowStockProducts.map((prod) => (
                     <tr key={prod.id} className="hover:bg-slate-50/80 transition">
-                      <td className="px-6 py-3.5 font-medium text-slate-900">
-                        <div>{prod.name}</div>
-                        <div className="text-xs text-slate-400 font-mono">{prod.sku}</div>
+                      <td className="px-6 py-3.5 font-medium text-slate-900 min-w-[200px]">
+                        <div className="font-bold text-slate-900 leading-snug">{prod.name}</div>
+                        <div className="text-xs text-slate-400 font-mono mt-0.5 whitespace-nowrap">SKU: {prod.sku}</div>
                       </td>
-                      <td className="px-4 py-3.5 text-slate-600 text-xs">
+                      <td className="px-4 py-3.5 text-slate-600 text-xs whitespace-nowrap font-medium">
                         {prod.branchName || (isBranchStaff ? currentUser?.branchName : 'Semua Cabang (Pusat)')}
                       </td>
-                      <td className="px-4 py-3.5">
-                        <span className="font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded-md text-xs">
-                          {prod.currentStock} {prod.unit}
+                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                        <span className="inline-block font-bold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-md text-xs border border-rose-200/60 whitespace-nowrap">
+                          {prod.currentStock} {prod.unit || 'Pcs'}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-slate-500 text-xs">{prod.minStock} {prod.unit}</td>
-                      <td className="px-6 py-3.5 text-right">
+                      <td className="px-4 py-3.5 text-center text-slate-600 text-xs whitespace-nowrap font-semibold">
+                        {prod.minStock} {prod.unit || 'Pcs'}
+                      </td>
+                      <td className="px-6 py-3.5 text-right whitespace-nowrap">
                         <button
                           onClick={() => onNavigate('stock-in')}
-                          className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-medium rounded-lg transition cursor-pointer"
+                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-lg transition cursor-pointer whitespace-nowrap"
                         >
                           Restock
                         </button>

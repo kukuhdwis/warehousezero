@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, X } from 'lucide-react';
+import { Bell, X, QrCode, ArrowDownLeft, ArrowUpRight, Eye, Package } from 'lucide-react';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -12,6 +12,7 @@ import BranchManagement from './components/BranchManagement';
 import BranchMonitoring from './components/BranchMonitoring';
 import BarcodeModal from './components/BarcodeModal';
 import LoginView from './components/LoginView';
+import PublicCatalog from './components/PublicCatalog';
 import { getStoredUser, logoutUser } from './services/authService';
 import { 
   fetchProducts, 
@@ -19,6 +20,7 @@ import {
   createProduct, 
   updateProduct, 
   deleteProduct, 
+  deleteProductsBatch, 
   fetchTransactions, 
   subscribeStockMovements,
   recordStockMovement,
@@ -75,7 +77,37 @@ import LogoutConfirmModal from './components/LogoutConfirmModal';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(getStoredUser());
+  
+  // Clean URL Routing for Public Catalog (e.g. /catalog, /catalog/list, /catalog/WZ-2GD-BO-033)
+  const pathname = typeof window !== 'undefined' ? window.location.pathname.toLowerCase() : '';
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  
+  let initialUrlSku = searchParams ? (searchParams.get('sku') || '') : '';
+  
+  // Support clean path parameters: /catalog/WZ-2GD-001 or /product/WZ-2GD-001
+  if (!initialUrlSku && typeof window !== 'undefined') {
+    const segments = window.location.pathname.split('/').filter(Boolean);
+    if (segments.length >= 2 && (segments[0] === 'catalog' || segments[0] === 'katalog' || segments[0] === 'product')) {
+      if (segments[1] !== 'list') {
+        initialUrlSku = decodeURIComponent(segments[1]);
+      }
+    }
+  }
+
+  const isDirectCatalogRequested = Boolean(
+    initialUrlSku || 
+    (searchParams && searchParams.get('catalog') === 'true') || 
+    pathname.startsWith('/catalog') ||
+    pathname.startsWith('/katalog') ||
+    pathname.startsWith('/product')
+  );
+
+  const [isCatalogMode, setIsCatalogMode] = useState(isDirectCatalogRequested);
+  const [detectedQrSku, setDetectedQrSku] = useState(initialUrlSku);
+  const [isQrActionSheetOpen, setIsQrActionSheetOpen] = useState(Boolean(initialUrlSku && currentUser));
+
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [products, setProducts] = useState([]);
   const [branchInventories, setBranchInventories] = useState([]);
@@ -99,42 +131,18 @@ export default function App() {
   const prevNotifIdsRef = useRef(new Set());
   const isInitialNotifLoadRef = useRef(true);
 
+  // Find product matching detectedQrSku (placed safely after all useState definitions)
+  const detectedProduct = (products || []).find(p => 
+    (p.sku || '').toLowerCase() === (detectedQrSku || '').toLowerCase() ||
+    (p.code || '').toLowerCase() === (detectedQrSku || '').toLowerCase()
+  );
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const results = await Promise.allSettled([
-        fetchProducts(),
-        fetchTransactions(),
-        fetchBranches(),
-        fetchUsers(),
-        fetchBrands(),
-        fetchMachineCategories(),
-        fetchBranchInventories(),
-        fetchNotifications(currentUser),
-        fetchTransfers(currentUser?.branchId),
-        fetchStockRequests(currentUser?.branchId)
-      ]);
-
-      const [prodsRes, txsRes, branchRes, userRes, brandRes, catRes, invRes, notifRes, transRes, reqRes] = results;
-
-      if (branchRes.status === 'fulfilled') setBranches(branchRes.value || []);
-      if (userRes.status === 'fulfilled') setUsers(userRes.value || []);
-      if (brandRes.status === 'fulfilled') setBrands(brandRes.value || []);
-      if (catRes.status === 'fulfilled') setMachineCategories(catRes.value || []);
-      if (prodsRes.status === 'fulfilled') setProducts(prodsRes.value || []);
-      if (invRes.status === 'fulfilled') setBranchInventories(invRes.value || []);
-      if (notifRes.status === 'fulfilled') setNotifications(notifRes.value || []);
-      if (transRes.status === 'fulfilled') setTransfers(transRes.value || []);
-      if (reqRes.status === 'fulfilled') setStockRequests(reqRes.value || []);
-
-      if (txsRes.status === 'fulfilled') {
-        const txs = txsRes.value || [];
-        if (currentUser && currentUser.role === 'STAFF_BRANCH' && currentUser.branchId !== 'ALL') {
-          setTransactions(txs.filter(t => !t.branchId || t.branchId === currentUser.branchId));
-        } else {
-          setTransactions(txs);
-        }
-      }
+      // Data is populated automatically via onSnapshot real-time subscriptions.
+      // We just need a tiny delay to allow Firestore's local cache to resolve and avoid UI flashes.
+      await new Promise(resolve => setTimeout(resolve, 400));
     } catch (e) {
       console.error("Error loading data:", e);
     } finally {
@@ -272,6 +280,33 @@ export default function App() {
   };
 
 
+  // Unauthenticated real-time stream for public catalog (72 Master Products)
+  useEffect(() => {
+    if (!currentUser) {
+      const unsubProds = subscribeProducts((liveProds) => setProducts(liveProds));
+      const unsubBrands = subscribeBrands((liveBrands) => setBrands(liveBrands));
+      const unsubCats = subscribeMachineCategories((liveCats) => setMachineCategories(liveCats));
+      return () => {
+        unsubProds();
+        unsubBrands();
+        unsubCats();
+      };
+    }
+  }, [currentUser]);
+
+  // Tampilkan Public E-Catalog jika mode katalog aktif!
+  if (isCatalogMode) {
+    return (
+      <PublicCatalog 
+        products={products}
+        brands={brands}
+        machineCategories={machineCategories}
+        initialSku={initialUrlSku}
+        onGoToLogin={() => setIsCatalogMode(false)}
+      />
+    );
+  }
+
   // Jika belum login -> Tampilkan Halaman Login!
   if (!currentUser) {
     return (
@@ -280,6 +315,7 @@ export default function App() {
           setCurrentUser(user);
           setActiveTab('dashboard');
         }} 
+        onOpenCatalog={() => setIsCatalogMode(true)}
       />
     );
   }
@@ -302,6 +338,11 @@ export default function App() {
 
   const handleDeleteProduct = async (id) => {
     await deleteProduct(id);
+    await loadData();
+  };
+
+  const handleDeleteProductsBatch = async (ids) => {
+    await deleteProductsBatch(ids);
     await loadData();
   };
 
@@ -437,15 +478,12 @@ export default function App() {
         await fulfillStockRequest(matchedReq.id, deliveryNoteNo, currentUser);
       }
     }
-
-    await loadData();
   };
 
   // Handler for Branch Confirming Central Transfer Receipt (Single or Batch)
   const handleConfirmTransfer = async (transferIdOrItems, notes) => {
     const list = Array.isArray(transferIdOrItems) ? transferIdOrItems : [transferIdOrItems];
     const result = await confirmBatchTransferReceipt(list, currentUser, notes);
-    await loadData();
     const count = list.length;
     const firstItem = typeof list[0] === 'object' ? list[0] : transfers.find(t => t.id === list[0]);
     const deliveryNote = firstItem?.deliveryNote || '-';
@@ -465,7 +503,6 @@ export default function App() {
   const handleRejectTransfer = async (transferIdOrItems, reason) => {
     const list = Array.isArray(transferIdOrItems) ? transferIdOrItems : [transferIdOrItems];
     const result = await rejectBatchTransferReceipt(list, currentUser, reason);
-    await loadData();
     const count = list.length;
     const firstItem = typeof list[0] === 'object' ? list[0] : transfers.find(t => t.id === list[0]);
     const deliveryNote = firstItem?.deliveryNote || '-';
@@ -484,7 +521,6 @@ export default function App() {
   // Handler for Branch Requesting Stock from Central Office
   const handleRequestStock = async (requestData) => {
     const result = await createStockRequest(requestData, currentUser);
-    await loadData();
     setGlobalSuccessPopup({
       title: "Permintaan Stok Berhasil Dikirim!",
       message: "Pengajuan permintaan stok barang telah berhasil tercatat dan ternotifikasi ke Kantor Pusat.",
@@ -502,7 +538,6 @@ export default function App() {
   const handleRejectStockRequest = async (requestId, reason) => {
     const matched = stockRequests.find(r => r.id === requestId);
     const result = await rejectStockRequest(requestId, reason, currentUser);
-    await loadData();
     setGlobalSuccessPopup({
       title: "Permintaan Stok Ditolak",
       message: "Pemberitahuan penolakan permintaan stok beserta alasan resmi telah terkirim ke Cabang pemohon.",
@@ -518,7 +553,6 @@ export default function App() {
   // Handlers for User Management (Admin Only)
   const handleCreateUser = async (userData) => {
     await createUser(userData);
-    await loadData();
   };
 
   const handleUpdateUser = async (id, userData) => {
@@ -529,35 +563,29 @@ export default function App() {
       setCurrentUser(updatedSession);
       localStorage.setItem('wms_user', JSON.stringify(updatedSession));
     }
-    await loadData();
   };
 
   const handleDeleteUser = async (id) => {
     await deleteUser(id);
-    await loadData();
   };
 
   // Handlers for Branch Management (Admin Only)
   const handleCreateBranch = async (branchData) => {
     await createBranch(branchData);
-    await loadData();
   };
 
   const handleUpdateBranch = async (id, branchData) => {
     await updateBranch(id, branchData);
-    await loadData();
   };
 
   const handleDeleteBranch = async (id) => {
     await deleteBranch(id);
-    await loadData();
   };
 
   const handleClearAllBranches = async () => {
     setLoading(true);
     try {
       await clearAllBranches();
-      await loadData();
     } catch (e) {
       console.error("Error clearing branches:", e);
     } finally {
@@ -667,6 +695,8 @@ export default function App() {
           activeTab={activeTab}
           setActiveTab={changeTab}
           onLogout={handleLogout}
+          isCollapsed={isSidebarCollapsed}
+          setIsCollapsed={setIsSidebarCollapsed}
         />
 
 
@@ -703,6 +733,7 @@ export default function App() {
                   onCreateProduct={handleCreateProduct}
                   onUpdateProduct={handleUpdateProduct}
                   onDeleteProduct={handleDeleteProduct}
+                  onDeleteProductsBatch={handleDeleteProductsBatch}
                   onCreateBrand={handleCreateBrand}
                   onDeleteBrand={handleDeleteBrand}
                   onCreateMachineCategory={handleCreateMachineCategory}
@@ -788,6 +819,101 @@ export default function App() {
         product={barcodeProduct}
         onClose={() => setBarcodeProduct(null)}
       />
+
+      {/* SMART QR CODE DETECTED MODAL (WHEN LOGGED-IN STAFF SCANS QR FROM OUTSIDE APP) */}
+      {isQrActionSheetOpen && detectedProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200 flex flex-col">
+            
+            <div className="p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shadow-xs">
+                  <QrCode className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-sm text-white leading-tight">Smart QR Terdeteksi!</h4>
+                  <p className="text-[11px] text-slate-300">Pilih aksi cepat untuk produk ini</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsQrActionSheetOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-full hover:bg-white/10 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="flex items-center gap-3.5 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+                {detectedProduct.imageUrl ? (
+                  <img 
+                    src={detectedProduct.imageUrl} 
+                    alt={detectedProduct.name} 
+                    className="w-16 h-16 rounded-xl object-cover border border-slate-200 shadow-2xs flex-shrink-0 bg-white" 
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 font-bold text-xs flex-shrink-0">
+                    <Package className="w-7 h-7 opacity-60" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-2 py-0.2 rounded text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-200">
+                      {detectedProduct.engine_type || 'Universal'}
+                    </span>
+                    <span className="text-[11px] font-mono text-slate-500 font-bold">
+                      {detectedProduct.sku || detectedProduct.code}
+                    </span>
+                  </div>
+                  <h5 className="font-bold text-slate-900 text-sm mt-0.5 truncate">{detectedProduct.name}</h5>
+                  <p className="text-xs font-bold text-emerald-600 mt-0.5">
+                    Rp {(Number(detectedProduct.selling_price ?? detectedProduct.price) || 0).toLocaleString('id-ID')}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('stock-in');
+                    setIsQrActionSheetOpen(false);
+                  }}
+                  className="w-full py-3 px-4 bg-sky-600 hover:bg-sky-700 text-white rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md shadow-sky-600/20 active:scale-95 cursor-pointer"
+                >
+                  <ArrowDownLeft className="w-4 h-4" />
+                  <span>+ Buka di Barang Masuk (Stock In)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('stock-out');
+                    setIsQrActionSheetOpen(false);
+                  }}
+                  className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 active:scale-95 cursor-pointer"
+                >
+                  <ArrowUpRight className="w-4 h-4" />
+                  <span>+ Buka di Barang Keluar / Kasir (Stock Out)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCatalogMode(true);
+                    setIsQrActionSheetOpen(false);
+                  }}
+                  className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Eye className="w-4 h-4 text-slate-500" />
+                  <span>Lihat Tampilan E-Katalog Publik</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* Mobile Bottom Navigation Bar */}
       <BottomNav 

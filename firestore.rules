@@ -6,64 +6,100 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
+    
+    function hasRole(roleName) {
+      return isAuthenticated() && request.auth.token.role == roleName;
+    }
+    
+    function isAdminOrPusat() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'ADMIN' || 
+        request.auth.token.role == 'PUSAT' || 
+        request.auth.token.role == 'STAFF_PUSAT'
+      );
+    }
+    
+    function isStaffBranch() {
+      return hasRole('STAFF_BRANCH');
+    }
+    
+    function isBranchContext(branchId) {
+      return isAuthenticated() && request.auth.token.branch_id == branchId;
+    }
 
     // Metadata & Initial System Bootstrapping
     match /system_metadata/{doc} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isAdminOrPusat();
     }
 
-    // Master Catalog Data (Produk, Brand, Kategori Mesin, Cabang)
+    // Master Catalog Data (Produk, Brand, Kategori Mesin, Cabang) - Publik Read untuk E-Katalog
     match /products/{doc} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if true;
+      allow write: if isAdminOrPusat();
     }
 
     match /brands/{doc} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if true;
+      allow write: if isAdminOrPusat();
     }
 
     match /machine_categories/{doc} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if true;
+      allow write: if isAdminOrPusat();
     }
 
     match /branches/{doc} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if true;
+      allow write: if isAdminOrPusat();
     }
 
     // Manajemen Pengguna & Profil
-    match /users/{doc} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+    match /users/{userId} {
+      // User hanya bisa baca profilnya sendiri, Admin/Pusat bisa akses semua
+      allow read: if isAdminOrPusat() || request.auth.uid == userId;
+      allow write: if isAdminOrPusat();
     }
 
-    match /user_profiles/{doc} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+    match /user_profiles/{userId} {
+      allow read: if isAdminOrPusat() || request.auth.uid == userId;
+      allow write: if false; // Diubah melalui Cloud Functions
     }
 
     // Operasional Inventaris & Mutasi Stok
     match /branch_inventories/{doc} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow create, update: if isAdminOrPusat() || (isStaffBranch() && isBranchContext(request.resource.data.branchId));
+      allow delete: if isAdminOrPusat();
     }
 
     match /stock_transfers/{doc} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      // Hanya pusat yang bisa kirim, cabang hanya bisa update status penerimaan
+      allow create: if isAdminOrPusat();
+      allow update: if isAdminOrPusat() || (isStaffBranch() && isBranchContext(resource.data.targetBranchId));
+      allow delete: if isAdminOrPusat();
     }
 
     match /stock_requests/{doc} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      // Cabang hanya boleh request untuk cabangnya sendiri
+      allow create: if isStaffBranch() && isBranchContext(request.resource.data.branchId);
+      allow update: if isAdminOrPusat() || (isStaffBranch() && isBranchContext(resource.data.branchId));
+      allow delete: if isAdminOrPusat();
     }
 
     match /stock_movements/{doc} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow create: if isAdminOrPusat() || (isStaffBranch() && isBranchContext(request.resource.data.branchId));
+      allow update, delete: if isAdminOrPusat();
     }
 
     match /notifications/{doc} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated(); // To mark as read
+      allow delete: if isAdminOrPusat();
     }
 
     // Koleksi Sensitif Terkunci (Zero-Trust: Hanya bisa dimodifikasi via Cloud Functions / Admin SDK)
@@ -87,11 +123,9 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Default Deny: Tolak seluruh akses unauthenticated
+    // Default Deny: Tolak seluruh akses unauthenticated / unhandled
     match /{document=**} {
       allow read, write: if false;
     }
   }
 }
-
-

@@ -430,16 +430,16 @@ export default function BranchMonitoring({
               </div>
 
               {/* DESKTOP TABLE VIEW */}
-              <div className="hidden md:block overflow-hidden rounded-xl border border-slate-200">
-                <table className="w-full text-left text-sm">
+              <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left text-sm border-collapse">
                   <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase border-b border-slate-200">
                     <tr>
-                      <th className="px-5 py-3">Nama Produk & Merk</th>
-                      <th className="px-4 py-3">SKU</th>
-                      <th className="px-4 py-3 text-right">Harga Unit</th>
-                      <th className="px-4 py-3 text-center">Stok Fisik</th>
-                      <th className="px-4 py-3 text-right">Total Nilai (Rp)</th>
-                      <th className="px-5 py-3 text-center">Status Validasi</th>
+                      <th className="px-5 py-3.5 min-w-[200px]">Nama Produk & Merk</th>
+                      <th className="px-4 py-3.5 whitespace-nowrap min-w-[130px]">SKU</th>
+                      <th className="px-4 py-3.5 text-right whitespace-nowrap min-w-[110px]">Harga Unit</th>
+                      <th className="px-4 py-3.5 text-center whitespace-nowrap min-w-[120px]">Stok Fisik</th>
+                      <th className="px-4 py-3.5 text-right whitespace-nowrap min-w-[130px]">Total Nilai (Rp)</th>
+                      <th className="px-5 py-3.5 text-center whitespace-nowrap min-w-[140px]">Status Validasi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -450,46 +450,46 @@ export default function BranchMonitoring({
 
                       return (
                         <tr key={item.id} className="hover:bg-slate-50/80 transition">
-                          <td className="px-5 py-3.5 font-medium text-slate-900">
-                            <div className="flex items-center gap-2">
-                              <span>{item.productName}</span>
-                              <span className="px-2 py-0.2 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700">
+                          <td className="px-5 py-3.5 font-medium text-slate-900 min-w-[200px]">
+                            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                              <span className="font-bold text-slate-900 leading-snug">{item.productName}</span>
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap flex-shrink-0">
                                 {item.brand || 'Generic'}
                               </span>
                             </div>
                           </td>
-                          <td className="px-4 py-3.5 text-xs text-slate-400 font-mono">{item.sku}</td>
-                          <td className="px-4 py-3.5 text-right text-slate-700 text-xs font-medium">
+                          <td className="px-4 py-3.5 text-xs text-slate-600 font-mono font-bold whitespace-nowrap">{item.sku}</td>
+                          <td className="px-4 py-3.5 text-right text-slate-700 text-xs font-semibold whitespace-nowrap">
                             Rp {(Number(item.price) || 0).toLocaleString('id-ID')}
                           </td>
-                          <td className="px-4 py-3.5 text-center">
-                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                          <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
                               !isApproved 
-                                ? 'bg-amber-100 text-amber-800' 
+                                ? 'bg-amber-100 text-amber-800 border border-amber-200' 
                                 : isLow 
-                                  ? 'bg-rose-100 text-rose-700' 
-                                  : 'bg-emerald-100 text-emerald-700'
+                                  ? 'bg-rose-100 text-rose-700 border border-rose-200' 
+                                  : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                             }`}>
                               {item.stockQuantity} {item.unit || 'Pcs'}
                             </span>
                           </td>
-                          <td className="px-4 py-3.5 text-right font-bold text-slate-900 text-xs">
+                          <td className="px-4 py-3.5 text-right font-extrabold text-slate-900 text-xs whitespace-nowrap">
                             Rp {lineVal.toLocaleString('id-ID')}
                           </td>
-                          <td className="px-5 py-3.5 text-center">
+                          <td className="px-5 py-3.5 text-center whitespace-nowrap">
                             {isApproved ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                <Check className="w-3 h-3" />
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
+                                <Check className="w-3.5 h-3.5" />
                                 Aktif (Disetujui)
                               </span>
                             ) : item.status === 'PENDING_APPROVAL' ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse">
-                                <Clock className="w-3 h-3" />
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse whitespace-nowrap">
+                                <Clock className="w-3.5 h-3.5" />
                                 Menunggu Validasi
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                <Ban className="w-3 h-3" />
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">
+                                <Ban className="w-3.5 h-3.5" />
                                 Ditolak
                               </span>
                             )}

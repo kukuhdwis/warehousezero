@@ -7,6 +7,7 @@ import {
 } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { getFunctions } from "firebase/functions";
+import { getStorage } from "firebase/storage";
 
 // Secure Firebase Configuration loaded exclusively from environment variables (.env)
 const getFirebaseConfig = () => {
@@ -35,6 +36,7 @@ let app = null;
 let db = null;
 let auth = null;
 let functions = null;
+let storage = null;
 
 if (isFirebaseConfigured()) {
   try {
@@ -50,10 +52,16 @@ if (isFirebaseConfigured()) {
     }
     auth = getAuth(app);
     functions = getFunctions(app);
+    try {
+      storage = getStorage(app);
+    } catch (storageErr) {
+      console.warn("Storage init warning:", storageErr);
+    }
   } catch (error) {
     console.error("Error initializing Firebase:", error);
   }
 }
 
-export { app, db, auth, functions, firebaseConfig };
+export { app, db, auth, functions, storage, firebaseConfig };
+
 

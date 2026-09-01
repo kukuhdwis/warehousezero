@@ -495,15 +495,15 @@ export default function UserManagement({
       {/* DESKTOP TABLE VIEW (Screens >= md) */}
       <div className="hidden md:block bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full text-left text-sm border-collapse">
             <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase border-b border-slate-200">
               <tr>
-                <th className="px-6 py-3.5">Pengguna / User</th>
-                <th className="px-4 py-3.5">Peran (Role)</th>
-                <th className="px-4 py-3.5">Penugasan Cabang</th>
-                <th className="px-4 py-3.5">Kontak / Telepon</th>
-                <th className="px-4 py-3.5">Status</th>
-                <th className="px-6 py-3.5 text-right">Aksi</th>
+                <th className="px-6 py-3.5 min-w-[220px]">Pengguna / User</th>
+                <th className="px-4 py-3.5 whitespace-nowrap min-w-[140px]">Peran (Role)</th>
+                <th className="px-4 py-3.5 whitespace-nowrap min-w-[160px]">Penugasan Cabang</th>
+                <th className="px-4 py-3.5 whitespace-nowrap min-w-[130px]">Kontak / Telepon</th>
+                <th className="px-4 py-3.5 text-center whitespace-nowrap min-w-[95px]">Status</th>
+                <th className="px-6 py-3.5 text-right whitespace-nowrap min-w-[110px]">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -532,9 +532,9 @@ export default function UserManagement({
                     <tr key={user.id} className="hover:bg-slate-50/80 transition">
                       
                       {/* Name & Email */}
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 min-w-[220px]">
                         <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shadow-xs ${
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shadow-xs flex-shrink-0 ${
                             isAdmin 
                               ? 'bg-sky-100 text-sky-700 border border-sky-200' 
                               : isStaffPusat
@@ -543,36 +543,36 @@ export default function UserManagement({
                           }`}>
                             {initials}
                           </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-slate-900">{user.name}</span>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                              <span className="font-bold text-slate-900 leading-snug">{user.name}</span>
                               {isCurrent && (
-                                <span className="text-[10px] px-1.5 py-0.2 bg-blue-50 text-blue-700 border border-blue-200 rounded font-medium">
+                                <span className="text-[10px] px-1.5 py-0.2 bg-blue-50 text-blue-700 border border-blue-200 rounded font-bold whitespace-nowrap flex-shrink-0">
                                   Anda
                                 </span>
                               )}
                             </div>
-                            <div className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                              <Mail className="w-3 h-3" /> {user.email}
+                            <div className="text-xs text-slate-400 flex items-center gap-1 mt-0.5 whitespace-nowrap">
+                              <Mail className="w-3 h-3 flex-shrink-0" /> <span className="truncate">{user.email}</span>
                             </div>
                           </div>
                         </div>
                       </td>
 
                       {/* Role Badge */}
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-4 whitespace-nowrap">
                         {isAdmin ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-sky-50 text-sky-700 border border-sky-200 whitespace-nowrap">
                             <ShieldCheck className="w-3.5 h-3.5" />
                             Administrator
                           </span>
                         ) : isStaffPusat ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
                             <Eye className="w-3.5 h-3.5" />
                             Staff Pusat
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
                             <UserCheck className="w-3.5 h-3.5" />
                             Staff Cabang
                           </span>
@@ -580,17 +580,17 @@ export default function UserManagement({
                       </td>
 
                       {/* Branch Badge */}
-                      <td className="px-4 py-4">
-                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 rounded-lg text-xs font-medium text-slate-700">
-                          <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 whitespace-nowrap">
+                          <Building2 className="w-3.5 h-3.5 text-slate-500" />
                           <span>{displayBranch}</span>
                         </div>
                       </td>
 
                       {/* Phone */}
-                      <td className="px-4 py-4 text-xs text-slate-600">
+                      <td className="px-4 py-4 text-xs text-slate-600 whitespace-nowrap">
                         {user.phone ? (
-                          <span className="flex items-center gap-1">
+                          <span className="flex items-center gap-1.5 font-medium">
                             <Phone className="w-3 h-3 text-slate-400" /> {user.phone}
                           </span>
                         ) : (
@@ -599,14 +599,14 @@ export default function UserManagement({
                       </td>
 
                       {/* Status */}
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-4 text-center whitespace-nowrap">
                         {user.status === 'INACTIVE' ? (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 whitespace-nowrap">
                             <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                             Nonaktif
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                             Aktif
                           </span>
@@ -614,8 +614,8 @@ export default function UserManagement({
                       </td>
 
                       {/* Action Buttons */}
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1.5 flex-nowrap">
                           <button
                             onClick={() => handleOpenEditModal(user)}
                             className="p-1.5 text-slate-500 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition cursor-pointer"

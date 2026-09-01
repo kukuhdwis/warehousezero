@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ArrowDownLeft, 
   Camera, 
   CheckCircle, 
+  CheckCircle2,
   Package, 
   Plus, 
   Minus, 
@@ -99,53 +100,145 @@ export default function StockIn({
   const [isInboundMultiCategoryMode, setIsInboundMultiCategoryMode] = useState(false);
   const [inboundCategoryFilter, setInboundCategoryFilter] = useState('ALL');
   const [inboundManifest, setInboundManifest] = useState([]);
-
+  const [scanSuccessToast, setScanSuccessToast] = useState(null);
 
   // Safe Arrays
   const safeTransfers = Array.isArray(transfers) ? transfers : [];
   const safeStockRequests = Array.isArray(stockRequests) ? stockRequests : [];
   const safeProducts = Array.isArray(products) ? products : [];
 
+  // Auto-dismiss scan success toast
+  useEffect(() => {
+    if (scanSuccessToast) {
+      const timer = setTimeout(() => {
+        setScanSuccessToast(null);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [scanSuccessToast]);
+
   // Get all unique categories for filtering
   const allInboundCategories = Array.from(
     new Set(safeProducts.map(p => p.machineCategory || p.kategoriMesin || 'Universal / Semua Mesin'))
   );
 
+// Helper to parse SKU from raw barcodes or Smart QR URLs
+const parseScannedSKU = (text) => {
+  if (!text) return '';
+  const trimmed = text.trim();
+  if (trimmed.includes('http://') || trimmed.includes('https://') || trimmed.includes('sku=') || trimmed.includes('/catalog/') || trimmed.includes('/product/')) {
+    try {
+      const urlObj = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+      const skuParam = urlObj.searchParams.get('sku');
+      if (skuParam) return decodeURIComponent(skuParam).trim();
+      const parts = urlObj.pathname.split('/').filter(Boolean);
+      if (parts.length >= 2 && (parts[0] === 'catalog' || parts[0] === 'katalog' || parts[0] === 'product') && parts[1] !== 'list') {
+        return decodeURIComponent(parts[1]).trim();
+      }
+    } catch (e) {
+      const match = trimmed.match(/[?&]sku=([^&#]+)/i);
+      if (match && match[1]) return decodeURIComponent(match[1]).trim();
+    }
+  }
+  return trimmed;
+};
+
   const handleAddItemToManifest = (product) => {
     if (!product) return;
-    const existingIdx = inboundManifest.findIndex(item => item.productId === product.id);
-    if (existingIdx !== -1) {
-      const updated = [...inboundManifest];
-      updated[existingIdx].qty_in += 1;
-      setInboundManifest(updated);
-    } else {
-      setInboundManifest([
-        ...inboundManifest,
-        {
-          productId: product.id,
-          sku: product.sku,
-          productName: product.name,
-          brand: product.brand || 'Generic',
-          machineCategory: product.machineCategory || product.kategoriMesin || 'Universal',
-          qty_in: 1,
-          buyPrice: product.price || 0,
-          supplier: '',
-          invoiceNo: '',
-          batchNo: '',
-          expiredDate: ''
-        }
-      ]);
-    }
+    setInboundManifest((prevManifest) => {
+      const prodSku = (product.sku || product.code || '').trim().toLowerCase();
+      const existingIdx = prevManifest.findIndex(
+        item => (item.productId && item.productId === product.id) || 
+                (item.sku && item.sku.trim().toLowerCase() === prodSku)
+      );
+
+      if (existingIdx !== -1) {
+        const updated = [...prevManifest];
+        const currentQty = Number(updated[existingIdx].qty_in) || 0;
+        const nextQty = currentQty + 1;
+        updated[existingIdx] = {
+          ...updated[existingIdx],
+          qty_in: nextQty
+        };
+        setScanSuccessToast({
+          name: product.name,
+          sku: product.sku || product.code,
+          qty: nextQty
+        });
+        return updated;
+      } else {
+        setScanSuccessToast({
+          name: product.name,
+          sku: product.sku || product.code,
+          qty: 1
+        });
+        return [
+          ...prevManifest,
+          {
+            productId: product.id,
+            sku: product.sku || product.code,
+            productName: product.name,
+            brand: product.brand || 'NDK Exhaust',
+            machineCategory: product.machineCategory || product.engine_type || product.kategoriMesin || 'Universal',
+            qty_in: 1,
+            buyPrice: Number(product.reseller_price || product.price) || 0,
+            supplier: '',
+            invoiceNo: '',
+            batchNo: '',
+            expiredDate: ''
+          }
+        ];
+      }
+    });
   };
 
   const handleUpdateManifestField = (index, field, value) => {
-    const updated = [...inboundManifest];
-    updated[index][field] = value;
-    setInboundManifest(updated);
+    setInboundManifest(prev => {
+      const updated = [...prev];
+      if (updated[index]) {
+        updated[index] = { ...updated[index], [field]: value };
+      }
+      return updated;
+    });
   };
 
   const handleRemoveFromManifest = (index) => {
-    setInboundManifest(inboundManifest.filter((_, i) => i !== index));
+    setInboundManifest(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleScanSuccess = (scannedText) => {
+    if (!scannedText) return;
+    const cleanSku = parseScannedSKU(scannedText).trim().toLowerCase();
+    const cleanNormalized = cleanSku.replace(/[\s\-_]/g, '');
+    
+    const matched = safeProducts.find(p => {
+      const pSku = (p.sku || '').trim().toLowerCase();
+      const pCode = (p.code || '').trim().toLowerCase();
+      const pBarcode = (p.barcode || '').trim().toLowerCase();
+      const pId = (p.id || '').trim().toLowerCase();
+      const pName = (p.name || '').trim().toLowerCase();
+
+      return pSku === cleanSku || 
+             pCode === cleanSku || 
+             pBarcode === cleanSku || 
+             pId === cleanSku ||
+             pSku.replace(/[\s\-_]/g, '') === cleanNormalized ||
+             pCode.replace(/[\s\-_]/g, '') === cleanNormalized ||
+             pName === cleanSku;
+    });
+
+    if (matched) {
+      if (isBranchStaff) {
+        setReqProductId(matched.id);
+        setReqQty(prev => (Number(prev) || 0) + 1);
+        setIsRequestModalOpen(true);
+      } else {
+        handleAddItemToManifest(matched);
+      }
+      setIsScannerOpen(false);
+    } else {
+      showAlert("Produk Tidak Ditemukan 🔍", `Produk dengan SKU/Barcode "${parseScannedSKU(scannedText)}" tidak ditemukan di database master.`, "WARNING");
+    }
   };
 
   // Pre-submit validation before opening Inbound Batch Confirmation Dialog
@@ -276,18 +369,6 @@ export default function StockIn({
   );
 
   const selectedProduct = safeProducts.find(p => p.id === selectedProductId || p.sku === selectedProductId);
-
-  const handleScanSuccess = (scannedText) => {
-    const matched = safeProducts.find(
-      p => p.sku?.toLowerCase() === scannedText?.toLowerCase() || 
-           p.barcode?.toLowerCase() === scannedText?.toLowerCase()
-    );
-    if (matched) {
-      setSelectedProductId(matched.id);
-    } else {
-      showAlert("Barcode Tidak Ditemukan 🔍", `Produk dengan SKU/Barcode "${scannedText}" tidak ditemukan di database.`, "WARNING");
-    }
-  };
 
   // Toggle expand for a Delivery Note Package
   const toggleExpandPackage = (key) => {
@@ -472,6 +553,28 @@ export default function StockIn({
         </div>
       </div>
 
+      {/* Live Scan Success Alert Banner */}
+      {scanSuccessToast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-slate-950 text-white px-4 py-3 rounded-2xl shadow-2xl border border-emerald-500/50 flex items-center gap-3 animate-in slide-in-from-top-4 duration-200 max-w-md w-[92%]">
+          <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold leading-tight truncate text-white">{scanSuccessToast.name}</p>
+            <p className="text-[11px] text-slate-300 mt-0.5">
+              SKU: <span className="font-mono text-emerald-400 font-bold">{scanSuccessToast.sku}</span> • Total di List: <strong className="text-white bg-emerald-700/80 px-2 py-0.5 rounded-md font-black">{scanSuccessToast.qty} Pcs</strong>
+            </p>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => setScanSuccessToast(null)} 
+            className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {reqSuccessMsg && (
         <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold rounded-2xl flex items-center gap-2 animate-in fade-in">
           <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
@@ -638,39 +741,39 @@ export default function StockIn({
                         {isExpanded && (
                           <div className="p-4 sm:p-5 bg-slate-50/50">
                             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
-                              <table className="w-full text-left text-xs">
+                              <table className="w-full text-left text-xs border-collapse">
                                 <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-100">
                                   <tr>
-                                    <th className="px-4 py-3">Nama Produk</th>
-                                    <th className="px-3 py-3">Merk / Brand</th>
-                                    <th className="px-3 py-3 font-mono">SKU</th>
-                                    <th className="px-3 py-3 text-center">Kuantitas Kirim</th>
-                                    <th className="px-3 py-3">Catatan</th>
-                                    <th className="px-4 py-3 text-right">Aksi Satuan</th>
+                                    <th className="px-4 py-3 min-w-[180px]">Nama Produk</th>
+                                    <th className="px-3 py-3 whitespace-nowrap min-w-[110px]">Merk / Brand</th>
+                                    <th className="px-3 py-3 font-mono whitespace-nowrap min-w-[120px]">SKU</th>
+                                    <th className="px-3 py-3 text-center whitespace-nowrap min-w-[120px]">Kuantitas Kirim</th>
+                                    <th className="px-3 py-3 min-w-[150px]">Catatan</th>
+                                    <th className="px-4 py-3 text-right whitespace-nowrap min-w-[140px]">Aksi Satuan</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                   {pkg.items.map((item) => (
                                     <tr key={item.id} className="hover:bg-slate-50/80 transition">
-                                      <td className="px-4 py-3 font-bold text-slate-900">
-                                        {item.productName}
+                                      <td className="px-4 py-3 font-bold text-slate-900 min-w-[180px]">
+                                        <span className="leading-snug">{item.productName}</span>
                                       </td>
-                                      <td className="px-3 py-3">
-                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                      <td className="px-3 py-3 whitespace-nowrap">
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap inline-block">
                                           {item.brand || 'Generic'}
                                         </span>
                                       </td>
-                                      <td className="px-3 py-3 font-mono text-slate-500">{item.sku}</td>
-                                      <td className="px-3 py-3 text-center">
-                                        <span className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      <td className="px-3 py-3 font-mono text-slate-600 font-bold whitespace-nowrap">{item.sku}</td>
+                                      <td className="px-3 py-3 text-center whitespace-nowrap">
+                                        <span className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap inline-block">
                                           +{item.qty} Pcs
                                         </span>
                                       </td>
-                                      <td className="px-3 py-3 text-slate-600 italic">
+                                      <td className="px-3 py-3 text-slate-600 italic break-words min-w-[150px]">
                                         {item.notes || '-'}
                                       </td>
-                                      <td className="px-4 py-3 text-right">
-                                        <div className="flex items-center justify-end gap-1.5">
+                                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                                        <div className="flex items-center justify-end gap-1.5 flex-nowrap">
                                           <button
                                             type="button"
                                             onClick={() => {
@@ -678,7 +781,7 @@ export default function StockIn({
                                               setTransferRejectReason('');
                                               setTransferRejectError('');
                                             }}
-                                            className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
+                                            className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg text-[11px] font-bold transition flex items-center gap-1 cursor-pointer whitespace-nowrap"
                                             title="Tolak item ini saja"
                                           >
                                             <Ban className="w-3 h-3" />
@@ -687,8 +790,8 @@ export default function StockIn({
                                           <button
                                             type="button"
                                             onClick={() => setConfirmingSingleTransfer(item)}
-                                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition shadow-xs active:scale-95 flex items-center gap-1 cursor-pointer"
-                                            title="Konfirmasi terima item ini saja"
+                                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition shadow-xs active:scale-95 flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                                            title="Terima item ini saja"
                                           >
                                             <Check className="w-3 h-3" />
                                             <span>Terima</span>
@@ -930,27 +1033,31 @@ export default function StockIn({
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-100/80 text-slate-600 font-semibold uppercase">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-100/80 text-slate-600 font-semibold uppercase border-b border-slate-200">
                       <tr>
-                        <th className="px-4 py-2.5">Produk & Kategori</th>
-                        <th className="px-3 py-2.5 text-center w-36">Kuantitas Masuk (Pcs)</th>
-                        <th className="px-3 py-2.5 text-right w-32">Harga Beli / HPP</th>
-                        <th className="px-3 py-2.5">Supplier / No. Faktur</th>
-                        <th className="px-4 py-2.5 text-right">Aksi</th>
+                        <th className="px-4 py-2.5 min-w-[200px]">Produk & Kategori</th>
+                        <th className="px-3 py-2.5 text-center whitespace-nowrap min-w-[140px]">Kuantitas Masuk (Pcs)</th>
+                        <th className="px-3 py-2.5 text-right whitespace-nowrap min-w-[120px]">Harga Beli / HPP</th>
+                        <th className="px-3 py-2.5 min-w-[160px]">Supplier / No. Faktur</th>
+                        <th className="px-4 py-2.5 text-right whitespace-nowrap min-w-[70px]">Aksi</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {inboundManifest.map((item, idx) => (
                         <tr key={item.productId} className="hover:bg-slate-50">
-                          <td className="px-4 py-3 font-semibold text-slate-900">
-                            <div className="flex items-center gap-1.5">
-                              <span>{item.productName}</span>
-                              <span className="px-1.5 py-0.2 rounded text-[10px] bg-amber-50 text-amber-800 border border-amber-200">
+                          <td className="px-4 py-3 font-semibold text-slate-900 min-w-[200px]">
+                            <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+                              <span className="font-bold text-slate-900 leading-snug">{item.productName}</span>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-50 text-amber-800 border border-amber-200 whitespace-nowrap flex-shrink-0">
                                 {item.machineCategory}
                               </span>
                             </div>
-                            <span className="text-[10px] font-mono text-slate-500">{item.sku} | Brand: {item.brand}</span>
+                            <div className="text-[10px] font-mono text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                              <span className="whitespace-nowrap font-bold text-slate-600">SKU: {item.sku}</span>
+                              <span>|</span>
+                              <span className="whitespace-nowrap text-indigo-600 font-semibold">Brand: {item.brand}</span>
+                            </div>
                           </td>
                           <td className="px-3 py-3 text-center">
                             <div className="flex items-center justify-center gap-1">
@@ -1176,13 +1283,6 @@ export default function StockIn({
           </div>
         </div>
       )}
-
-      {/* Barcode Scanner Camera Modal (For Pusat Inbound) */}
-      <ScannerModal
-        isOpen={isScannerOpen}
-        onClose={() => setIsScannerOpen(false)}
-        onScanSuccess={handleScanSuccess}
-      />
 
       {/* Transaction Success Pop-Up Modal */}
       <TransactionSuccessModal
@@ -1417,6 +1517,12 @@ export default function StockIn({
         type={alertModal?.type}
       />
 
+      {/* SCANNER MODAL FOR BARCODE / SMART QR */}
+      <ScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScanSuccess={handleScanSuccess}
+      />
 
     </div>
   );

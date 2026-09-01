@@ -116,6 +116,17 @@ export default function Navbar({
         {/* Right Section: Notification Center & Clock */}
         <div className="flex items-center gap-2 sm:gap-3">
           
+          {/* E-Katalog Publik Preview Button */}
+          <button
+            type="button"
+            onClick={() => window.open('/catalog', '_blank')}
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
+            title="Buka Halaman E-Katalog Publik di tab baru"
+          >
+            <span>🛍️ E-Katalog</span>
+            <ExternalLink className="w-3.5 h-3.5 opacity-70" />
+          </button>
+          
           {/* Notification Center Bell */}
           <div className="relative" ref={notifRef}>
             <button
