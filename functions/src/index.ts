@@ -255,7 +255,6 @@ export const setUserRoleAndBranch = functions.https.onCall(async (data, context)
   await admin.auth().setCustomUserClaims(targetUid, {
     role,
     branch_id: role === 'cabang' ? branchId : null,
-    branch_type: role === 'cabang' ? branchType : null,
     claims_version: Date.now()
   });
 
@@ -267,7 +266,6 @@ export const setUserRoleAndBranch = functions.https.onCall(async (data, context)
   await db.doc(`user_profiles/${targetUid}`).set({
     role,
     branch_id: role === 'cabang' ? branchId : null,
-    branch_type: role === 'cabang' ? branchType : null,
     claims_updated_at: admin.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 
@@ -340,10 +338,14 @@ export const createStockTransfer = functions.https.onCall(async (data, context) 
     throw new functions.https.HttpsError('invalid-argument', 'Cabang tujuan dan daftar items tidak boleh kosong.');
   }
 
-  // 1. Cek Profil Cabang Tujuan
+  // 1. Cek Profil Cabang Tujuan & Secret
   const branchSnap = await db.doc(`branches/${toBranchId}`).get();
   if (!branchSnap.exists) throw new functions.https.HttpsError('not-found', 'Cabang tujuan tidak ada.');
   const branch = branchSnap.data()!;
+  
+  const secretSnap = await db.doc(`branch_secrets/${toBranchId}`).get();
+  const actualBranchType = secretSnap.exists ? secretSnap.data()?.type : (branch.branch_type || 'INTERNAL');
+
 
   // 2. CEK STATUS PIUTANG OVERDUE (Jatuh Tempo Macet)
   const overdueInvoices = await db.collection('invoices')
@@ -371,9 +373,9 @@ export const createStockTransfer = functions.https.onCall(async (data, context) 
       throw new functions.https.HttpsError('not-found', `Data harga untuk SKU ${item.productId} tidak lengkap.`);
     }
 
-    const priceApplied = branch.branch_type === 'DISTRIBUTOR' 
+    const priceApplied = actualBranchType === 'DISTRIBUTOR' 
       ? pricingSnap.data()!.distributor_price 
-      : branch.branch_type === 'RESELLER' 
+      : actualBranchType === 'RESELLER' 
         ? pricingSnap.data()!.reseller_price 
         : pricingSnap.data()!.cost_price; // Internal = HPP
 
@@ -425,7 +427,6 @@ export const createStockTransfer = functions.https.onCall(async (data, context) 
       from_branch_id: 'PUSAT',
       to_branch_id: toBranchId,
       branch_name: branch.branch_name,
-      branch_type: branch.branch_type,
       items: calculatedItems,
       total_value: totalTransferValue,
       status: 'IN_TRANSIT',

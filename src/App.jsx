@@ -524,23 +524,9 @@ export default function App() {
     };
     await recordStockMovement(dataWithBranch);
 
-    // If this is a Central Transfer to a Branch, also register the transfer for branch confirmation
+    // If this is a Central Transfer to a Branch, check if there is a pending stock request matching this branch and product, and mark as fulfilled
     if (movementData.transactionType === 'STOCK_TRANSFER_TO_BRANCH') {
-      const prod = products.find(p => p.id === movementData.productId);
       const deliveryNoteNo = movementData.deliveryNote || `SJ-HQ-${Date.now().toString().slice(-6)}`;
-
-      await createStockTransfer({
-        productId: movementData.productId,
-        sku: movementData.sku || prod?.sku,
-        productName: movementData.productName || prod?.name,
-        brand: prod?.brand || 'NDK Packaging',
-        price: movementData.price || prod?.price || 0,
-        qty: movementData.qty,
-        targetBranchId: movementData.targetBranchId,
-        targetBranchName: movementData.targetBranchName,
-        deliveryNote: deliveryNoteNo,
-        notes: movementData.notes
-      }, currentUser);
 
       // Check if there is a pending stock request matching this branch and product, and mark as fulfilled
       const matchedReq = stockRequests.find(

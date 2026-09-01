@@ -18,6 +18,7 @@ import {
 import GlobalSuccessModal from './GlobalSuccessModal';
 import CustomAlertModal from './CustomAlertModal';
 import ConfirmationModal from './ConfirmationModal';
+import { getBranchSecret } from '../services/dataService';
 
 export default function BranchManagement({ 
   currentUser, 
@@ -53,7 +54,8 @@ export default function BranchManagement({
     address: '',
     pic: '',
     phone: '',
-    status: 'ACTIVE'
+    status: 'ACTIVE',
+    branchType: 'RESELLER'
   });
 
   const [formError, setFormError] = useState('');
@@ -103,20 +105,30 @@ export default function BranchManagement({
       address: '',
       pic: '',
       phone: '',
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      branchType: 'RESELLER'
     });
     setFormError('');
     setIsModalOpen(true);
   };
 
-  const handleOpenEditModal = (branch) => {
+  const handleOpenEditModal = async (branch) => {
     setEditingBranch(branch);
+    
+    // Fetch branchType if it exists
+    let branchType = 'RESELLER';
+    if (!branch.isPusat && branch.code !== 'GUDANG-PUSAT') {
+      const type = await getBranchSecret(branch.id);
+      if (type) branchType = type;
+    }
+
     setFormData({
       name: branch.name || '',
       address: branch.address || '',
       pic: branch.pic || '',
       phone: branch.phone || '',
-      status: branch.status || 'ACTIVE'
+      status: branch.status || 'ACTIVE',
+      branchType
     });
     setFormError('');
     setIsModalOpen(true);
@@ -645,19 +657,38 @@ export default function BranchManagement({
               </div>
 
               {/* 5. Status Operasional */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                  Status Operasional
-                </label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
-                >
-                  <option value="ACTIVE">Aktif Beroperasi</option>
-                  <option value="MAINTENANCE">Pemeliharaan / Renovasi</option>
-                  <option value="CLOSED">Nonaktif / Tutup</option>
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Status Operasional
+                  </label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
+                  >
+                    <option value="ACTIVE">Aktif Beroperasi</option>
+                    <option value="MAINTENANCE">Pemeliharaan / Renovasi</option>
+                    <option value="CLOSED">Nonaktif / Tutup</option>
+                  </select>
+                </div>
+
+                {/* 6. Tipe Kemitraan Cabang (Rahasia) */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                    Tipe / Kategori Kemitraan
+                    <span title="Data ini dirahasiakan dan tidak akan terlihat oleh Cabang" className="bg-rose-100 text-rose-700 text-[9px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Secret</span>
+                  </label>
+                  <select
+                    value={formData.branchType}
+                    onChange={(e) => setFormData({ ...formData, branchType: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
+                  >
+                    <option value="DISTRIBUTOR">Distributor (Harga Khusus)</option>
+                    <option value="RESELLER">Reseller (Harga Standar)</option>
+                    <option value="INTERNAL">Internal / Milik Sendiri (HPP)</option>
+                  </select>
+                </div>
               </div>
 
               {/* Modal Buttons */}

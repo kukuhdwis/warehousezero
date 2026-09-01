@@ -31,7 +31,9 @@ import TransactionSuccessModal from './TransactionSuccessModal';
 import GlobalSuccessModal from './GlobalSuccessModal';
 import ProductSearchPicker from './ProductSearchPicker';
 import CustomAlertModal from './CustomAlertModal';
-
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import { callCreateStockTransfer } from '../services/cloudFunctionsService';
 
 
 export default function StockOut({ 
@@ -610,24 +612,62 @@ const parseScannedSKU = (text) => {
     setIsProcessing(true);
 
     try {
-      if (pendingConfirm.isBatchTransfer && pendingConfirm.batchItems) {
-        for (const item of pendingConfirm.batchItems) {
+      if (pendingConfirm.transactionType === 'STOCK_TRANSFER_TO_BRANCH') {
+        const isBatch = pendingConfirm.isBatchTransfer && pendingConfirm.batchItems;
+        const items = isBatch ? pendingConfirm.batchItems : [pendingConfirm];
+        
+        // 1. Panggil Cloud Function V3.0
+        const mappedItems = items.map(item => ({
+          productId: item.productId,
+          qty_pcs: Number(item.qty)
+        }));
+        
+        const cfResult = await callCreateStockTransfer({
+          toBranchId: pendingConfirm.targetBranchId,
+          items: mappedItems,
+          shippingNotes: pendingConfirm.notes
+        });
+
+        // 2. Generate PDF Surat Jalan
+        try {
+          const doc = new jsPDF();
+          doc.setFontSize(16);
+          doc.text("SURAT JALAN / PENGIRIMAN BARANG", 14, 20);
+          doc.setFontSize(11);
+          doc.text(`ID Transfer   : ${cfResult.transferId}`, 14, 30);
+          doc.text(`Tujuan Cabang : ${pendingConfirm.targetBranchName}`, 14, 36);
+          doc.text(`Tanggal       : ${new Date().toLocaleDateString('id-ID')}`, 14, 42);
+
+          const tableData = items.map((item, index) => [
+            index + 1, item.sku, item.productName || item.product_name, `${item.qty} Pcs`
+          ]);
+
+          doc.autoTable({
+            startY: 50,
+            head: [['No', 'SKU', 'Nama Barang', 'Kuantitas']],
+            body: tableData,
+            theme: 'grid'
+          });
+
+          doc.save(`Surat_Jalan_${pendingConfirm.targetBranchName}.pdf`);
+          showAlert("Surat Jalan Berhasil Dibuat", "File PDF Surat Jalan otomatis diunduh. Harap segera simpan/kirimkan file tersebut karena sistem tidak menyimpannya di cloud.", "INFO");
+        } catch (pdfErr) {
+          console.error("PDF Gen Error:", pdfErr);
+        }
+
+        // 3. Catat di Audit Log Frontend (onRecordMovement)
+        for (const item of items) {
           await onRecordMovement({
-            productId: item.productId,
-            sku: item.sku,
-            productName: item.productName,
-            type: 'OUT',
-            qty: Number(item.qty),
-            unit: 'Pcs',
-            notes: pendingConfirm.notes,
-            user: pendingConfirm.user,
+            ...item,
             transactionType: 'STOCK_TRANSFER_TO_BRANCH',
             targetBranchId: pendingConfirm.targetBranchId,
             targetBranchName: pendingConfirm.targetBranchName,
-            deliveryNote: pendingConfirm.deliveryNote
+            deliveryNote: cfResult.transferId,
+            notes: pendingConfirm.notes,
+            user: pendingConfirm.user
           });
         }
-        setTransferCart([]);
+        if (isBatch) setTransferCart([]);
       } else if (pendingConfirm.isMultiItem && pendingConfirm.items) {
         await onRecordMovement({
           ...pendingConfirm,

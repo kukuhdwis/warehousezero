@@ -1605,8 +1605,10 @@ export const createBranch = async (branchData) => {
     }
   }
 
+  const { branchType, ...publicBranchData } = branchData;
+
   const newBranch = {
-    ...branchData,
+    ...publicBranchData,
     code: isPusatChoice ? "GUDANG-PUSAT" : (branchData.code || `BR-${Math.floor(100 + Math.random() * 900)}`),
     status: branchData.status || "ACTIVE",
     isPusat: isPusatChoice,
@@ -1619,8 +1621,16 @@ export const createBranch = async (branchData) => {
       ...newBranch,
       createdAt: serverTimestamp()
     });
+
+    if (!isPusatChoice) {
+      await setDoc(doc(db, "branch_secrets", docRef.id), {
+        type: branchType || 'INTERNAL',
+        createdAt: serverTimestamp()
+      });
+    }
+
     await markBootstrapDone();
-    return { id: docRef.id, ...newBranch };
+    return { id: docRef.id, ...newBranch, branchType };
   } catch (err) {
     console.error("Firestore error creating branch:", err);
     throw new Error(`Gagal membuat Cabang baru di Firestore: ${err.message}`);
@@ -1629,18 +1639,42 @@ export const createBranch = async (branchData) => {
 
 export const updateBranch = async (id, branchData) => {
   ensureFirebase();
+  const { branchType, ...publicBranchData } = branchData;
   const updatedData = {
-    ...branchData,
+    ...publicBranchData,
     updatedAt: new Date().toISOString()
   };
 
   try {
     const docRef = doc(db, "branches", id);
     await updateDoc(docRef, updatedData);
-    return { id, ...updatedData };
+    
+    if (branchType) {
+      await setDoc(doc(db, "branch_secrets", id), {
+        type: branchType,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    }
+    
+    return { id, ...updatedData, branchType };
   } catch (err) {
     console.error("Firestore error updating branch:", err);
     throw new Error(`Gagal memperbarui Cabang di Firestore: ${err.message}`);
+  }
+};
+
+export const getBranchSecret = async (id) => {
+  ensureFirebase();
+  try {
+    const docRef = doc(db, "branch_secrets", id);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return snap.data().type || 'INTERNAL';
+    }
+    return null;
+  } catch (err) {
+    console.warn("Could not fetch branch secret:", err);
+    return null;
   }
 };
 

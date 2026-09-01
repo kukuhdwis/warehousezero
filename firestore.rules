@@ -52,16 +52,20 @@ service cloud.firestore {
     }
 
     match /branches/{doc} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow write: if isAdminOrPusat();
+    }
+
+    match /branch_secrets/{doc} {
+      allow read, write: if isAdminOrPusat();
     }
 
     // Manajemen Pengguna & Profil
     match /users/{userId} {
       // User hanya bisa baca profilnya sendiri (berdasarkan UID atau Email), Admin/Pusat bisa akses semua
       allow read: if isAuthenticated() && (isAdminOrPusat() || request.auth.uid == userId || request.auth.token.email == resource.data.email);
-      // Migration rule: Allow user to create their own document at their UID
-      allow create: if isAuthenticated() && request.auth.uid == userId && request.resource.data.email == request.auth.token.email && (request.resource.data.role == 'STAFF_BRANCH' || request.auth.token.email == 'admin@perusahaan.com');
+      // Migration rule: Allow user to create their own document at their UID, and Admin to create any
+      allow create: if isAdminOrPusat() || (isAuthenticated() && request.auth.uid == userId && request.resource.data.email == request.auth.token.email && (request.resource.data.role == 'STAFF_BRANCH' || request.auth.token.email == 'admin@perusahaan.com'));
       // Admin/Pusat can update anyone. User can update themselves (but shouldn't change role).
       allow update: if isAuthenticated() && (isAdminOrPusat() || request.auth.uid == userId);
       allow delete: if isAuthenticated() && isAdminOrPusat();
@@ -74,13 +78,13 @@ service cloud.firestore {
 
     // Operasional Inventaris & Mutasi Stok
     match /branch_inventories/{doc} {
-      allow read: if isAuthenticated();
+      allow read: if isAdminOrPusat() || (isStaffBranch() && isBranchContext(resource.data.branchId));
       allow create, update: if isAdminOrPusat() || (isStaffBranch() && isBranchContext(request.resource.data.branchId));
       allow delete: if isAdminOrPusat();
     }
 
     match /stock_transfers/{doc} {
-      allow read: if isAuthenticated();
+      allow read: if isAdminOrPusat() || (isStaffBranch() && (isBranchContext(resource.data.targetBranchId) || isBranchContext(resource.data.to_branch_id)));
       // Hanya pusat yang bisa kirim, cabang hanya bisa update status penerimaan
       allow create: if isAdminOrPusat();
       allow update: if isAdminOrPusat() || (isStaffBranch() && isBranchContext(resource.data.targetBranchId));
