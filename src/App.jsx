@@ -340,8 +340,9 @@ export default function App() {
 
 
   // Unauthenticated real-time stream for public catalog (72 Master Products)
+  // Only subscribe if the user is explicitly on the catalog page to avoid Firestore errors during logout
   useEffect(() => {
-    if (!currentUser) {
+    if (!currentUser && currentRoute === 'catalog') {
       const unsubProds = subscribeProducts((liveProds) => setProducts(liveProds));
       const unsubBrands = subscribeBrands((liveBrands) => setBrands(liveBrands));
       const unsubCats = subscribeMachineCategories((liveCats) => setMachineCategories(liveCats));
@@ -351,7 +352,7 @@ export default function App() {
         unsubCats();
       };
     }
-  }, [currentUser]);
+  }, [currentUser, currentRoute]);
 
   // Tampilkan Landing Page (Public)
   if (currentRoute === 'landing') {
