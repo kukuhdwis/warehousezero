@@ -1,7 +1,14 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Package, ShieldCheck, Zap, ArrowRight, Warehouse, CheckCircle2 } from 'lucide-react';
+import { setSEO } from '../utils/seo';
 
 export default function LandingPage({ currentUser }) {
+  useEffect(() => {
+    setSEO(
+      "NDK Warehouse - Official E-Katalog & Sistem Manajemen Knalpot",
+      "Katalog resmi produk knalpot NDK Exhaust. Sistem informasi manajemen gudang dan katalog produk original NDK Exhaust."
+    );
+  }, []);
   const navigateTo = (path) => {
     window.history.pushState({}, '', path);
     window.dispatchEvent(new PopStateEvent('popstate'));

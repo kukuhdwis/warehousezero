@@ -25,6 +25,7 @@ import {
   Filter,
   CheckCircle
 } from 'lucide-react';
+import { setSEO } from '../utils/seo';
 
 export default function PublicCatalog({ 
   products = [], 
@@ -38,6 +39,22 @@ export default function PublicCatalog({
   const [selectedBrand, setSelectedBrand] = useState('ALL');
   const [selectedSound, setSelectedSound] = useState('ALL');
   const [detailProduct, setDetailProduct] = useState(null);
+
+  // Dynamic SEO
+  useEffect(() => {
+    if (detailProduct) {
+      setSEO(
+        `${detailProduct.name} - NDK Exhaust Official`,
+        `Beli ${detailProduct.name} ${detailProduct.brand || ''}. Kategori: ${detailProduct.category_name}. Harga Resmi: Rp ${(Number(detailProduct.selling_price || detailProduct.price) || 0).toLocaleString('id-ID')}. Kompatibel untuk: ${detailProduct.car_variant || 'Semua Mobil'}`,
+        detailProduct.imageUrl || null
+      );
+    } else {
+      setSEO(
+        "Katalog Resmi NDK Exhaust - Jual Knalpot Racing PNP Presisi",
+        "E-Katalog lengkap NDK Exhaust. Cari dan beli berbagai tipe knalpot, downpipe, frontpipe, centerpipe, dan muffler berbahan Stainless Steel & Titanium."
+      );
+    }
+  }, [detailProduct]);
   const [copiedSku, setCopiedSku] = useState(false);
 
   // Active public products (exclude soft deleted INACTIVE)
