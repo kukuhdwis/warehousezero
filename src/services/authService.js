@@ -85,101 +85,109 @@ export const loginUser = async (email, password) => {
     throw new Error('Koneksi Firebase Authentication belum terkonfigurasi. Silakan periksa file .env.');
   }
 
-  let firebaseUser = null;
-  let idTokenResult = null;
+  // Execute login with a 15-second timeout to prevent UI hanging indefinitely
+  const loginPromise = async () => {
+    let firebaseUser = null;
+    let idTokenResult = null;
 
-  try {
-    // 1. Authenticate with Firebase Authentication
-    const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
-    firebaseUser = userCredential.user;
-    idTokenResult = await firebaseUser.getIdTokenResult(true);
-  } catch (authError) {
-    console.error('Firebase Auth login error:', authError);
-    if (
-      authError.code === 'auth/user-not-found' ||
-      authError.code === 'auth/wrong-password' ||
-      authError.code === 'auth/invalid-credential' ||
-      authError.code === 'auth/invalid-email'
-    ) {
-      throw new Error('Email atau kata sandi tidak valid. Silakan periksa kembali kredensial Anda.');
+    try {
+      // 1. Authenticate with Firebase Authentication
+      const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
+      firebaseUser = userCredential.user;
+      idTokenResult = await firebaseUser.getIdTokenResult(true);
+    } catch (authError) {
+      console.error('Firebase Auth login error:', authError);
+      if (
+        authError.code === 'auth/user-not-found' ||
+        authError.code === 'auth/wrong-password' ||
+        authError.code === 'auth/invalid-credential' ||
+        authError.code === 'auth/invalid-email'
+      ) {
+        throw new Error('Email atau kata sandi tidak valid. Silakan periksa kembali kredensial Anda.');
+      }
+      if (authError.code === 'auth/too-many-requests') {
+        throw new Error('Terlalu banyak percobaan login yang gagal. Silakan tunggu beberapa saat atau hubungi administrator.');
+      }
+      if (authError.code === 'auth/user-disabled') {
+        throw new Error('Akun Anda telah dinonaktifkan. Silakan hubungi administrator sistem.');
+      }
+      throw new Error(`Gagal masuk ke sistem: ${authError.message || 'Terjadi kesalahan pada server autentikasi.'}`);
     }
-    if (authError.code === 'auth/too-many-requests') {
-      throw new Error('Terlalu banyak percobaan login yang gagal. Silakan tunggu beberapa saat atau hubungi administrator.');
-    }
-    if (authError.code === 'auth/user-disabled') {
-      throw new Error('Akun Anda telah dinonaktifkan. Silakan hubungi administrator sistem.');
-    }
-    throw new Error(`Gagal masuk ke sistem: ${authError.message || 'Terjadi kesalahan pada server autentikasi.'}`);
-  }
 
-  // 2. Retrieve user profile details from Firestore using Direct O(1) UID Lookup
-  let profileData = {};
-  try {
-    if (db) {
-      // Fast Direct Key-Value Lookup (O(1))
-      const userDocRef = doc(db, 'users', firebaseUser.uid);
-      const userDocSnap = await getDoc(userDocRef);
-      if (userDocSnap.exists()) {
-        profileData = { id: userDocSnap.id, ...userDocSnap.data() };
-      } else {
-        // Fallback search by email if document ID is not yet matching UID
-        const q = query(collection(db, 'users'), where('email', '==', cleanEmail));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          profileData = { id: snap.docs[0].id, ...snap.docs[0].data() };
-          
-          // Auto-migrate legacy document to UID
-          if (profileData.id !== firebaseUser.uid) {
-            try {
-              const newPayload = {
-                ...profileData,
-                id: firebaseUser.uid,
-                uid: firebaseUser.uid,
-              };
-              // Set new document with UID (allowed by our new firestore.rules create rule)
-              const { setDoc, deleteDoc } = await import('firebase/firestore');
-              await setDoc(userDocRef, newPayload);
-              // Delete old document (allowed because Admin can delete, or user can delete their own if we allowed it, but wait: 
-              // the old document doesn't match the new UID. Let's just try to delete, if it fails, it's fine).
+    // 2. Retrieve user profile details from Firestore using Direct O(1) UID Lookup
+    let profileData = {};
+    try {
+      if (db) {
+        // Fast Direct Key-Value Lookup (O(1))
+        const userDocRef = doc(db, 'users', firebaseUser.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists()) {
+          profileData = { id: userDocSnap.id, ...userDocSnap.data() };
+        } else {
+          // Fallback search by email if document ID is not yet matching UID
+          const q = query(collection(db, 'users'), where('email', '==', cleanEmail));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            profileData = { id: snap.docs[0].id, ...snap.docs[0].data() };
+            
+            // Auto-migrate legacy document to UID
+            if (profileData.id !== firebaseUser.uid) {
               try {
-                await deleteDoc(doc(db, 'users', profileData.id));
-              } catch (delErr) {
-                console.warn('Could not delete old legacy user document:', delErr);
+                const newPayload = {
+                  ...profileData,
+                  id: firebaseUser.uid,
+                  uid: firebaseUser.uid,
+                };
+                const { setDoc, deleteDoc } = await import('firebase/firestore');
+                await setDoc(userDocRef, newPayload);
+                try {
+                  await deleteDoc(doc(db, 'users', profileData.id));
+                } catch (delErr) {
+                  console.warn('Could not delete old legacy user document:', delErr);
+                }
+                profileData = newPayload;
+              } catch (migErr) {
+                console.warn('Auto-migration to UID failed:', migErr);
               }
-              profileData = newPayload;
-            } catch (migErr) {
-              console.warn('Auto-migration to UID failed:', migErr);
             }
           }
         }
       }
+    } catch (err) {
+      console.warn('Gagal memuat detail profil tambahan dari Firestore:', err);
     }
-  } catch (err) {
-    console.warn('Gagal memuat detail profil tambahan dari Firestore:', err);
-  }
 
-  // 3. Check if user is marked INACTIVE in Firestore profile
-  if (profileData.status === 'INACTIVE') {
-    if (auth) await signOut(auth);
-    localStorage.removeItem(STORAGE_KEY);
-    throw new Error('Akun Anda dinonaktifkan oleh Administrator. Silakan hubungi admin sistem.');
-  }
+    // 3. Check if user is marked INACTIVE in Firestore profile
+    if (profileData.status === 'INACTIVE') {
+      if (auth) await signOut(auth);
+      localStorage.removeItem(STORAGE_KEY);
+      throw new Error('Akun Anda dinonaktifkan oleh Administrator. Silakan hubungi admin sistem.');
+    }
 
-  // 4. Construct secure session compatible with App.jsx
-  const claims = idTokenResult?.claims || {};
-  const userSession = {
-    uid: firebaseUser.uid,
-    email: firebaseUser.email,
-    name: profileData.name || firebaseUser.displayName || cleanEmail.split('@')[0],
-    role: claims.role || profileData.role || 'STAFF_BRANCH',
-    branchId: claims.branch_id || profileData.branchId || 'ALL',
-    branchName: profileData.branchName || (claims.branch_name) || (profileData.role === 'ADMIN' ? 'Semua Cabang (Pusat)' : 'Gudang Cabang'),
-    phone: profileData.phone || '',
-    status: profileData.status || 'ACTIVE'
+    // 4. Construct secure session compatible with App.jsx
+    const claims = idTokenResult?.claims || {};
+    const userSession = {
+      uid: firebaseUser.uid,
+      email: firebaseUser.email,
+      name: profileData.name || firebaseUser.displayName || cleanEmail.split('@')[0],
+      role: claims.role || profileData.role || 'STAFF_BRANCH',
+      branchId: claims.branch_id || profileData.branchId || 'ALL',
+      branchName: profileData.branchName || (claims.branch_name) || (profileData.role === 'ADMIN' ? 'Semua Cabang (Pusat)' : 'Gudang Cabang'),
+      phone: profileData.phone || '',
+      status: profileData.status || 'ACTIVE'
+    };
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(userSession));
+    return userSession;
   };
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(userSession));
-  return userSession;
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(new Error('Waktu koneksi habis (Timeout). Koneksi ke Firebase terputus atau sangat lambat. Silakan muat ulang halaman atau periksa internet Anda.'));
+    }, 15000);
+  });
+
+  return Promise.race([loginPromise(), timeoutPromise]);
 };
 
 /**

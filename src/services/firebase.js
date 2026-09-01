@@ -42,11 +42,8 @@ if (isFirebaseConfigured()) {
   try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
     try {
-      db = initializeFirestore(app, {
-        localCache: persistentLocalCache({
-          tabManager: persistentMultipleTabManager()
-        })
-      });
+      // Use standard Firestore without persistentMultipleTabManager to prevent ID: b815 assertion deadlocks
+      db = getFirestore(app);
     } catch (cacheErr) {
       db = getFirestore(app);
     }
