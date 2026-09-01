@@ -156,7 +156,58 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // Full Realtime Live Data Stream Across All Collections (Seamless Zero-Refresh)
+  // Check if we need to auto-migrate the legacy admin account to UID
+  useEffect(() => {
+    if (currentUser?.email === 'admin@perusahaan.com' && currentUser?.uid) {
+      const runMigration = async () => {
+        try {
+          const { query, collection, where, getDocs, doc, getDoc, setDoc, deleteDoc } = await import('firebase/firestore');
+          const { db } = await import('./services/firebase');
+          
+          // First check if the UID document already exists
+          const uidDocRef = doc(db, 'users', currentUser.uid);
+          const uidDocSnap = await getDoc(uidDocRef);
+          
+          if (uidDocSnap.exists()) {
+            return; // Already migrated
+          }
+
+          // Search for legacy document
+          const q = query(collection(db, 'users'), where('email', '==', 'admin@perusahaan.com'));
+          const snap = await getDocs(q);
+          
+          if (!snap.empty) {
+            const oldDoc = snap.docs[0];
+            const oldDocId = oldDoc.id;
+            const profileData = oldDoc.data();
+            
+            if (oldDocId !== currentUser.uid) {
+              const newPayload = {
+                ...profileData,
+                id: currentUser.uid,
+                uid: currentUser.uid,
+              };
+              
+              await setDoc(uidDocRef, newPayload);
+              console.log('Successfully migrated admin to new UID!');
+              
+              try {
+                await deleteDoc(doc(db, 'users', oldDocId));
+                console.log('Deleted old legacy admin document.');
+              } catch (e) {
+                console.warn('Could not delete old document (this is fine):', e);
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('Auto migration error:', err);
+        }
+      };
+      runMigration();
+    }
+  }, [currentUser]);
+
+  // Initial Data Load (Safe Realtime Subscriptions)
   useEffect(() => {
     if (!currentUser) return;
 
@@ -686,6 +737,7 @@ export default function App() {
         onMarkAsRead={handleMarkNotificationRead}
         onMarkAllAsRead={handleMarkAllNotificationsRead}
         onNavigate={handleNavigate}
+        onLogout={handleLogout}
       />
 
       <div className="flex-1 flex overflow-hidden">

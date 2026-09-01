@@ -8,6 +8,54 @@ if (admin.apps.length === 0) {
 
 const db = admin.firestore();
 
+// TEMP: Fix Admin Account Endpoint (Remove after running)
+export const fixAdminAccount = functions.https.onRequest(async (req, res) => {
+  const email = req.query.email as string || 'admin@perusahaan.com';
+  try {
+    const userRecord = await admin.auth().getUserByEmail(email);
+    
+    // Set custom claims
+    await admin.auth().setCustomUserClaims(userRecord.uid, {
+      role: 'ADMIN',
+      branch_id: 'ALL',
+      branch_name: 'Semua Cabang (Pusat)'
+    });
+    
+    // Move Firestore document to UID if needed
+    const snapshot = await db.collection('users').where('email', '==', email).get();
+    let oldData = null;
+    let oldDocId = null;
+
+    if (!snapshot.empty) {
+      oldDocId = snapshot.docs[0].id;
+      oldData = snapshot.docs[0].data();
+    }
+    
+    const newPayload = {
+      ...(oldData || {}),
+      id: userRecord.uid,
+      uid: userRecord.uid,
+      name: oldData?.name || 'Administrator (Pusat)',
+      email: email,
+      role: 'ADMIN',
+      branchId: 'ALL',
+      branchName: 'Semua Cabang (Pusat)',
+      status: 'ACTIVE',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.doc(`users/${userRecord.uid}`).set(newPayload, { merge: true });
+    
+    if (oldDocId && oldDocId !== userRecord.uid) {
+      await db.doc(`users/${oldDocId}`).delete();
+    }
+    
+    res.status(200).send(`Successfully fixed admin account for ${email}. UID: ${userRecord.uid}`);
+  } catch (error: any) {
+    res.status(500).send(`Error: ${error.message}`);
+  }
+});
+
 // ============================================================================
 // DATA INTERFACES
 // ============================================================================

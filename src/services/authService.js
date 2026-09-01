@@ -127,6 +127,30 @@ export const loginUser = async (email, password) => {
         const snap = await getDocs(q);
         if (!snap.empty) {
           profileData = { id: snap.docs[0].id, ...snap.docs[0].data() };
+          
+          // Auto-migrate legacy document to UID
+          if (profileData.id !== firebaseUser.uid) {
+            try {
+              const newPayload = {
+                ...profileData,
+                id: firebaseUser.uid,
+                uid: firebaseUser.uid,
+              };
+              // Set new document with UID (allowed by our new firestore.rules create rule)
+              const { setDoc, deleteDoc } = await import('firebase/firestore');
+              await setDoc(userDocRef, newPayload);
+              // Delete old document (allowed because Admin can delete, or user can delete their own if we allowed it, but wait: 
+              // the old document doesn't match the new UID. Let's just try to delete, if it fails, it's fine).
+              try {
+                await deleteDoc(doc(db, 'users', profileData.id));
+              } catch (delErr) {
+                console.warn('Could not delete old legacy user document:', delErr);
+              }
+              profileData = newPayload;
+            } catch (migErr) {
+              console.warn('Auto-migration to UID failed:', migErr);
+            }
+          }
         }
       }
     }

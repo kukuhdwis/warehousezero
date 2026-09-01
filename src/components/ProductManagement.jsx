@@ -889,6 +889,7 @@ export default function ProductManagement({
         price: sellingPrice, // Backward compatibility
         profit_amount: profitAmount,
         profit_percentage: Math.round(profitPercentage * 100) / 100,
+        imageUrl: formData.imageUrl || '',
         notes: (formData.notes || '').trim(),
         machineCategory: finalEngine,
         minStock: Number(formData.minStock) || 5,

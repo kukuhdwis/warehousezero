@@ -12,7 +12,10 @@ import {
   Truck,
   Send,
   X,
-  ExternalLink 
+  ExternalLink,
+  User,
+  LogOut,
+  ChevronDown
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -20,22 +23,28 @@ export default function Navbar({
   notifications = [], 
   onMarkAsRead, 
   onMarkAllAsRead, 
-  onNavigate 
+  onNavigate,
+  onLogout
 }) {
   const [time, setTime] = useState(new Date());
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const notifRef = useRef(null);
+  const profileRef = useRef(null);
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (notifRef.current && !notifRef.current.contains(event.target)) {
         setIsNotifOpen(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setIsProfileOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -263,6 +272,59 @@ export default function Navbar({
           <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl text-slate-600 text-xs font-mono">
             <Clock className="w-3.5 h-3.5 text-slate-400" />
             <span>{time.toLocaleTimeString('id-ID')} WIB</span>
+          </div>
+
+          {/* User Profile Dropdown */}
+          <div className="relative ml-1" ref={profileRef}>
+            <button
+              type="button"
+              onClick={() => setIsProfileOpen(!isProfileOpen)}
+              className="flex items-center gap-2 p-1 pr-2 sm:pr-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-full transition cursor-pointer active:scale-95 shadow-2xs"
+            >
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-inner">
+                {currentUser?.name?.charAt(0)?.toUpperCase() || 'U'}
+              </div>
+              <div className="hidden sm:block text-left max-w-[100px]">
+                <p className="text-xs font-bold text-slate-900 truncate leading-tight">
+                  {currentUser?.name || 'User'}
+                </p>
+                <p className="text-[9px] text-slate-500 font-medium truncate leading-tight">
+                  {currentUser?.role === 'ADMIN' ? 'Administrator' : 'Staff'}
+                </p>
+              </div>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
+            </button>
+
+            {/* Dropdown Menu */}
+            {isProfileOpen && (
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="p-4 bg-slate-50 border-b border-slate-100">
+                  <p className="text-sm font-bold text-slate-900 truncate">
+                    {currentUser?.name || 'User Name'}
+                  </p>
+                  <p className="text-xs text-slate-500 truncate mt-0.5">
+                    {currentUser?.email || 'user@email.com'}
+                  </p>
+                  <div className="mt-2 inline-flex px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-sky-100 text-sky-700 border border-sky-200/50 uppercase tracking-wider">
+                    {currentUser?.role === 'ADMIN' ? 'Lord Admin Pusat' : (currentUser?.role || 'Staff')}
+                  </div>
+                </div>
+                
+                <div className="p-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      if (onLogout) onLogout();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer text-sm font-semibold"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Keluar / Logout</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
         </div>

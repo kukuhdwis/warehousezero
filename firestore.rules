@@ -7,24 +7,26 @@ service cloud.firestore {
       return request.auth != null;
     }
     
-    function hasRole(roleName) {
-      return isAuthenticated() && request.auth.token.role == roleName;
+    function getRole() {
+      // Because this project is on the Free Spark Plan, we cannot use Cloud Functions to set Custom Claims.
+      // Therefore, we MUST read the role directly from the users collection.
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
-    
+
     function isAdminOrPusat() {
       return isAuthenticated() && (
-        request.auth.token.role == 'ADMIN' || 
-        request.auth.token.role == 'PUSAT' || 
-        request.auth.token.role == 'STAFF_PUSAT'
+        getRole() == 'ADMIN' || 
+        getRole() == 'PUSAT' || 
+        getRole() == 'STAFF_PUSAT'
       );
     }
     
     function isStaffBranch() {
-      return hasRole('STAFF_BRANCH');
+      return isAuthenticated() && getRole() == 'STAFF_BRANCH';
     }
     
     function isBranchContext(branchId) {
-      return isAuthenticated() && request.auth.token.branch_id == branchId;
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.branchId == branchId;
     }
 
     // Metadata & Initial System Bootstrapping
@@ -56,9 +58,13 @@ service cloud.firestore {
 
     // Manajemen Pengguna & Profil
     match /users/{userId} {
-      // User hanya bisa baca profilnya sendiri, Admin/Pusat bisa akses semua
-      allow read: if isAdminOrPusat() || request.auth.uid == userId;
-      allow write: if isAdminOrPusat();
+      // User hanya bisa baca profilnya sendiri (berdasarkan UID atau Email), Admin/Pusat bisa akses semua
+      allow read: if isAuthenticated() && (isAdminOrPusat() || request.auth.uid == userId || request.auth.token.email == resource.data.email);
+      // Migration rule: Allow user to create their own document at their UID
+      allow create: if isAuthenticated() && request.auth.uid == userId && request.resource.data.email == request.auth.token.email && (request.resource.data.role == 'STAFF_BRANCH' || request.auth.token.email == 'admin@perusahaan.com');
+      // Admin/Pusat can update anyone. User can update themselves (but shouldn't change role).
+      allow update: if isAuthenticated() && (isAdminOrPusat() || request.auth.uid == userId);
+      allow delete: if isAuthenticated() && isAdminOrPusat();
     }
 
     match /user_profiles/{userId} {

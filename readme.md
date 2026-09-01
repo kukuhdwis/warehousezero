@@ -16,6 +16,8 @@ WarehouseZero adalah Sistem Manajemen Gudang (Warehouse Management System / WMS)
 - **Optimasi Database (Zero Double-Fetching)**: Menghapus penarikan data manual secara masal pada saat inisialisasi awal. Sistem kini murni mengandalkan *realtime listener* bawaan dari *cache* lokal, yang secara signifikan memangkas beban baca database (Read Operations) dan mempercepat waktu *loading*.
 - **UX Respons Instan**: Menghilangkan fungsi muat ulang otomatis (*reload*) setelah pengguna melakukan tindakan modifikasi data. Perubahan antarmuka kini bereaksi instan mengikuti aliran *WebSocket* Firestore.
 - **Penerapan Keamanan RBAC Kritis (Firestore Rules)**: Menutup seluruh celah keamanan terbuka (*default allow*) pada `firestore.rules`. Master data kini berstatus *read-only* bagi karyawan biasa, dan manipulasi stok antar cabang kini divalidasi secara ketat berdasarkan pencocokan ID Cabang dari profil staf.
+- **Auto-Migrasi Profil Admin (*Spark Plan Ready*)**: Menyuntikkan skrip migrasi sinkronisasi ID keamanan sisi klien di dalam aplikasi agar akun admin versi *legacy* dapat kembali mengakses hak penuh *Master Produk* tanpa bergantung pada layanan Cloud Functions.
+- **Pembaruan Antarmuka Akun**: Menambahkan *dropdown* manajemen profil dan akses *Logout* pada navigasi atas layar, menghilangkan keharusan menggulir daftar inventaris panjang di menu sisi samping (*sidebar*).
 
 ## Teknologi & Arsitektur
 
