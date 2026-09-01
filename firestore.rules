@@ -66,8 +66,8 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (isAdminOrPusat() || request.auth.uid == userId || request.auth.token.email == resource.data.email);
       // Migration rule: Allow user to create their own document at their UID, and Admin to create any
       allow create: if isAdminOrPusat() || (isAuthenticated() && request.auth.uid == userId && request.resource.data.email == request.auth.token.email && (request.resource.data.role == 'STAFF_BRANCH' || request.auth.token.email == 'admin@perusahaan.com'));
-      // Admin/Pusat can update anyone. User can update themselves (but shouldn't change role).
-      allow update: if isAuthenticated() && (isAdminOrPusat() || request.auth.uid == userId);
+      // Admin/Pusat can update anyone. User can update themselves but cannot elevate privileges or change branch assignment.
+      allow update: if isAuthenticated() && (isAdminOrPusat() || (request.auth.uid == userId && request.resource.data.role == resource.data.role && request.resource.data.branchId == resource.data.branchId && request.resource.data.status == resource.data.status));
       allow delete: if isAuthenticated() && isAdminOrPusat();
     }
 
@@ -79,7 +79,8 @@ service cloud.firestore {
     // Operasional Inventaris & Mutasi Stok
     match /branch_inventories/{doc} {
       allow read: if isAdminOrPusat() || (isStaffBranch() && isBranchContext(resource.data.branchId));
-      allow create, update: if isAdminOrPusat() || (isStaffBranch() && isBranchContext(request.resource.data.branchId));
+      allow create: if isAdminOrPusat() || (isStaffBranch() && isBranchContext(request.resource.data.branchId));
+      allow update: if isAdminOrPusat() || (isStaffBranch() && isBranchContext(resource.data.branchId) && isBranchContext(request.resource.data.branchId));
       allow delete: if isAdminOrPusat();
     }
 
@@ -87,7 +88,7 @@ service cloud.firestore {
       allow read: if isAdminOrPusat() || (isStaffBranch() && (isBranchContext(resource.data.targetBranchId) || isBranchContext(resource.data.to_branch_id)));
       // Hanya pusat yang bisa kirim, cabang hanya bisa update status penerimaan
       allow create: if isAdminOrPusat();
-      allow update: if isAdminOrPusat() || (isStaffBranch() && isBranchContext(resource.data.targetBranchId));
+      allow update: if isAdminOrPusat();
       allow delete: if isAdminOrPusat();
     }
 
@@ -95,7 +96,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       // Cabang hanya boleh request untuk cabangnya sendiri
       allow create: if isStaffBranch() && isBranchContext(request.resource.data.branchId);
-      allow update: if isAdminOrPusat() || (isStaffBranch() && isBranchContext(resource.data.branchId));
+      allow update: if isAdminOrPusat();
       allow delete: if isAdminOrPusat();
     }
 
@@ -107,7 +108,7 @@ service cloud.firestore {
 
     match /notifications/{doc} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.get('message', '').size() <= 1000 && request.resource.data.get('title', '').size() <= 150;
       allow update: if isAuthenticated(); // To mark as read
       allow delete: if isAdminOrPusat();
     }
