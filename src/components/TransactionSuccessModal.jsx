@@ -36,13 +36,13 @@ export default function TransactionSuccessModal({
 
   return (
     <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in duration-200 pointer-events-auto">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-150 my-auto">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-150 my-auto print-only-modal">
         
         {/* Header with Celebration Glow & Explicit Status */}
         <div className="relative p-6 text-center bg-gradient-to-b from-emerald-50 via-emerald-50/50 to-white border-b border-emerald-100">
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition cursor-pointer"
+            className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition cursor-pointer no-print"
           >
             <X className="w-5 h-5" />
           </button>
@@ -69,7 +69,7 @@ export default function TransactionSuccessModal({
         </div>
 
         {/* Receipt / Surat Jalan Card */}
-        <div id="printable-transaction-receipt" className="p-6 space-y-4 bg-white">
+        <div id="printable-transaction-receipt" className="p-6 space-y-4">
           <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4 sm:p-5 space-y-3.5 font-sans">
             
             {/* Header of Receipt */}
@@ -184,7 +184,7 @@ export default function TransactionSuccessModal({
           </div>
 
           {/* Action Buttons */}
-          <div className="space-y-2 pt-1">
+          <div className="space-y-2 pt-1 no-print">
             <button
               onClick={handlePrint}
               className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 transition active:scale-98 cursor-pointer shadow-md shadow-slate-900/10"

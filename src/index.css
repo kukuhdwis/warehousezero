@@ -13,14 +13,21 @@ body {
     visibility: hidden;
   }
   #printable-barcode-area, #printable-barcode-area *,
-  #printable-transaction-receipt, #printable-transaction-receipt * {
-    visibility: visible;
+  .print-only-modal, .print-only-modal * {
+    visibility: visible !important;
   }
-  #printable-barcode-area, #printable-transaction-receipt {
+  #printable-barcode-area, .print-only-modal {
     position: absolute;
     left: 0;
     top: 0;
     width: 100%;
+    margin: 0;
+    padding: 0;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .no-print, .no-print * {
+    display: none !important;
   }
 }
 

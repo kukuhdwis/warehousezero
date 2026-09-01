@@ -6,6 +6,17 @@ export default function TransactionHistory({ transactions = [], currentUser }) {
   const isBranchStaff = currentUser?.role === 'STAFF_BRANCH';
   const branchId = currentUser?.branchId;
 
+  const formatTime = (ts) => {
+    if (!ts) return '-';
+    try {
+      if (ts.toDate) return ts.toDate().toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      if (ts.seconds) return new Date(ts.seconds * 1000).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return new Date(ts).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+      return '-';
+    }
+  };
+
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [selectedBranchFilter, setSelectedBranchFilter] = useState('ALL');
@@ -42,7 +53,7 @@ export default function TransactionHistory({ transactions = [], currentUser }) {
       Jumlah: tx.qty,
       Catatan: tx.notes || '-',
       Petugas: tx.user || '-',
-      Waktu: new Date(tx.createdAt).toLocaleString('id-ID')
+      Waktu: formatTime(tx.createdAt)
     }));
 
     exportToCSV(formattedData, `WMS-Riwayat-Transaksi-${Date.now()}.csv`);
@@ -162,7 +173,7 @@ export default function TransactionHistory({ transactions = [], currentUser }) {
                   </div>
                   <div className="flex items-center gap-1">
                     <Clock className="w-3 h-3 text-slate-400" />
-                    <span>{new Date(tx.createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                    <span>{formatTime(tx.createdAt)}</span>
                   </div>
                 </div>
 
@@ -224,7 +235,7 @@ export default function TransactionHistory({ transactions = [], currentUser }) {
                         {tx.user || '-'}
                       </td>
                       <td className="px-5 py-4 text-right text-xs text-slate-400 whitespace-nowrap">
-                        {new Date(tx.createdAt).toLocaleString('id-ID')}
+                        {formatTime(tx.createdAt)}
                       </td>
                     </tr>
                   );

@@ -85,7 +85,7 @@ service cloud.firestore {
     }
 
     match /stock_transfers/{doc} {
-      allow read: if isAdminOrPusat() || (isStaffBranch() && (isBranchContext(resource.data.targetBranchId) || isBranchContext(resource.data.to_branch_id)));
+      allow read: if isAuthenticated();
       // Hanya pusat yang bisa kirim, cabang hanya bisa update status penerimaan
       allow create: if isAdminOrPusat();
       allow update: if isAdminOrPusat();
