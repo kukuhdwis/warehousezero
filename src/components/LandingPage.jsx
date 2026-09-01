@@ -1,10 +1,18 @@
 import React from 'react';
 import { Package, ShieldCheck, Zap, ArrowRight, Warehouse, CheckCircle2 } from 'lucide-react';
 
-export default function LandingPage() {
+export default function LandingPage({ currentUser }) {
   const navigateTo = (path) => {
     window.history.pushState({}, '', path);
     window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+
+  const handleStaffPortalClick = () => {
+    if (currentUser) {
+      navigateTo('/dashboard');
+    } else {
+      navigateTo('/login');
+    }
   };
 
   return (
@@ -27,10 +35,10 @@ export default function LandingPage() {
               Katalog Produk
             </button>
             <button
-              onClick={() => navigateTo('/login')}
+              onClick={handleStaffPortalClick}
               className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-900/20 transition active:scale-95 cursor-pointer"
             >
-              Login Staf <ArrowRight className="w-4 h-4" />
+              {currentUser ? 'Ke Dashboard' : 'Login Staf'} <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -63,10 +71,10 @@ export default function LandingPage() {
             Lihat E-Katalog Publik
           </button>
           <button
-            onClick={() => navigateTo('/login')}
+            onClick={handleStaffPortalClick}
             className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white hover:bg-slate-50 text-slate-900 border-2 border-slate-200 hover:border-slate-300 rounded-2xl font-bold text-lg shadow-sm transition active:scale-95 cursor-pointer"
           >
-            Masuk ke Portal Staf
+            {currentUser ? 'Masuk ke Dashboard' : 'Masuk ke Portal Staf'}
           </button>
         </div>
       </section>

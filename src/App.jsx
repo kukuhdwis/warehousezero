@@ -79,6 +79,8 @@ import LogoutConfirmModal from './components/LogoutConfirmModal';
 export default function App() {
   const [currentUser, setCurrentUser] = useState(getStoredUser());
   
+  const internalTabs = ['dashboard', 'products', 'stock-in', 'stock-out', 'history', 'monitoring', 'users', 'branches'];
+
   // Clean URL Routing (Manual SPA Routing)
   const [currentRoute, setCurrentRoute] = useState(() => {
     const p = typeof window !== 'undefined' ? window.location.pathname.toLowerCase() : '';
@@ -97,8 +99,12 @@ export default function App() {
       return 'login';
     }
 
-    // Check if they are already logged in and at root? 
-    // We can show landing page by default, but let's just stick to 'landing' for root.
+    // Check if it matches an internal tab
+    const tabMatch = internalTabs.find(tab => p.startsWith(`/${tab}`));
+    if (tabMatch) {
+      return 'app';
+    }
+
     return 'landing';
   });
 
@@ -117,6 +123,12 @@ export default function App() {
   const [detectedQrSku, setDetectedQrSku] = useState(initialUrlSku);
   const [isQrActionSheetOpen, setIsQrActionSheetOpen] = useState(Boolean(initialUrlSku && currentUser));
 
+  const [activeTab, setActiveTab] = useState(() => {
+    const p = typeof window !== 'undefined' ? window.location.pathname.toLowerCase() : '';
+    const tabMatch = internalTabs.find(tab => p.startsWith(`/${tab}`));
+    return tabMatch || 'dashboard';
+  });
+
   // Listen to popstate for browser navigation (Back/Forward buttons)
   useEffect(() => {
     const handlePopStateRoute = () => {
@@ -126,14 +138,18 @@ export default function App() {
       } else if (p.startsWith('/login') || p.startsWith('/admin')) {
         setCurrentRoute('login');
       } else {
-        setCurrentRoute('landing');
+        const tabMatch = internalTabs.find(tab => p.startsWith(`/${tab}`));
+        if (tabMatch) {
+          setCurrentRoute('app');
+          setActiveTab(tabMatch);
+        } else {
+          setCurrentRoute('landing');
+        }
       }
     };
     window.addEventListener('popstate', handlePopStateRoute);
     return () => window.removeEventListener('popstate', handlePopStateRoute);
   }, []);
-
-  const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [products, setProducts] = useState([]);
@@ -314,45 +330,10 @@ export default function App() {
     };
   }, [currentUser]);
 
-  // Mobile / Browser Hardware Back Button Handler (Requirement 6)
-  useEffect(() => {
-    window.history.replaceState({ tab: activeTab }, '');
-  }, []);
-
-  useEffect(() => {
-    const handlePopState = (e) => {
-      // 1. Close open modals first
-      if (globalSuccessPopup) {
-        setGlobalSuccessPopup(null);
-        return;
-      }
-      if (barcodeProduct) {
-        setBarcodeProduct(null);
-        return;
-      }
-      if (isLogoutModalOpen) {
-        setIsLogoutModalOpen(false);
-        return;
-      }
-
-      // 2. Return to dashboard if in another tab
-      if (activeTab !== 'dashboard') {
-        setActiveTab('dashboard');
-        return;
-      }
-
-      // 3. Show Toast if already on dashboard
-      setBackToast("Tekan sekali lagi untuk keluar dari aplikasi.");
-      setTimeout(() => setBackToast(null), 3000);
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [globalSuccessPopup, barcodeProduct, isLogoutModalOpen, activeTab]);
-
   const changeTab = (newTab) => {
     if (newTab !== activeTab) {
-      window.history.pushState({ tab: newTab }, '');
+      window.history.pushState({}, '', `/${newTab}`);
+      setCurrentRoute('app');
       setActiveTab(newTab);
     }
   };
@@ -374,7 +355,7 @@ export default function App() {
 
   // Tampilkan Landing Page (Public)
   if (currentRoute === 'landing') {
-    return <LandingPage />;
+    return <LandingPage currentUser={currentUser} />;
   }
 
   // Tampilkan Public E-Catalog
@@ -400,9 +381,9 @@ export default function App() {
         onLoginSuccess={(user) => {
           setCurrentUser(user);
           setActiveTab('dashboard');
-          // Update URL back to / (or dashboard) after successful login
-          window.history.pushState({}, '', '/');
-          setCurrentRoute('dashboard');
+          // Update URL back to /dashboard after successful login
+          window.history.pushState({}, '', '/dashboard');
+          setCurrentRoute('app');
         }} 
         onOpenCatalog={() => {
           window.history.pushState({}, '', '/catalog');
@@ -693,6 +674,8 @@ export default function App() {
     await logoutUser();
     setCurrentUser(null);
     setIsLogoutModalOpen(false);
+    window.history.pushState({}, '', '/login');
+    setCurrentRoute('login');
   };
 
 
