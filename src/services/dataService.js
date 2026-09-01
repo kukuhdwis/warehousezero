@@ -924,7 +924,7 @@ export const subscribeTransfers = (currentUser, onUpdate) => {
     return onSnapshot(q, (snapshot) => {
       const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
       const filtered = (currentUser?.role === 'STAFF_BRANCH')
-        ? list.filter(t => t.targetBranchId === currentUser.branchId || t.targetBranchId === 'ALL')
+        ? list.filter(t => t.targetBranchId === currentUser.branchId || t.targetBranchId === 'ALL' || t.to_branch_id === currentUser.branchId || t.to_branch_id === 'ALL')
         : list;
       onUpdate(filtered);
     }, (err) => {
@@ -1119,7 +1119,7 @@ export const fetchTransfers = async (branchId = null) => {
     const snapshot = await getDocs(q);
     const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
     if (branchId && branchId !== 'ALL') {
-      return list.filter(t => t.targetBranchId === branchId || t.fromBranchId === branchId);
+      return list.filter(t => t.targetBranchId === branchId || t.fromBranchId === branchId || t.to_branch_id === branchId);
     }
     return list;
   } catch (err) {

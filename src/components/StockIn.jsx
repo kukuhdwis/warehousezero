@@ -334,7 +334,7 @@ const parseScannedSKU = (text) => {
 
   // Incoming pending transfers from HQ for this branch
   const pendingTransfers = safeTransfers.filter(
-    t => t && t.status === 'IN_TRANSIT' && (t.targetBranchId === currentUser?.branchId || t.targetBranchId === 'ALL')
+    t => t && t.status === 'IN_TRANSIT' && (t.targetBranchId === currentUser?.branchId || t.targetBranchId === 'ALL' || t.to_branch_id === currentUser?.branchId || t.to_branch_id === 'ALL')
   );
 
   // Group incoming transfers from HQ by Delivery Note / Surat Jalan
@@ -360,7 +360,7 @@ const parseScannedSKU = (text) => {
 
   // Completed received transfers for this branch
   const receivedTransfers = safeTransfers.filter(
-    t => t && t.status === 'RECEIVED' && (t.targetBranchId === currentUser?.branchId || t.targetBranchId === 'ALL')
+    t => t && t.status === 'RECEIVED' && (t.targetBranchId === currentUser?.branchId || t.targetBranchId === 'ALL' || t.to_branch_id === currentUser?.branchId || t.to_branch_id === 'ALL')
   );
 
   // Branch Stock Requests

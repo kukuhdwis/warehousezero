@@ -69,7 +69,7 @@ export default function TransactionSuccessModal({
         </div>
 
         {/* Receipt / Surat Jalan Card */}
-        <div className="p-6 space-y-4">
+        <div id="printable-transaction-receipt" className="p-6 space-y-4 bg-white">
           <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4 sm:p-5 space-y-3.5 font-sans">
             
             {/* Header of Receipt */}

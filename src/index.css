@@ -12,10 +12,11 @@ body {
   body * {
     visibility: hidden;
   }
-  #printable-barcode-area, #printable-barcode-area * {
+  #printable-barcode-area, #printable-barcode-area *,
+  #printable-transaction-receipt, #printable-transaction-receipt * {
     visibility: visible;
   }
-  #printable-barcode-area {
+  #printable-barcode-area, #printable-transaction-receipt {
     position: absolute;
     left: 0;
     top: 0;
