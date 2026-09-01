@@ -340,6 +340,7 @@ export default function ProductManagement({
     profit_amount: 0,
     profit_percentage: 0,
     imageUrl: '',
+    description: '',
     notes: '',
     price: 0,
     minStock: 5,
@@ -770,6 +771,7 @@ export default function ProductManagement({
       profit_amount: 0,
       profit_percentage: 0,
       imageUrl: '',
+      description: '',
       notes: '',
       price: 0,
       minStock: 5,
@@ -814,7 +816,8 @@ export default function ProductManagement({
       profit_amount: profitAmount,
       profit_percentage: Math.round(profitPercentage * 100) / 100,
       imageUrl: product.imageUrl || product.image || product.photoUrl || '',
-      notes: product.notes || product.description || '',
+      description: product.description || '',
+      notes: product.notes || '',
       minStock: product.minStock ?? 5,
       currentStock: product.currentStock ?? 0,
       unit: product.unit || 'Pcs',
@@ -890,6 +893,7 @@ export default function ProductManagement({
         profit_amount: profitAmount,
         profit_percentage: Math.round(profitPercentage * 100) / 100,
         imageUrl: formData.imageUrl || '',
+        description: (formData.description || '').trim(),
         notes: (formData.notes || '').trim(),
         machineCategory: finalEngine,
         minStock: Number(formData.minStock) || 5,
@@ -3892,6 +3896,20 @@ export default function ProductManagement({
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Row 9: Deskripsi Lengkap */}
+              <div className="md:col-span-2">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Deskripsi Lengkap Produk
+                </label>
+                <textarea
+                  rows={4}
+                  placeholder="Masukkan deskripsi panjang, fitur utama, dan manfaat produk di sini..."
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-y"
                 />
               </div>
 

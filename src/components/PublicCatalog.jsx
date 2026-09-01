@@ -588,14 +588,19 @@ export default function PublicCatalog({
                     <strong className="text-slate-900 text-xs font-bold truncate block">{detailProduct.spec_pipe_size || 'Presisi PNP'}</strong>
                   </div>
                 </div>
+              </div>
 
-                {detailProduct.description && (
-                  <div className="p-2.5 bg-white rounded-xl border border-slate-200 text-xs text-slate-700 leading-relaxed">
-                    <span className="text-slate-400 text-[10px] block font-bold mb-0.5">Deskripsi Tambahan</span>
+              {/* Multiline Description Section */}
+              {detailProduct.description && (
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2 mt-3">
+                  <h4 className="text-[11px] sm:text-xs font-black text-slate-700 uppercase tracking-wider">
+                    Deskripsi
+                  </h4>
+                  <div className="text-xs sm:text-[13px] text-slate-600 leading-relaxed whitespace-pre-line">
                     {detailProduct.description}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Direct Order Call To Action */}
               <div className="pt-1">
