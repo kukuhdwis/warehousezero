@@ -523,7 +523,7 @@ export default function ProductManagement({
       ? bi.branchId === currentUser?.branchId 
       : (selectedBranchFilter === 'ALL' || bi.branchId === selectedBranchFilter);
     const matchesStatus = statusFilter === 'ALL' || bi.status === statusFilter;
-    const matchesSearchTerm = matchesSearch(searchTerm, bi.productName, bi.sku, bi.brand, bi.branchName);
+    const matchesSearchTerm = matchesSearch(searchTerm, bi.productName, bi.name, bi.sku, bi.brand, bi.branchName);
     return matchesBranch && matchesStatus && matchesSearchTerm;
   });
 
@@ -535,7 +535,7 @@ export default function ProductManagement({
   const filteredActiveBranchItems = activeBranchItems.filter(bi => {
     const matchesStatus = statusFilter === 'ALL' || bi.status === statusFilter;
     const matchesBrand = brandFilter === 'ALL' || bi.brand === brandFilter;
-    const matchesSearchTerm = matchesSearch(searchTerm, bi.productName, bi.sku, bi.brand);
+    const matchesSearchTerm = matchesSearch(searchTerm, bi.productName, bi.name, bi.sku, bi.brand);
     return matchesStatus && matchesBrand && matchesSearchTerm;
   });
 

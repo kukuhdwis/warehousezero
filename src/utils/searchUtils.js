@@ -9,8 +9,7 @@
  */
 export const matchesSearch = (searchTerm, ...fields) => {
   if (!searchTerm || typeof searchTerm !== 'string') return true;
-  
-  const searchWords = searchTerm.toLowerCase().split(' ').filter(Boolean);
+  const searchWords = searchTerm.toLowerCase().split(/\s+/).filter(Boolean);
   
   if (searchWords.length === 0) return true;
 
