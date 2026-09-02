@@ -15,10 +15,11 @@ import {
   Warehouse,
   Users
 } from 'lucide-react';
+import { db } from '../services/firebase';
+import { matchesSearch } from '../utils/searchUtils';
 import GlobalSuccessModal from './GlobalSuccessModal';
 import CustomAlertModal from './CustomAlertModal';
 import ConfirmationModal from './ConfirmationModal';
-import { getBranchSecret } from '../services/dataService';
 
 export default function BranchManagement({ 
   currentUser, 
@@ -88,14 +89,10 @@ export default function BranchManagement({
 
   // Filtered branches
   const filteredBranches = branches.filter(branch => {
-    const matchesSearch = 
-      (branch.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (branch.address || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (branch.pic || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (branch.phone || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearchTerm = matchesSearch(searchTerm, branch.name, branch.address, branch.pic, branch.phone);
 
     const matchesStatus = statusFilter === 'ALL' || branch.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    return matchesSearchTerm && matchesStatus;
   });
 
   const handleOpenAddModal = () => {
@@ -112,23 +109,16 @@ export default function BranchManagement({
     setIsModalOpen(true);
   };
 
-  const handleOpenEditModal = async (branch) => {
+  const handleOpenEditModal = (branch) => {
     setEditingBranch(branch);
     
-    // Fetch branchType if it exists
-    let branchType = 'RESELLER';
-    if (!branch.isPusat && branch.code !== 'GUDANG-PUSAT') {
-      const type = await getBranchSecret(branch.id);
-      if (type) branchType = type;
-    }
-
     setFormData({
       name: branch.name || '',
       address: branch.address || '',
       pic: branch.pic || '',
       phone: branch.phone || '',
       status: branch.status || 'ACTIVE',
-      branchType
+      branchType: branch.branchType || 'RESELLER'
     });
     setFormError('');
     setIsModalOpen(true);

@@ -9,6 +9,13 @@ body {
 
 /* Custom Print Styles for Barcode printing */
 @media print {
+  @page {
+    margin: 10mm;
+  }
+  html, body {
+    height: auto !important;
+    min-height: auto !important;
+  }
   body * {
     visibility: hidden;
   }

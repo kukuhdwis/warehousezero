@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { db } from '../services/firebase';
+import { matchesSearch } from '../utils/searchUtils';
 import { 
   User,
   Users, 
@@ -88,15 +90,12 @@ export default function UserManagement({
   // Filtered Users
   const filteredUsers = users.filter(user => {
     const branchName = getBranchDisplayName(user);
-    const matchesSearch = 
-      (user.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (user.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      branchName.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearchTerm = matchesSearch(searchTerm, user.name, user.email, branchName);
     
     const matchesRole = roleFilter === 'ALL' || user.role === roleFilter;
     const matchesBranch = branchFilter === 'ALL' || user.branchId === branchFilter;
 
-    return matchesSearch && matchesRole && matchesBranch;
+    return matchesSearchTerm && matchesRole && matchesBranch;
   });
 
   const handleOpenAddModal = () => {
@@ -164,8 +163,8 @@ export default function UserManagement({
     e.preventDefault();
     setFormError('');
 
-    if (!formData.name.trim() || !formData.email.trim()) {
-      setFormError('Nama lengkap dan alamat email wajib diisi.');
+    if (!formData.name.trim() || !formData.email.trim() || !formData.role || !formData.branchId) {
+      setFormError('Harap lengkapi semua field wajib.');
       return;
     }
 

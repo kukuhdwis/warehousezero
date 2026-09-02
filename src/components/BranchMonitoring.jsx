@@ -24,9 +24,14 @@ import {
   Layers,
   Inbox,
   Check,
-  Ban
+  Ban,
+  X,
+  Info,
+  Trash2
 } from 'lucide-react';
-import { exportToCSV } from '../services/dataService';
+import { exportToCSV, purgeTransactions } from '../services/dataService';
+import { matchesSearch } from '../utils/searchUtils';
+import ConfirmationModal from './ConfirmationModal';
 
 export default function BranchMonitoring({ 
   currentUser, 
@@ -41,6 +46,25 @@ export default function BranchMonitoring({
   const [selectedStaffName, setSelectedStaffName] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [stockFilter, setStockFilter] = useState('ALL'); // 'ALL' | 'LOW' | 'SAFE'
+  const [showProfitDetails, setShowProfitDetails] = useState(false);
+
+  // Purge State
+  const [isPurgeConfirmOpen, setIsPurgeConfirmOpen] = useState(false);
+  const [isPurging, setIsPurging] = useState(false);
+  const [purgeError, setPurgeError] = useState('');
+
+  const handlePurgeTransactions = async () => {
+    setIsPurging(true);
+    setPurgeError('');
+    try {
+      await purgeTransactions(selectedBranchId, currentUser);
+      setIsPurgeConfirmOpen(false);
+    } catch (err) {
+      setPurgeError(err.message || 'Gagal melakukan purge data.');
+    } finally {
+      setIsPurging(false);
+    }
+  };
 
   // Selected Branch Object
   const selectedBranch = branches.find(b => b.id === selectedBranchId);
@@ -134,10 +158,7 @@ export default function BranchMonitoring({
 
   // Filter items by search & stock status
   const filteredInventories = branchInventoryItems.filter(item => {
-    const matchesSearch = 
-      (item.productName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.sku || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.brand || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearchTerm = matchesSearch(searchTerm, item.productName, item.sku, item.brand);
 
     const isLow = (Number(item.stockQuantity) || 0) <= (Number(item.minStock) || 5);
     const matchesStock = 
@@ -145,15 +166,42 @@ export default function BranchMonitoring({
       (stockFilter === 'LOW' && isLow) ||
       (stockFilter === 'SAFE' && !isLow);
 
-    return matchesSearch && matchesStock;
+    return matchesSearchTerm && matchesStock;
   });
 
-  // Transactions belonging to selected branch and/or staff
   const branchTransactions = transactions.filter(t => {
     const matchesBranch = selectedBranchId === 'ALL' || t.branchId === selectedBranchId;
     const matchesStaff = selectedStaffName === 'ALL' || t.user === selectedStaffName;
     return matchesBranch && matchesStaff;
   });
+
+  const detailBranchProfit = branchTransactions.reduce((acc, tx) => {
+    if (tx.type === 'OUT' && tx.items) {
+      return acc + tx.items.reduce((sum, item) => {
+        if (item.costPrice !== undefined) {
+          return sum + ((Number(item.price) || 0) - (Number(item.costPrice) || 0)) * (Number(item.qty) || 0);
+        }
+        return sum;
+      }, 0);
+    }
+    return acc;
+  }, 0);
+
+  const profitDetails = branchTransactions
+    .filter(tx => tx.type === 'OUT' && tx.items)
+    .map(tx => {
+      let txProfit = 0;
+      const profitItems = tx.items.map(item => {
+        if (item.costPrice !== undefined) {
+          const itemProfit = ((Number(item.price) || 0) - (Number(item.costPrice) || 0)) * (Number(item.qty) || 0);
+          txProfit += itemProfit;
+          return { ...item, itemProfit };
+        }
+        return { ...item, itemProfit: 0 };
+      });
+      return { ...tx, txProfit, profitItems };
+    })
+    .filter(tx => tx.txProfit !== 0);
 
   // Statistics Calculation
   const totalSKU = filteredInventories.filter(bi => bi.status === 'APPROVED').length;
@@ -214,13 +262,25 @@ export default function BranchMonitoring({
             <span>Kembali ke Ringkasan Semua Cabang</span>
           </button>
 
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export CSV Cabang</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {currentUser?.role === 'ADMIN' && (
+              <button
+                onClick={() => setIsPurgeConfirmOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
+                title="Purge Data Riwayat Transaksi Cabang Ini"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Purge Riwayat</span>
+              </button>
+            )}
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export CSV Cabang</span>
+            </button>
+          </div>
         </div>
 
         {/* Dedicated Branch Header Banner */}
@@ -275,7 +335,7 @@ export default function BranchMonitoring({
           </div>
 
           {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-slate-100 border-t border-slate-100 bg-slate-50/60">
+          <div className="grid grid-cols-2 md:grid-cols-5 divide-x divide-y sm:divide-y-0 divide-slate-100 border-t border-slate-100 bg-slate-50/60">
             <div className="p-4 text-center">
               <span className="text-[11px] font-semibold text-slate-400 uppercase block">Total Produk Aktif</span>
               <span className="text-lg font-bold text-slate-800 mt-0.5 block">{totalSKU} SKU</span>
@@ -296,8 +356,89 @@ export default function BranchMonitoring({
                 Rp {totalValuation.toLocaleString('id-ID')}
               </span>
             </div>
+            <div 
+              className="p-4 text-center cursor-pointer hover:bg-emerald-50 transition group"
+              onClick={() => setShowProfitDetails(true)}
+            >
+              <span className="text-[11px] font-semibold text-emerald-600 uppercase block flex items-center justify-center gap-1">
+                Estimasi Profit <Info className="w-3 h-3 text-emerald-500 group-hover:text-emerald-700" />
+              </span>
+              <span className="text-lg font-bold text-emerald-700 mt-0.5 block">
+                Rp {detailBranchProfit.toLocaleString('id-ID')}
+              </span>
+            </div>
           </div>
         </div>
+
+        {/* Profit Details Modal (inside View 1) */}
+        {showProfitDetails && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowProfitDetails(false)}></div>
+            <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col relative z-10">
+              <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                    <TrendingUp className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-800">Detail Estimasi Profit</h3>
+                    <p className="text-xs text-slate-500">{isPusatSelected ? 'Gudang Pusat' : (selectedBranch ? `Cabang ${selectedBranch.name}` : 'Semua Cabang')}</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowProfitDetails(false)} className="w-8 h-8 rounded-xl hover:bg-slate-200 flex items-center justify-center text-slate-500 transition cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              
+              <div className="p-5 overflow-y-auto flex-1 bg-slate-50">
+                {profitDetails.length === 0 ? (
+                  <div className="text-center py-10 text-slate-400 text-sm">Belum ada transaksi penjualan yang menghasilkan profit tercatat.</div>
+                ) : (
+                  <div className="space-y-4">
+                    {profitDetails.map(tx => (
+                      <div key={tx.id} className="p-4 rounded-xl border border-slate-100 bg-white shadow-xs">
+                        <div className="flex justify-between items-start mb-3 pb-3 border-b border-slate-50">
+                          <div>
+                            <div className="font-bold text-slate-700 text-sm">{tx.id}</div>
+                            <div className="text-xs text-slate-500 mt-0.5">{formatTime(tx.timestamp || tx.date)}</div>
+                            <div className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full inline-block mt-1">{tx.user || 'Unknown'}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-semibold text-slate-500 uppercase">Profit</div>
+                            <div className={`font-bold ${tx.txProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              Rp {tx.txProfit.toLocaleString('id-ID')}
+                            </div>
+                            {tx.totalPrice > 0 && <div className="text-[10px] text-slate-400">Total: Rp {tx.totalPrice.toLocaleString('id-ID')}</div>}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          {tx.profitItems.map((item, idx) => (
+                            <div key={idx} className="flex justify-between text-xs items-center gap-4">
+                              <div className="text-slate-600 font-medium break-words">
+                                {item.qty}x {item.productName}
+                                <span className="text-slate-400 ml-1">
+                                  (Jual: Rp {(Number(item.price) || 0).toLocaleString('id-ID')} - Modal: Rp {(Number(item.costPrice) || 0).toLocaleString('id-ID')})
+                                </span>
+                              </div>
+                              <div className={`font-semibold flex-shrink-0 ${item.itemProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                Rp {item.itemProfit.toLocaleString('id-ID')}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              <div className="p-5 border-t border-slate-100 bg-slate-50/80 flex justify-between items-center">
+                <span className="font-semibold text-slate-600 text-sm">Total Keseluruhan Profit</span>
+                <span className="text-lg font-bold text-emerald-700">Rp {detailBranchProfit.toLocaleString('id-ID')}</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ========================================== */}
         {/* SECTION A: INVENTORY PRODUCTS IN BRANCH    */}
@@ -604,17 +745,29 @@ export default function BranchMonitoring({
           </p>
         </div>
 
-        <button
-          onClick={handleExportCSV}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-semibold text-xs transition active:scale-98 cursor-pointer"
-        >
-          <Download className="w-4 h-4" />
-          <span>Export Rekap Semua Cabang</span>
-        </button>
+        <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
+          {currentUser?.role === 'ADMIN' && (
+            <button
+              onClick={() => setIsPurgeConfirmOpen(true)}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl font-bold text-xs transition cursor-pointer shadow-xs border border-rose-200"
+              title="Purge Data Riwayat Transaksi Seluruh Cabang & Pusat"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Purge Semua Riwayat</span>
+            </button>
+          )}
+          <button
+            onClick={handleExportCSV}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-semibold text-xs transition active:scale-98 cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            <span>Export Rekap Semua Cabang</span>
+          </button>
+        </div>
       </div>
 
       {/* Global Consolidated KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 sm:gap-4">
         <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
           <p className="text-[11px] font-semibold text-slate-400 uppercase">Total Cabang</p>
           <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">{branches.length} <span className="text-xs font-normal text-slate-400">Gudang</span></h3>
@@ -633,6 +786,22 @@ export default function BranchMonitoring({
           <p className="text-[11px] font-semibold text-slate-400 uppercase">Total Valuasi Cabang</p>
           <h3 className="text-sm sm:text-xl font-bold text-emerald-600 mt-1 truncate">
             Rp {branchInventories.filter(bi => bi.status === 'APPROVED').reduce((acc, bi) => acc + ((Number(bi.stockQuantity) || 0) * (Number(bi.price) || 0)), 0).toLocaleString('id-ID')}
+          </h3>
+        </div>
+        <div className="bg-emerald-50/50 p-3.5 sm:p-5 rounded-2xl border border-emerald-200 shadow-xs">
+          <p className="text-[11px] font-semibold text-emerald-600 uppercase">Estimasi Profit</p>
+          <h3 className="text-sm sm:text-xl font-bold text-emerald-700 mt-1 truncate">
+            Rp {transactions.reduce((acc, tx) => {
+              if (tx.type === 'OUT' && tx.items) {
+                return acc + tx.items.reduce((sum, item) => {
+                  if (item.costPrice !== undefined) {
+                    return sum + ((Number(item.price) || 0) - (Number(item.costPrice) || 0)) * (Number(item.qty) || 0);
+                  }
+                  return sum;
+                }, 0);
+              }
+              return acc;
+            }, 0).toLocaleString('id-ID')}
           </h3>
         </div>
       </div>
@@ -703,7 +872,7 @@ export default function BranchMonitoring({
                   )}
 
                   {/* Branch Metrics Matrix */}
-                  <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 text-center">
+                  <div className="grid grid-cols-4 gap-2 pt-3 border-t border-slate-100 text-center">
                     <div className="p-2 bg-slate-50 rounded-xl">
                       <p className="text-[10px] text-slate-400 uppercase">Item SKU</p>
                       <p className="font-bold text-slate-900 text-sm mt-0.5">{bInventories.length}</p>
@@ -715,6 +884,35 @@ export default function BranchMonitoring({
                     <div className="p-2 bg-slate-50 rounded-xl">
                       <p className="text-[10px] text-slate-400 uppercase">Petugas</p>
                       <p className="font-bold text-slate-900 text-sm mt-0.5">{bStaff.length}</p>
+                    </div>
+                    <div className="p-2 bg-emerald-50 rounded-xl border border-emerald-100">
+                      <p className="text-[10px] text-emerald-600 uppercase">Profit</p>
+                      <p className="font-bold text-emerald-700 text-sm mt-0.5" title={`Rp ${transactions.filter(t => t.branchId === branch.id).reduce((acc, tx) => {
+                        if (tx.type === 'OUT' && tx.items) {
+                          return acc + tx.items.reduce((sum, item) => {
+                            if (item.costPrice !== undefined) {
+                              return sum + ((Number(item.price) || 0) - (Number(item.costPrice) || 0)) * (Number(item.qty) || 0);
+                            }
+                            return sum;
+                          }, 0);
+                        }
+                        return acc;
+                      }, 0).toLocaleString('id-ID')}`}>
+                        {(() => {
+                          const profit = transactions.filter(t => t.branchId === branch.id).reduce((acc, tx) => {
+                            if (tx.type === 'OUT' && tx.items) {
+                              return acc + tx.items.reduce((sum, item) => {
+                                if (item.costPrice !== undefined) {
+                                  return sum + ((Number(item.price) || 0) - (Number(item.costPrice) || 0)) * (Number(item.qty) || 0);
+                                }
+                                return sum;
+                              }, 0);
+                            }
+                            return acc;
+                          }, 0);
+                          return profit > 1000000 ? `${(profit / 1000000).toFixed(1)}M` : profit > 1000 ? `${(profit / 1000).toFixed(1)}K` : profit;
+                        })()}
+                      </p>
                     </div>
                   </div>
 
@@ -731,6 +929,41 @@ export default function BranchMonitoring({
         </div>
       </div>
 
+      {/* ADMIN PURGE CONFIRMATION MODAL */}
+      <ConfirmationModal
+        isOpen={isPurgeConfirmOpen}
+        onClose={() => {
+          setIsPurgeConfirmOpen(false);
+          setPurgeError('');
+        }}
+        onConfirm={handlePurgeTransactions}
+        title="Peringatan Kritis: Purge Data ⚠️"
+        message={
+          <div className="space-y-4">
+            <div className="bg-rose-50 text-rose-800 p-4 rounded-xl flex gap-3 text-sm border border-rose-200">
+              <AlertTriangle className="w-5 h-5 flex-shrink-0 text-rose-600" />
+              <p>
+                Anda akan menghapus <strong>SELURUH</strong> riwayat transaksi (Barang Masuk & Keluar) secara permanen untuk 
+                <span className="font-bold underline ml-1">
+                  {selectedBranchId === 'ALL' ? 'SEMUA CABANG & PUSAT' : `CABANG TEPILIH (${selectedBranch?.name || ''})`}
+                </span>.
+              </p>
+            </div>
+            <p className="text-slate-600 text-sm font-semibold">
+              Tindakan ini bersifat destruktif dan TIDAK DAPAT dibatalkan. Riwayat yang dihapus tidak bisa dikembalikan.
+            </p>
+            {purgeError && (
+              <p className="text-sm font-bold text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
+                Error: {purgeError}
+              </p>
+            )}
+          </div>
+        }
+        confirmText={isPurging ? "Memproses Purge..." : "Ya, Hapus Permanen!"}
+        cancelText="Batal"
+        isDangerous={true}
+        isLoading={isPurging}
+      />
     </div>
   );
 }

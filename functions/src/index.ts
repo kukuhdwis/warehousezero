@@ -433,6 +433,7 @@ export const createStockTransfer = functions.https.onCall(async (data, context) 
       unit: 'PCS',
       created_by: callerUid,
       created_at: admin.firestore.FieldValue.serverTimestamp(),
+      sentAt: admin.firestore.FieldValue.serverTimestamp(),
       shipping_notes: shippingNotes || ''
     });
 

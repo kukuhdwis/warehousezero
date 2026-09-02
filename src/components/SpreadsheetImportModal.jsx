@@ -26,6 +26,7 @@ import {
   downloadExhaustTemplate 
 } from '../services/spreadsheetService';
 import { importProductsBatch } from '../services/dataService';
+import { matchesSearch } from '../utils/searchUtils';
 
 export default function SpreadsheetImportModal({ 
   isOpen, 
@@ -161,14 +162,9 @@ export default function SpreadsheetImportModal({
 
   // Filter preview items
   const filteredPreviewItems = (parsedData?.items || []).filter(item => {
-    const matchesSearch = 
-      (item.sku || '').toLowerCase().includes(searchPreview.toLowerCase()) ||
-      (item.name || '').toLowerCase().includes(searchPreview.toLowerCase()) ||
-      (item.engine_type || '').toLowerCase().includes(searchPreview.toLowerCase()) ||
-      (item.car_variant || '').toLowerCase().includes(searchPreview.toLowerCase()) ||
-      (item.category_name || '').toLowerCase().includes(searchPreview.toLowerCase());
+    const matchesSearchTerm = matchesSearch(searchPreview, item.sku, item.name, item.engine_type, item.car_variant, item.category_name);
 
-    if (!matchesSearch) return false;
+    if (!matchesSearchTerm) return false;
 
     if (previewFilter === 'VALID') return item.isValid && !item.isDuplicate;
     if (previewFilter === 'DUPLICATE') return item.isDuplicate;

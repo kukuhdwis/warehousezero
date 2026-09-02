@@ -20,6 +20,7 @@ export default function Dashboard({
   products = [], 
   branchInventories = [],
   transactions = [], 
+  stockRequests = [],
   branches = [], 
   users = [], 
   onNavigate,

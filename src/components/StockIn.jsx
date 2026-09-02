@@ -24,6 +24,8 @@ import {
   ChevronUp,
   Trash2
 } from 'lucide-react';
+import { db } from '../services/firebase';
+import { matchesSearch } from '../utils/searchUtils';
 import ScannerModal from './ScannerModal';
 import TransactionSuccessModal from './TransactionSuccessModal';
 import GlobalSuccessModal from './GlobalSuccessModal';
@@ -78,9 +80,8 @@ export default function StockIn({
 
   // Request Stock Form State (Branch -> Pusat)
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
-  const [reqProductId, setReqProductId] = useState('');
-  const [reqQty, setReqQty] = useState(10);
-  const [reqNotes, setReqNotes] = useState('');
+  const [requestSearchTerm, setRequestSearchTerm] = useState('');
+  const [requestItems, setRequestItems] = useState([]);
   const [isSubmittingReq, setIsSubmittingReq] = useState(false);
   const [reqSuccessMsg, setReqSuccessMsg] = useState('');
   const [successRequestData, setSuccessRequestData] = useState(null);
@@ -229,8 +230,7 @@ const parseScannedSKU = (text) => {
 
     if (matched) {
       if (isBranchStaff) {
-        setReqProductId(matched.id);
-        setReqQty(prev => (Number(prev) || 0) + 1);
+        setRequestSearchTerm(matched.name);
         setIsRequestModalOpen(true);
       } else {
         handleAddItemToManifest(matched);
@@ -361,7 +361,7 @@ const parseScannedSKU = (text) => {
   // Completed received transfers for this branch
   const receivedTransfers = safeTransfers.filter(
     t => t && t.status === 'RECEIVED' && (t.targetBranchId === currentUser?.branchId || t.targetBranchId === 'ALL' || t.to_branch_id === currentUser?.branchId || t.to_branch_id === 'ALL')
-  );
+  ).sort((a, b) => new Date(b.receivedAt || b.timestamp || 0) - new Date(a.receivedAt || a.timestamp || 0));
 
   // Branch Stock Requests
   const myStockRequests = safeStockRequests.filter(
@@ -436,28 +436,85 @@ const parseScannedSKU = (text) => {
     }
   };
 
+  // Multi-item handlers for Branch Request Stock
+  const handleToggleProductInRequest = (prod) => {
+    const exists = requestItems.some(item => item.productId === prod.id);
+    if (exists) {
+      setRequestItems(requestItems.filter(item => item.productId !== prod.id));
+    } else {
+      setRequestItems([
+        ...requestItems,
+        {
+          productId: prod.id,
+          sku: prod.sku,
+          productName: prod.name,
+          brand: prod.brand || 'Generic',
+          qty: 10,
+          notes: ''
+        }
+      ]);
+    }
+  };
+
+  const handleToggleAllFilteredInRequest = () => {
+    const filteredProducts = safeProducts.filter(p => 
+      p.status !== 'INACTIVE' && matchesSearch(requestSearchTerm, p.name, p.sku, p.brand)
+    );
+
+    const allSelected = filteredProducts.every(prod => requestItems.some(item => item.productId === prod.id));
+
+    if (allSelected) {
+      const filteredIds = filteredProducts.map(p => p.id);
+      setRequestItems(requestItems.filter(item => !filteredIds.includes(item.productId)));
+    } else {
+      const newItems = [...requestItems];
+      filteredProducts.forEach(prod => {
+        if (!newItems.some(item => item.productId === prod.id)) {
+          newItems.push({
+            productId: prod.id,
+            sku: prod.sku,
+            productName: prod.name,
+            brand: prod.brand || 'Generic',
+            qty: 10,
+            notes: ''
+          });
+        }
+      });
+      setRequestItems(newItems);
+    }
+  };
+
+  const handleUpdateItemField = (index, field, value) => {
+    setRequestItems(prev => {
+      const updated = [...prev];
+      if (updated[index]) {
+        updated[index] = { ...updated[index], [field]: value };
+      }
+      return updated;
+    });
+  };
+
+  const handleRemoveProductFromRequest = (index) => {
+    setRequestItems(prev => prev.filter((_, i) => i !== index));
+  };
+
   // Pre-submit validation before opening Request Stock Confirmation Dialog
   const handlePreSubmitStockRequest = (e) => {
     e.preventDefault();
-    const targetP = safeProducts.find(p => p.id === reqProductId) || safeProducts[0];
-    if (!targetP) {
-      showAlert("Pilih Produk", "Pilih produk dari katalog terlebih dahulu!", "WARNING");
+    
+    if (requestItems.length === 0) {
+      showAlert("Keranjang Kosong", "Pilih minimal 1 produk dari katalog terlebih dahulu!", "WARNING");
       return;
     }
-    if (Number(reqQty) <= 0) {
-      showAlert("Kuantitas Tidak Valid", "Jumlah kuantitas yang diminta harus lebih besar dari 0!", "WARNING");
-      return;
+    
+    for (const item of requestItems) {
+      if (Number(item.qty) <= 0) {
+        showAlert("Kuantitas Tidak Valid", `Jumlah kuantitas untuk ${item.productName} harus lebih besar dari 0!`, "WARNING");
+        return;
+      }
     }
 
-    const payload = {
-      productId: targetP.id,
-      sku: targetP.sku,
-      productName: targetP.name,
-      brand: targetP.brand || 'Generic',
-      qty: Number(reqQty),
-      notes: reqNotes.trim()
-    };
-    setPendingConfirmRequest(payload);
+    setPendingConfirmRequest(requestItems);
   };
 
   // Execute Stock Request Save to Database after confirmation
@@ -466,14 +523,16 @@ const parseScannedSKU = (text) => {
     setIsExecutingAction(true);
     try {
       if (onRequestStock) {
-        await onRequestStock(pendingConfirmRequest);
+        for (const req of pendingConfirmRequest) {
+           await onRequestStock(req);
+        }
       }
 
       setIsRequestModalOpen(false);
-      setReqNotes('');
-      setReqQty(10);
+      setRequestItems([]);
+      setRequestSearchTerm('');
       setActiveBranchTab('REQUEST_STOCK');
-      setSuccessRequestData(pendingConfirmRequest);
+      setReqSuccessMsg(`Berhasil mengajukan permintaan untuk ${pendingConfirmRequest.length} produk.`);
       setPendingConfirmRequest(null);
     } catch (err) {
       showAlert("Gagal Mengirim Permintaan", err.message, "ERROR");
@@ -1205,53 +1264,135 @@ const parseScannedSKU = (text) => {
 
             <form onSubmit={handlePreSubmitStockRequest} className="p-6 space-y-4 text-sm">
               
-              {/* Product Selection */}
+              {/* 1. Master Product Selector */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                  Pilih Produk dari Master Katalog *
-                </label>
-                <select
-                  required
-                  value={reqProductId}
-                  onChange={(e) => setReqProductId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                >
-                  {safeProducts.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} [{p.brand || 'Generic'}] ({p.sku})
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                    1. Pilih Produk dari Katalog ({safeProducts.filter(p => p.status !== 'INACTIVE').length} Tersedia) *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleToggleAllFilteredInRequest}
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-lg transition"
+                  >
+                    Pilih / Batalkan Semua
+                  </button>
+                </div>
+                <div className="relative mb-2">
+                  <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Cari nama produk, SKU, atau merk katalog..."
+                    value={requestSearchTerm}
+                    onChange={(e) => setRequestSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="max-h-44 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
+                  {safeProducts
+                    .filter(p => 
+                      p.status !== 'INACTIVE' && matchesSearch(requestSearchTerm, p.name, p.sku, p.brand)
+                    )
+                    .map(prod => {
+                      const isSelected = requestItems.some(item => item.productId === prod.id);
+                      return (
+                        <div
+                          key={prod.id}
+                          onClick={() => handleToggleProductInRequest(prod)}
+                          className={`p-3 flex items-center justify-between gap-3 hover:bg-slate-50 cursor-pointer transition ${
+                            isSelected ? 'bg-indigo-50/70 border-l-4 border-indigo-500' : ''
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer flex-shrink-0"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+                                <span className="font-bold text-slate-800 text-xs leading-snug">{prod.name}</span>
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap flex-shrink-0">
+                                  {prod.brand || 'Generic'}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center gap-1 flex-wrap">
+                                <span className="whitespace-nowrap font-semibold text-slate-600">SKU: {prod.sku}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <span className="text-[11px] font-bold text-indigo-700 whitespace-nowrap flex-shrink-0">
+                            {isSelected ? '✓ Terpilih' : '+ Pilih'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                </div>
               </div>
 
-              {/* Quantity */}
+              {/* 2. Configuration for Selected Items */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                  Kuantitas yang Diminta (Qty Pcs) *
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  2. Atur Kuantitas & Catatan ({requestItems.length} Produk Dipilih) *
                 </label>
-                <input
-                  type="number"
-                  min="1"
-                  required
-                  placeholder="Contoh: 50"
-                  value={reqQty}
-                  onChange={(e) => setReqQty(Math.max(1, Number(e.target.value)))}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                />
-              </div>
 
-              {/* Notes */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                  Catatan / Keterangan Kebutuhan Cabang
-                </label>
-                <textarea
-                  rows="3"
-                  placeholder="Contoh: Stok di cabang tersisa 5 pcs, mohon dikirimkan segera."
-                  value={reqNotes}
-                  onChange={(e) => setReqNotes(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                />
+                {requestItems.length === 0 ? (
+                  <div className="p-4 bg-slate-50 border border-dashed border-slate-300 rounded-xl text-center text-slate-400 text-xs">
+                    Klik / centang produk di atas untuk mengajukan permintaan stok.
+                  </div>
+                ) : (
+                  <div className="max-h-56 overflow-y-auto space-y-2.5 pr-1">
+                    {requestItems.map((item, index) => (
+                      <div key={item.productId} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-bold text-slate-800 text-xs">{item.productName}</span>
+                            <span className="ml-1.5 text-[11px] font-mono text-slate-500">({item.sku})</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveProductFromRequest(index)}
+                            className="text-rose-500 hover:text-rose-700 p-0.5 cursor-pointer"
+                            title="Hapus item ini"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-600 uppercase mb-0.5">
+                              Kuantitas (Qty) *
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              required
+                              value={item.qty}
+                              onChange={(e) => handleUpdateItemField(index, 'qty', Math.max(1, Number(e.target.value)))}
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-extrabold text-indigo-700 focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </div>
+
+                          <div className="col-span-1 sm:col-span-2">
+                            <label className="block text-[10px] font-semibold text-slate-600 uppercase mb-0.5">
+                              Catatan Kebutuhan Cabang
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="Contoh: Stok di toko hampir habis"
+                              value={item.notes}
+                              onChange={(e) => handleUpdateItemField(index, 'notes', e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-1">
@@ -1298,10 +1439,9 @@ const parseScannedSKU = (text) => {
         title="Permintaan Stok Berhasil Dikirim!"
         message="Pengajuan permintaan stok barang telah berhasil tercatat dan ternotifikasi ke Kantor Pusat."
         details={successRequestData ? [
-          { label: "Nama Produk", value: successRequestData.productName },
-          { label: "Kuantitas Diminta", value: `+${successRequestData.qty} Pcs`, highlight: true },
-          { label: "Status Permintaan", value: "Menunggu Respon Pusat" },
-          ...(successRequestData.notes ? [{ label: "Catatan", value: successRequestData.notes }] : [])
+          { label: "Total Jenis Produk", value: `${successRequestData.length} Produk` },
+          { label: "Total Kuantitas Diminta", value: `+${successRequestData.reduce((sum, item) => sum + Number(item.qty), 0)} Pcs`, highlight: true },
+          { label: "Status Permintaan", value: "Menunggu Respon Pusat" }
         ] : null}
         buttonText="✓ Selesai & Tutup"
       />
@@ -1352,16 +1492,21 @@ const parseScannedSKU = (text) => {
           title="Konfirmasi Permintaan Stok ke Pusat"
           subtitle="Permintaan stok akan tercatat di sistem Kantor Pusat untuk diproses pengirimannya."
           type="PRIMARY"
-          confirmText="Ya, Kirim Permintaan"
-          cancelText="← Cek Kembali"
+          confirmText={`Ya, Kirim Permintaan (${pendingConfirmRequest.length} Produk)`}
+          cancelText="Cek Kembali"
           isLoading={isExecutingAction}
           summaryItems={[
             { label: "Cabang Pemohon", value: currentUser?.branchName || 'Cabang', highlight: true },
-            { label: "Nama Produk", value: pendingConfirmRequest.productName },
-            { label: "SKU Produk", value: pendingConfirmRequest.sku },
-            { label: "Jumlah Diminta", value: `+${pendingConfirmRequest.qty} Pcs`, color: 'text-indigo-700 font-bold' },
-            { label: "Catatan Permintaan", value: pendingConfirmRequest.notes || '-' }
+            { label: "Total Jenis Produk", value: `${pendingConfirmRequest.length} Produk` },
+            { label: "Total Kuantitas", value: `+${pendingConfirmRequest.reduce((sum, item) => sum + Number(item.qty), 0)} Pcs`, color: 'text-indigo-700 font-bold' }
           ]}
+          itemsList={pendingConfirmRequest.map(item => ({
+            name: item.productName,
+            sku: item.sku,
+            brand: item.brand,
+            qty: item.qty,
+            unit: 'Pcs'
+          }))}
           warningNote="Admin / Staff Pusat akan memverifikasi ketersediaan stok fisik di pusat sebelum mengirimkannya ke cabang Anda."
         />
       )}

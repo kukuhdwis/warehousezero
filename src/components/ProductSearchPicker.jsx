@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Tag, Boxes, Check, X, ChevronDown, Layers } from 'lucide-react';
+import { matchesSearch } from '../utils/searchUtils';
 
 export default function ProductSearchPicker({ 
   products = [], 
@@ -30,12 +31,7 @@ export default function ProductSearchPicker({
     return safeProducts.filter(p => {
       const cat = p.machineCategory || p.kategoriMesin || 'Universal';
       const matchesCat = selectedCategory === 'ALL' || cat === selectedCategory;
-      const term = searchTerm.toLowerCase().trim();
-      const matchesTerm = !term || 
-        (p.name || '').toLowerCase().includes(term) ||
-        (p.sku || '').toLowerCase().includes(term) ||
-        (p.brand || '').toLowerCase().includes(term) ||
-        cat.toLowerCase().includes(term);
+      const matchesTerm = matchesSearch(searchTerm, p.name, p.sku, p.brand, cat);
       return matchesCat && matchesTerm;
     });
   }, [safeProducts, searchTerm, selectedCategory]);

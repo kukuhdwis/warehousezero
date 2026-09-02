@@ -683,7 +683,8 @@ export default function App() {
         .map(bi => {
           const masterP = products.find(p => p.id === bi.productId || p.sku === bi.sku);
           return {
-            id: bi.id,
+            id: bi.productId,
+            branchInventoryId: bi.id,
             productId: bi.productId,
             sku: bi.sku,
             name: bi.productName,
@@ -693,6 +694,7 @@ export default function App() {
             unit: bi.unit || masterP?.unit || 'Pcs',
             currentStock: Number(bi.stockQuantity) || 0,
             minStock: Number(bi.minStock) || 5,
+            costPrice: Number(bi.price ?? masterP?.price ?? 0),
             branchId: bi.branchId,
             branchName: bi.branchName || currentUser?.branchName || 'Cabang'
           };

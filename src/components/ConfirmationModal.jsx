@@ -33,6 +33,7 @@ export default function ConfirmationModal({
   itemsTitle = "Daftar Barang:",
   warningNote = null,
   isLoading = false,
+  hideCancel = false,
   maxWidth = "max-w-lg" // 'max-w-md' | 'max-w-lg' | 'max-w-xl' | 'max-w-2xl'
 }) {
   if (!isOpen) return null;
@@ -161,14 +162,16 @@ export default function ConfirmationModal({
 
         {/* Footer Actions */}
         <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-end gap-2.5">
-          <button
-            type="button"
-            disabled={isLoading}
-            onClick={onClose}
-            className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200/70 active:bg-slate-200 rounded-xl transition cursor-pointer disabled:opacity-50"
-          >
-            {cancelText}
-          </button>
+          {!hideCancel && (
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={onClose}
+              className="px-5 py-2.5 text-xs font-bold text-slate-600 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition active:scale-95 cursor-pointer disabled:opacity-50"
+            >
+              {cancelText}
+            </button>
+          )}
           <button
             type="button"
             disabled={isLoading}

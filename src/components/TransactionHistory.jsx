@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { History, Download, ArrowDownLeft, ArrowUpRight, Filter, Search, User, Clock, FileText } from 'lucide-react';
-import { exportToCSV } from '../services/dataService';
+import { matchesSearch } from '../utils/searchUtils';
+import { History, Download, ArrowDownLeft, ArrowUpRight, Filter, Search, User, Clock, FileText, Trash2, AlertTriangle } from 'lucide-react';
+import { exportToCSV, purgeTransactions } from '../services/dataService';
+import ConfirmationModal from './ConfirmationModal';
 
-export default function TransactionHistory({ transactions = [], currentUser }) {
+export default function TransactionHistory({ transactions = [], currentUser, onTransactionUpdate }) {
   const isBranchStaff = currentUser?.role === 'STAFF_BRANCH';
   const branchId = currentUser?.branchId;
 
@@ -20,6 +22,10 @@ export default function TransactionHistory({ transactions = [], currentUser }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [selectedBranchFilter, setSelectedBranchFilter] = useState('ALL');
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isPurgeConfirmOpen, setIsPurgeConfirmOpen] = useState(false);
+  const [isPurging, setIsPurging] = useState(false);
+  const [purgeError, setPurgeError] = useState('');
 
   // Branch data isolation: Branch Staff only sees their own branch's transactions!
   const scopedTransactions = transactions.filter(tx => {
@@ -33,30 +39,98 @@ export default function TransactionHistory({ transactions = [], currentUser }) {
   });
 
   const filteredTransactions = scopedTransactions.filter(tx => {
-    const matchesSearch = 
-      tx.productName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tx.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tx.notes?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tx.user?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tx.branchName?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearchTerm = matchesSearch(searchTerm, tx.productName, tx.sku, tx.notes, tx.user, tx.branchName);
     
     const matchesType = typeFilter === 'ALL' || tx.type === typeFilter;
-    return matchesSearch && matchesType;
+    return matchesSearchTerm && matchesType;
   });
 
-  const handleExport = () => {
-    const formattedData = filteredTransactions.map(tx => ({
-      ID: tx.id,
-      Tipe: tx.type === 'IN' ? 'Barang Masuk' : 'Barang Keluar',
-      SKU: tx.sku,
-      Nama_Produk: tx.productName,
-      Jumlah: tx.qty,
-      Catatan: tx.notes || '-',
-      Petugas: tx.user || '-',
-      Waktu: formatTime(tx.createdAt)
-    }));
+  const handleExport = (exportType = 'ALL') => {
+    const formattedData = [];
+    
+    // Filter transactions based on the selected exportType
+    const transactionsToExport = filteredTransactions.filter(tx => {
+      if (exportType === 'ALL') return true;
+      if (exportType === 'IN') return tx.type === 'IN';
+      if (exportType === 'OUT') return tx.type !== 'IN';
+      if (exportType === 'OUT_SHOPEE') return tx.type !== 'IN' && (tx.notes || '').toLowerCase().includes('shopee');
+      if (exportType === 'OUT_TOKOPEDIA') return tx.type !== 'IN' && (tx.notes || '').toLowerCase().includes('tokopedia');
+      if (exportType === 'OUT_TIKTOK') return tx.type !== 'IN' && (tx.notes || '').toLowerCase().includes('tiktok');
+      if (exportType === 'OUT_OFFLINE') return tx.type !== 'IN' && ((tx.notes || '').toLowerCase().includes('offline') || (tx.notes || '').toLowerCase().includes('cabang'));
+      return true;
+    });
 
-    exportToCSV(formattedData, `WMS-Riwayat-Transaksi-${Date.now()}.csv`);
+    transactionsToExport.forEach(tx => {
+      const isOutboundOrSale = tx.type !== 'IN';
+      
+      if (tx.items && tx.items.length > 0) {
+        // Flatten multi-item transactions
+        tx.items.forEach(item => {
+          const itemQty = Number(item.qty || item.qty_in || 1);
+          const itemPrice = Number(item.price || 0);
+          const itemTotal = item.subtotal || (itemPrice * itemQty);
+          
+          formattedData.push({
+            ID: tx.id,
+            Tipe: tx.type === 'IN' ? 'Barang Masuk' : 'Barang Keluar',
+            SKU: item.sku || '-',
+            Nama_Produk: item.productName || item.product_name || item.name || '-',
+            Jumlah: itemQty,
+            Harga_Satuan: isOutboundOrSale ? `Rp ${itemPrice}` : '-',
+            Total_Harga: isOutboundOrSale ? `Rp ${itemTotal}` : '-',
+            Catatan: tx.notes || '-',
+            Petugas: tx.user || '-',
+            Waktu: formatTime(tx.createdAt)
+          });
+        });
+      } else {
+        // Single item transaction fallback
+        const qty = Number(tx.qty || 1);
+        const price = Number(tx.price || 0);
+        const total = Number(tx.totalPrice || tx.totalValue || (price * qty));
+        
+        formattedData.push({
+          ID: tx.id,
+          Tipe: tx.type === 'IN' ? 'Barang Masuk' : 'Barang Keluar',
+          SKU: tx.sku || '-',
+          Nama_Produk: tx.productName || '-',
+          Jumlah: qty,
+          Harga_Satuan: isOutboundOrSale ? `Rp ${price}` : '-',
+          Total_Harga: isOutboundOrSale ? `Rp ${total}` : '-',
+          Catatan: tx.notes || '-',
+          Petugas: tx.user || '-',
+          Waktu: formatTime(tx.createdAt)
+        });
+      }
+    });
+
+    let filenameSuffix = exportType;
+    if (exportType.startsWith('OUT_')) {
+      filenameSuffix = `Keluar-${exportType.replace('OUT_', '')}`;
+    }
+    
+    exportToCSV(formattedData, `WMS-Riwayat-Transaksi-${filenameSuffix}-${Date.now()}.csv`);
+    setIsExportMenuOpen(false);
+  };
+
+  const handlePurgeTransactions = async () => {
+    setIsPurging(true);
+    setPurgeError('');
+    try {
+      const deletedCount = await purgeTransactions(selectedBranchFilter, currentUser);
+      setIsPurgeConfirmOpen(false);
+      if (onTransactionUpdate) {
+        onTransactionUpdate(); // Trigger refresh in parent
+      } else {
+        // Fallback reload if prop not provided
+        window.location.reload();
+      }
+      alert(`Berhasil menghapus ${deletedCount} riwayat transaksi secara permanen.`);
+    } catch (err) {
+      setPurgeError(err.message);
+    } finally {
+      setIsPurging(false);
+    }
   };
 
   return (
@@ -69,13 +143,95 @@ export default function TransactionHistory({ transactions = [], currentUser }) {
           <p className="text-xs sm:text-sm text-slate-500">Audit trail pergerakan stok barang masuk (Inbound) & keluar (Outbound).</p>
         </div>
 
-        <button
-          onClick={handleExport}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-semibold text-sm shadow-xs transition active:scale-98 cursor-pointer"
-        >
-          <Download className="w-4 h-4" />
-          <span>Export CSV / Excel</span>
-        </button>
+        <div className="flex items-center gap-2 relative">
+          {/* PURGE BUTTON (ADMIN ONLY) */}
+          {currentUser?.role === 'ADMIN' && (
+            <button
+              onClick={() => setIsPurgeConfirmOpen(true)}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-xl text-sm shadow-xs transition active:scale-98 cursor-pointer"
+              title="Bersihkan Semua Data Riwayat (Admin Only)"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Purge Data</span>
+            </button>
+          )}
+
+          <div className="relative">
+            <button
+              onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-semibold text-sm shadow-xs transition active:scale-98 cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            <span>Export CSV / Excel</span>
+          </button>
+          
+          {isExportMenuOpen && (
+            <>
+              {/* Backdrop to close menu */}
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setIsExportMenuOpen(false)}
+              ></div>
+              
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150 origin-top-right">
+                <div className="p-1 text-slate-700 font-medium text-sm">
+                  <button
+                    onClick={() => handleExport('ALL')}
+                    className="w-full text-left px-4 py-2.5 rounded-lg hover:bg-slate-50 transition cursor-pointer flex items-center gap-2"
+                  >
+                    <FileText className="w-4 h-4 text-slate-400" />
+                    <span>Semua Transaksi</span>
+                  </button>
+                  <button
+                    onClick={() => handleExport('OUT')}
+                    className="w-full text-left px-4 py-2.5 rounded-lg hover:bg-rose-50 hover:text-rose-700 transition cursor-pointer flex items-center gap-2"
+                  >
+                    <ArrowUpRight className="w-4 h-4 text-rose-500" />
+                    <span>Hanya Pengeluaran (Keluar)</span>
+                  </button>
+                  <button
+                    onClick={() => handleExport('IN')}
+                    className="w-full text-left px-4 py-2.5 rounded-lg hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer flex items-center gap-2"
+                  >
+                    <ArrowDownLeft className="w-4 h-4 text-emerald-500" />
+                    <span>Hanya Pemasukan (Masuk)</span>
+                  </button>
+                  <div className="h-px bg-slate-100 my-1"></div>
+                  <div className="px-4 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rekap Spesifik (Keluar)</div>
+                  <button
+                    onClick={() => handleExport('OUT_SHOPEE')}
+                    className="w-full text-left px-4 py-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition cursor-pointer flex items-center gap-2 text-xs"
+                  >
+                    <ArrowUpRight className="w-3.5 h-3.5 text-orange-500" />
+                    <span>Shopee</span>
+                  </button>
+                  <button
+                    onClick={() => handleExport('OUT_TOKOPEDIA')}
+                    className="w-full text-left px-4 py-2 rounded-lg hover:bg-green-50 hover:text-green-700 transition cursor-pointer flex items-center gap-2 text-xs"
+                  >
+                    <ArrowUpRight className="w-3.5 h-3.5 text-green-500" />
+                    <span>Tokopedia</span>
+                  </button>
+                  <button
+                    onClick={() => handleExport('OUT_TIKTOK')}
+                    className="w-full text-left px-4 py-2 rounded-lg hover:bg-slate-100 hover:text-slate-800 transition cursor-pointer flex items-center gap-2 text-xs"
+                  >
+                    <ArrowUpRight className="w-3.5 h-3.5 text-slate-700" />
+                    <span>TikTok Shop</span>
+                  </button>
+                  <button
+                    onClick={() => handleExport('OUT_OFFLINE')}
+                    className="w-full text-left px-4 py-2 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer flex items-center gap-2 text-xs"
+                  >
+                    <ArrowUpRight className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Toko Offline / Cabang</span>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+        </div>
       </div>
 
       {/* Filter & Search */}
@@ -145,6 +301,9 @@ export default function TransactionHistory({ transactions = [], currentUser }) {
                     <div>
                       <h4 className="font-bold text-slate-900 text-sm leading-snug">{tx.productName}</h4>
                       <p className="text-[11px] font-mono text-slate-400 mt-0.5">SKU: {tx.sku}</p>
+                      {tx.totalPrice !== undefined && tx.type === 'OUT' && (
+                        <p className="text-[11px] font-semibold text-emerald-600 mt-0.5">Nilai: Rp {tx.totalPrice.toLocaleString('id-ID')}</p>
+                      )}
                     </div>
                   </div>
 
@@ -220,6 +379,9 @@ export default function TransactionHistory({ transactions = [], currentUser }) {
                       <td className="px-5 py-4 min-w-[200px]">
                         <div className="font-semibold text-slate-800 leading-snug">{tx.productName}</div>
                         <div className="text-xs text-slate-400 font-mono mt-0.5 whitespace-nowrap">SKU: {tx.sku}</div>
+                        {tx.totalPrice !== undefined && tx.type === 'OUT' && (
+                          <div className="text-xs font-semibold text-emerald-600 mt-1 whitespace-nowrap">Nilai Transaksi: Rp {tx.totalPrice.toLocaleString('id-ID')}</div>
+                        )}
                       </td>
                       <td className="px-4 py-4 text-center font-extrabold text-slate-900 whitespace-nowrap">
                         <span className={`px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${
@@ -246,6 +408,41 @@ export default function TransactionHistory({ transactions = [], currentUser }) {
         </div>
       </div>
 
+      {/* ADMIN PURGE CONFIRMATION MODAL */}
+      <ConfirmationModal
+        isOpen={isPurgeConfirmOpen}
+        onClose={() => {
+          setIsPurgeConfirmOpen(false);
+          setPurgeError('');
+        }}
+        onConfirm={handlePurgeTransactions}
+        title="Peringatan Kritis: Purge Data ⚠️"
+        message={
+          <div className="space-y-4">
+            <div className="bg-rose-50 text-rose-800 p-4 rounded-xl flex gap-3 text-sm border border-rose-200">
+              <AlertTriangle className="w-5 h-5 flex-shrink-0 text-rose-600" />
+              <p>
+                Anda akan menghapus <strong>SELURUH</strong> riwayat transaksi (Barang Masuk & Keluar) secara permanen untuk 
+                <span className="font-bold underline ml-1">
+                  {selectedBranchFilter === 'ALL' ? 'SEMUA CABANG & PUSAT' : `CABANG TEPILIH (${selectedBranchFilter})`}
+                </span>.
+              </p>
+            </div>
+            <p className="text-slate-600 text-sm font-semibold">
+              Tindakan ini bersifat destruktif dan TIDAK DAPAT dibatalkan. Riwayat yang dihapus tidak bisa dikembalikan.
+            </p>
+            {purgeError && (
+              <p className="text-sm font-bold text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
+                Error: {purgeError}
+              </p>
+            )}
+          </div>
+        }
+        confirmText={isPurging ? "Memproses Purge..." : "Ya, Hapus Permanen!"}
+        cancelText="Batal"
+        isDangerous={true}
+        isLoading={isPurging}
+      />
     </div>
   );
 }

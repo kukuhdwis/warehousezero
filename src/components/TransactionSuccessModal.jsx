@@ -16,6 +16,8 @@ import {
   Sparkles,
   ShieldCheck
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function TransactionSuccessModal({ 
   isOpen, 
@@ -31,9 +33,148 @@ export default function TransactionSuccessModal({
   const isTransfer = transaction.transactionType === 'STOCK_TRANSFER_TO_BRANCH' || transaction.targetBranchName;
 
   const handlePrint = () => {
-    window.print();
-  };
+    try {
+        const doc = new jsPDF();
+        
+        // --- HEADER ---
+        doc.setFontSize(20);
+        doc.setFont("helvetica", "bold");
+        
+        let title = "BUKTI TRANSAKSI";
+        if (isTransfer) title = "SURAT JALAN";
+        else if (isSale) title = "NOTA PENJUALAN";
+        else if (isInbound) title = "BUKTI PENERIMAAN BARANG";
+        
+        // Right align title
+        const pageWidth = doc.internal.pageSize.getWidth();
+        doc.text(title, pageWidth - 14, 22, { align: 'right' });
+        
+        // Draw line under title
+        doc.setLineWidth(0.5);
+        doc.line(14, 25, pageWidth - 14, 25);
+        
+        // Left Header: Company Info
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.text("Kepada Yth.", 14, 32);
+        doc.setFont("helvetica", "normal");
+        
+        if (isSale) {
+            doc.text(`Nama: ${transaction.customerName || 'Pelanggan'}`, 14, 38);
+            if (transaction.customerPhone) doc.text(`No. Telp: ${transaction.customerPhone}`, 14, 44);
+            if (transaction.customerAddress) doc.text(`Alamat: ${transaction.customerAddress}`, 14, 50);
+        } else if (isTransfer) {
+            doc.text(`Tujuan: ${transaction.targetBranchName || 'Cabang'}`, 14, 38);
+        } else if (isInbound) {
+            doc.text(`Gudang: NDK Warehouse`, 14, 38);
+        }
 
+        // Right Header: Invoice Info
+        const invoiceNo = transaction.invoiceNumber || transaction.deliveryNote || `#TRX-${Date.now().toString().slice(-6)}`;
+        let txDate = new Date().toLocaleDateString('id-ID');
+        if (transaction.timestamp) {
+             // Handle Firestore timestamp or Date string
+             const d = transaction.timestamp.toDate ? transaction.timestamp.toDate() : new Date(transaction.timestamp);
+             txDate = d.toLocaleDateString('id-ID');
+        } else if (transaction.createdAt) {
+             const d = transaction.createdAt.toDate ? transaction.createdAt.toDate() : new Date(transaction.createdAt);
+             txDate = d.toLocaleDateString('id-ID');
+        }
+
+        doc.setFont("helvetica", "bold");
+        doc.text("No. Dokumen", pageWidth - 70, 32);
+        doc.text("Tanggal", pageWidth - 70, 38);
+        doc.text("Petugas", pageWidth - 70, 44);
+        
+        doc.setFont("helvetica", "normal");
+        doc.text(`: ${invoiceNo}`, pageWidth - 45, 32);
+        doc.text(`: ${txDate}`, pageWidth - 45, 38);
+        doc.text(`: ${transaction.performerName || transaction.callerUid || 'Admin'}`, pageWidth - 45, 44);
+
+        // --- TABLE ---
+        const tableColumn = ["No", "SKU", "Nama Barang", "Qty", "Jumlah (Rp)", "Keterangan"];
+        const tableRows = [];
+        
+        let totalQty = 0;
+        let totalAmount = 0;
+
+        (transaction.items || []).forEach((item, index) => {
+          let itemPrice = Number(item.price || item.totalPrice || 0);
+          // Only multiply if it's single unit price, but sometimes items store totalPrice directly.
+          // To be safe, rely on the item price being unit price if item.totalPrice is not set.
+          if (!item.totalPrice && item.price) {
+             itemPrice = itemPrice * (Number(item.qty) || 1);
+          }
+          
+          if (isTransfer || isInbound) itemPrice = 0; 
+          
+          const rowData = [
+            index + 1,
+            item.sku || '-',
+            item.productName || item.product_name || '-',
+            `${item.qty || 0} ${item.unit || 'Pcs'}`,
+            isSale ? `Rp ${itemPrice.toLocaleString('id-ID')}` : '-',
+            item.notes || '-'
+          ];
+          tableRows.push(rowData);
+          
+          totalQty += Number(item.qty || 0);
+          totalAmount += itemPrice;
+        });
+
+        autoTable(doc, {
+          head: [tableColumn],
+          body: tableRows,
+          startY: 55,
+          theme: 'grid',
+          styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0], lineColor: [0,0,0], lineWidth: 0.1 },
+          headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', lineColor: [0,0,0], lineWidth: 0.1 },
+          columnStyles: {
+            0: { cellWidth: 10, halign: 'center' },
+            1: { cellWidth: 25 },
+            2: { cellWidth: 'auto' },
+            3: { cellWidth: 15, halign: 'center' },
+            4: { cellWidth: 25, halign: 'right' },
+            5: { cellWidth: 35 }
+          }
+        });
+        
+        const finalY = doc.lastAutoTable?.finalY || 55;
+        
+        // --- TOTALS ---
+        doc.setFont("helvetica", "bold");
+        doc.text(`Total Berat/Barang: ${totalQty} Item`, 14, finalY + 8);
+        
+        if (isSale) {
+            doc.text(`Total Pembayaran: Rp ${totalAmount.toLocaleString('id-ID')}`, pageWidth - 14, finalY + 8, { align: 'right' });
+        }
+        
+        // --- FOOTER & SIGNATURES ---
+        doc.setLineWidth(0.5);
+        doc.line(14, finalY + 12, pageWidth - 14, finalY + 12);
+        
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.text("BARANG SUDAH DITERIMA DALAM KEADAAN BAIK DAN CUKUP oleh:", 14, finalY + 17);
+        doc.text("(tanda tangan dan cap stempel perusahaan)", 14, finalY + 21);
+        
+        doc.setFontSize(9);
+        doc.text("Penerima / Pembeli", 35, finalY + 35, { align: 'center' });
+        doc.text("Bagian Pengiriman", pageWidth / 2, finalY + 35, { align: 'center' });
+        doc.text("Petugas Gudang", pageWidth - 35, finalY + 35, { align: 'center' });
+        
+        doc.setLineWidth(0.3);
+        doc.line(14, finalY + 55, 56, finalY + 55);
+        doc.line(pageWidth / 2 - 20, finalY + 55, pageWidth / 2 + 20, finalY + 55);
+        doc.line(pageWidth - 56, finalY + 55, pageWidth - 14, finalY + 55);
+
+        // --- SAVE ---
+        doc.save(`${title.replace(/ /g, '_')}_${invoiceNo}.pdf`);
+    } catch (err) {
+        console.error("Failed to generate PDF", err);
+        alert("Gagal mencetak PDF: " + err.message);
+    }
+  };
   return (
     <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in duration-200 pointer-events-auto">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-150 my-auto print-only-modal">

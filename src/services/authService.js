@@ -170,8 +170,8 @@ export const loginUser = async (email, password) => {
       uid: firebaseUser.uid,
       email: firebaseUser.email,
       name: profileData.name || firebaseUser.displayName || cleanEmail.split('@')[0],
-      role: claims.role || profileData.role || 'STAFF_BRANCH',
-      branchId: claims.branch_id || profileData.branchId || 'ALL',
+      role: profileData.role || claims.role || 'STAFF_BRANCH',
+      branchId: profileData.branchId || claims.branch_id || 'ALL',
       branchName: profileData.branchName || (claims.branch_name) || (profileData.role === 'ADMIN' ? 'Semua Cabang (Pusat)' : 'Gudang Cabang'),
       phone: profileData.phone || '',
       status: profileData.status || 'ACTIVE'

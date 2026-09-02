@@ -23,8 +23,12 @@ import {
   Flame,
   ImageIcon,
   Filter,
-  CheckCircle
+  CheckCircle,
+  Download,
+  RefreshCw,
+  ShoppingCart
 } from 'lucide-react';
+import { matchesSearch } from '../utils/searchUtils';
 import { setSEO } from '../utils/seo';
 
 export default function PublicCatalog({ 
@@ -93,19 +97,14 @@ export default function PublicCatalog({
   // Filtered Products
   const filteredProducts = useMemo(() => {
     return activeProducts.filter(p => {
-      const matchesSearch = 
-        (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.sku || p.code || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.car_variant || p.carVariant || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.brand || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.category_name || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearchTerm = matchesSearch(searchTerm, p.name, p.sku || p.code, p.car_variant || p.carVariant, p.brand, p.category_name);
 
       const matchesEngine = selectedEngine === 'ALL' || (p.engine_type || p.machineCategory) === selectedEngine;
       const matchesCategory = selectedCategory === 'ALL' || (p.category_name || p.categoryName) === selectedCategory;
       const matchesBrand = selectedBrand === 'ALL' || (p.brand || 'NDK Exhaust') === selectedBrand;
       const matchesSound = selectedSound === 'ALL' || (p.spec_sound || p.specSound) === selectedSound;
 
-      return matchesSearch && matchesEngine && matchesCategory && matchesBrand && matchesSound;
+      return matchesSearchTerm && matchesEngine && matchesCategory && matchesBrand && matchesSound;
     });
   }, [activeProducts, searchTerm, selectedEngine, selectedCategory, selectedBrand, selectedSound]);
 

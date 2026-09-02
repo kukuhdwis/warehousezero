@@ -56,6 +56,8 @@ import GlobalSuccessModal from './GlobalSuccessModal';
 import CustomAlertModal from './CustomAlertModal';
 import ConfirmationModal from './ConfirmationModal';
 import SpreadsheetImportModal from './SpreadsheetImportModal';
+import { db } from '../services/firebase';
+import { matchesSearch } from '../utils/searchUtils';
 import { downloadExhaustTemplate, generateSmartSKU } from '../services/spreadsheetService';
 import { compressImage } from '../services/dataService';
 
@@ -505,24 +507,14 @@ export default function ProductManagement({
     const pFinish = p.material_finish || p.materialFinish || '';
     const pSound = p.spec_sound || p.specSound || '';
 
-    const matchesSearch = 
-      (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.sku || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.code || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pBrand.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pEngine.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pCategory.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pVariant.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pFinish.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pSound.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.notes || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearchTerm = matchesSearch(searchTerm, p.name, p.sku, p.code, pBrand, pEngine, pCategory, pVariant, pFinish, pSound, p.notes);
 
     const matchesBrand = brandFilter === 'ALL' || pBrand === brandFilter;
     const matchesEngine = engineTypeFilter === 'ALL' || pEngine === engineTypeFilter || (engineTypeFilter === '2KD' && pEngine.includes('2KD')) || (engineTypeFilter === '2GD/1GD' && (pEngine.includes('2GD') || pEngine.includes('1GD')));
     const matchesCategory = categoryFilter === 'ALL' || pCategory === categoryFilter;
     const matchesMachineCat = machineCategoryFilter === 'ALL' || pEngine === machineCategoryFilter;
 
-    return matchesSearch && matchesBrand && matchesEngine && matchesCategory && matchesMachineCat;
+    return matchesSearchTerm && matchesBrand && matchesEngine && matchesCategory && matchesMachineCat;
   });
 
   // Filtered Branch Inventories
@@ -531,12 +523,8 @@ export default function ProductManagement({
       ? bi.branchId === currentUser?.branchId 
       : (selectedBranchFilter === 'ALL' || bi.branchId === selectedBranchFilter);
     const matchesStatus = statusFilter === 'ALL' || bi.status === statusFilter;
-    const matchesSearch = 
-      (bi.productName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (bi.sku || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (bi.brand || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (bi.branchName || '').toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesBranch && matchesStatus && matchesSearch;
+    const matchesSearchTerm = matchesSearch(searchTerm, bi.productName, bi.sku, bi.brand, bi.branchName);
+    return matchesBranch && matchesStatus && matchesSearchTerm;
   });
 
   // Filtered Branch Inventories specifically for the active branch container
@@ -547,11 +535,8 @@ export default function ProductManagement({
   const filteredActiveBranchItems = activeBranchItems.filter(bi => {
     const matchesStatus = statusFilter === 'ALL' || bi.status === statusFilter;
     const matchesBrand = brandFilter === 'ALL' || bi.brand === brandFilter;
-    const matchesSearch = 
-      (bi.productName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (bi.sku || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (bi.brand || '').toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesStatus && matchesBrand && matchesSearch;
+    const matchesSearchTerm = matchesSearch(searchTerm, bi.productName, bi.sku, bi.brand);
+    return matchesStatus && matchesBrand && matchesSearchTerm;
   });
 
   // Paginated Master Products
@@ -574,6 +559,13 @@ export default function ProductManagement({
   const paginatedMyBranchInventories = recapPageSize === 0
     ? myBranchInventories
     : myBranchInventories.slice((safeRecapPage - 1) * recapPageSize, safeRecapPage * recapPageSize);
+
+  const groupedPaginatedBranchInventories = paginatedMyBranchInventories.reduce((acc, inv) => {
+    const branchName = inv.branchName || 'Cabang Tidak Diketahui';
+    if (!acc[branchName]) acc[branchName] = [];
+    acc[branchName].push(inv);
+    return acc;
+  }, {});
 
 
   // Quick Stock Adjustment Modal State (Opname / Direct Edit Stock)
@@ -989,6 +981,40 @@ export default function ProductManagement({
           notes: ''
         }
       ]);
+    }
+  };
+
+  const handleToggleAllFilteredInRequest = () => {
+    const filteredProducts = products.filter(p => 
+      p.status !== 'INACTIVE' && matchesSearch(requestSearchTerm, p.name, p.sku, p.brand)
+    );
+
+    const allSelected = filteredProducts.every(prod => requestItems.some(item => item.productId === prod.id));
+
+    if (allSelected) {
+      // Deselect all filtered
+      const filteredIds = filteredProducts.map(p => p.id);
+      setRequestItems(requestItems.filter(item => !filteredIds.includes(item.productId)));
+    } else {
+      // Select all filtered
+      const newItems = [...requestItems];
+      filteredProducts.forEach(prod => {
+        const exists = newItems.some(item => item.productId === prod.id);
+        if (!exists) {
+          newItems.push({
+            productId: prod.id,
+            sku: prod.sku,
+            productName: prod.name,
+            brand: prod.brand || 'Generic',
+            price: prod.price || 0,
+            unit: prod.unit || 'Pcs',
+            stockQuantity: 10,
+            minStock: 5,
+            notes: ''
+          });
+        }
+      });
+      setRequestItems(newItems);
     }
   };
 
@@ -3014,8 +3040,18 @@ export default function ProductManagement({
                 <>
                   {/* Mobile Card Feed for Branch Inventories (Smartphone Friendly) */}
                   <div className="block md:hidden divide-y divide-slate-100 p-2.5 sm:p-3 space-y-3 bg-slate-50/50">
-                    {paginatedMyBranchInventories.map((inv, idx) => {
-                      const rowNumber = (safeRecapPage - 1) * (recapPageSize === 0 ? 0 : recapPageSize) + idx + 1;
+                    {Object.entries(groupedPaginatedBranchInventories).map(([branchName, items]) => (
+                      <div key={branchName} className="space-y-3">
+                        {!isBranchStaff && (
+                          <div className="bg-sky-50 px-3 py-2 rounded-xl border border-sky-100 mb-2">
+                            <h3 className="font-bold text-sm text-sky-800">
+                              🏢 {branchName}
+                            </h3>
+                          </div>
+                        )}
+                        {items.map((inv, idx) => {
+                          const originalIndex = paginatedMyBranchInventories.findIndex(i => i.id === inv.id);
+                          const rowNumber = (safeRecapPage - 1) * (recapPageSize === 0 ? 0 : recapPageSize) + originalIndex + 1;
                       const isApproved = inv.status === 'APPROVED';
                       const isPending = inv.status === 'PENDING_APPROVAL';
                       const isRejected = inv.status === 'REJECTED';
@@ -3107,111 +3143,121 @@ export default function ProductManagement({
                         </div>
                       );
                     })}
+                    </div>
+                  ))}
                   </div>
 
                   {/* Desktop Table View (Screens >= md) */}
-                  <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full text-left text-sm border-collapse">
-                      <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase border-b border-slate-200">
-                        <tr>
-                          <th className="px-3.5 py-3.5 text-center font-bold text-slate-500 text-xs w-12 whitespace-nowrap">No.</th>
-                          <th className="px-5 py-3.5 min-w-[200px]">Produk & Merk</th>
-                          {!isBranchStaff && <th className="px-4 py-3.5 whitespace-nowrap min-w-[140px]">Lokasi Cabang</th>}
-                          <th className="px-4 py-3.5 text-center whitespace-nowrap min-w-[130px]">Stok Fisik di Cabang</th>
-                          <th className="px-4 py-3.5 text-right whitespace-nowrap min-w-[110px]">Harga Jual</th>
-                          <th className="px-4 py-3.5 text-center whitespace-nowrap min-w-[150px]">Status Verifikasi Pusat</th>
-                          <th className="px-5 py-3.5 text-right whitespace-nowrap min-w-[130px]">Aksi</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {paginatedMyBranchInventories.map((inv, idx) => {
-                          const rowNumber = (safeRecapPage - 1) * (recapPageSize === 0 ? 0 : recapPageSize) + idx + 1;
-                          const isApproved = inv.status === 'APPROVED';
-                          const isPending = inv.status === 'PENDING_APPROVAL';
-                          const isRejected = inv.status === 'REJECTED';
-
-                          return (
-                            <tr key={inv.id} className="hover:bg-slate-50/70 transition">
-                              <td className="px-3.5 py-3.5 text-center font-bold text-slate-400 text-xs whitespace-nowrap">
-                                {rowNumber}
-                              </td>
-
-                              <td className="px-5 py-3.5 font-medium text-slate-900 min-w-[200px]">
-                                <div className="font-bold text-slate-900 leading-snug">{inv.productName}</div>
-                                <div className="text-xs text-slate-400 font-mono flex items-center gap-1.5 mt-0.5 flex-wrap">
-                                  <span className="whitespace-nowrap font-bold text-slate-600">SKU: {inv.sku}</span>
-                                  <span>•</span>
-                                  <span className="text-indigo-600 font-semibold whitespace-nowrap">{inv.brand}</span>
-                                </div>
-                              </td>
-
-                              {!isBranchStaff && (
-                                <td className="px-4 py-3.5 text-xs text-slate-700 font-semibold whitespace-nowrap">
-                                  {inv.branchName}
-                                </td>
-                              )}
-
-                              <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                                <span className={`px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
-                                  isApproved ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
-                                }`}>
-                                  {inv.stockQuantity} Pcs
-                                </span>
-                              </td>
-
-                              <td className="px-4 py-3.5 text-right font-bold text-slate-800 text-xs whitespace-nowrap">
-                                Rp {(Number(inv.price) || 0).toLocaleString('id-ID')}
-                              </td>
-
-                              <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                                {isApproved && (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
-                                    <Check className="w-3.5 h-3.5" />
-                                    ✓ Terverifikasi & Aktif
-                                  </span>
-                                )}
-                                {isPending && (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse whitespace-nowrap">
-                                    <Clock className="w-3.5 h-3.5" />
-                                    ⏳ Menunggu Verifikasi Pusat
-                                  </span>
-                                )}
-                                {isRejected && (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap" title={inv.rejectionReason || 'Ditolak'}>
-                                    <Ban className="w-3.5 h-3.5" />
-                                    ⚠️ Ditolak Pusat
-                                  </span>
-                                )}
-                              </td>
-
-                              <td className="px-5 py-3.5 text-right whitespace-nowrap">
-                                <div className="flex items-center justify-end gap-1.5 flex-nowrap">
-                                  {isApproved && (
-                                    <button
-                                      onClick={() => handleOpenStockAdjustModal(inv, 'BRANCH')}
-                                      className="px-2.5 py-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition cursor-pointer inline-flex items-center gap-1 font-bold text-xs whitespace-nowrap"
-                                      title="Edit / Opname Stok Cabang Direct"
-                                    >
-                                      <Sliders className="w-3.5 h-3.5" />
-                                      <span>Edit Stok</span>
-                                    </button>
-                                  )}
-                                  {!isBranchStaff && isPending && (
-                                    <button
-                                      onClick={() => handleApprove(inv.id)}
-                                      className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition cursor-pointer whitespace-nowrap shadow-2xs"
-                                    >
-                                      Setujui
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
-
+                  <div className="hidden md:block overflow-x-auto space-y-6">
+                    {Object.entries(groupedPaginatedBranchInventories).map(([branchName, items]) => (
+                      <div key={branchName} className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                        {!isBranchStaff && (
+                          <div className="bg-sky-50 px-4 py-3 border-b border-sky-100 flex items-center justify-between">
+                            <h3 className="font-bold text-sm text-sky-800">
+                              🏢 {branchName}
+                            </h3>
+                            <span className="text-xs font-semibold text-sky-600 bg-sky-100 px-2 py-0.5 rounded-md">
+                              {items.length} Item
+                            </span>
+                          </div>
+                        )}
+                        <table className="w-full text-left text-sm border-collapse">
+                          <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase border-b border-slate-200">
+                            <tr>
+                              <th className="px-3.5 py-3.5 text-center font-bold text-slate-500 text-xs w-12 whitespace-nowrap">No.</th>
+                              <th className="px-5 py-3.5 min-w-[200px]">Produk & Merk</th>
+                              <th className="px-4 py-3.5 text-center whitespace-nowrap min-w-[130px]">Stok Fisik di Cabang</th>
+                              <th className="px-4 py-3.5 text-right whitespace-nowrap min-w-[110px]">Harga Jual</th>
+                              <th className="px-4 py-3.5 text-center whitespace-nowrap min-w-[150px]">Status Verifikasi Pusat</th>
+                              <th className="px-5 py-3.5 text-right whitespace-nowrap min-w-[130px]">Aksi</th>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {items.map((inv, idx) => {
+                              const originalIndex = paginatedMyBranchInventories.findIndex(i => i.id === inv.id);
+                              const rowNumber = (safeRecapPage - 1) * (recapPageSize === 0 ? 0 : recapPageSize) + originalIndex + 1;
+                              const isApproved = inv.status === 'APPROVED';
+                              const isPending = inv.status === 'PENDING_APPROVAL';
+                              const isRejected = inv.status === 'REJECTED';
+
+                              return (
+                                <tr key={inv.id} className="hover:bg-slate-50/70 transition">
+                                  <td className="px-3.5 py-3.5 text-center font-bold text-slate-400 text-xs whitespace-nowrap">
+                                    {rowNumber}
+                                  </td>
+
+                                  <td className="px-5 py-3.5 font-medium text-slate-900 min-w-[200px]">
+                                    <div className="font-bold text-slate-900 leading-snug">{inv.productName}</div>
+                                    <div className="text-xs text-slate-400 font-mono flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                      <span className="whitespace-nowrap font-bold text-slate-600">SKU: {inv.sku}</span>
+                                      <span>•</span>
+                                      <span className="text-indigo-600 font-semibold whitespace-nowrap">{inv.brand}</span>
+                                    </div>
+                                  </td>
+
+                                  <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
+                                      isApproved ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
+                                    }`}>
+                                      {inv.stockQuantity} Pcs
+                                    </span>
+                                  </td>
+
+                                  <td className="px-4 py-3.5 text-right font-bold text-slate-800 text-xs whitespace-nowrap">
+                                    Rp {(Number(inv.price) || 0).toLocaleString('id-ID')}
+                                  </td>
+
+                                  <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                                    {isApproved && (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
+                                        <Check className="w-3.5 h-3.5" />
+                                        ✓ Terverifikasi & Aktif
+                                      </span>
+                                    )}
+                                    {isPending && (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse whitespace-nowrap">
+                                        <Clock className="w-3.5 h-3.5" />
+                                        ⏳ Menunggu Verifikasi Pusat
+                                      </span>
+                                    )}
+                                    {isRejected && (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap" title={inv.rejectionReason || 'Ditolak'}>
+                                        <Ban className="w-3.5 h-3.5" />
+                                        ⚠️ Ditolak Pusat
+                                      </span>
+                                    )}
+                                  </td>
+
+                                  <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                                    <div className="flex items-center justify-end gap-1.5 flex-nowrap">
+                                      {isApproved && (
+                                        <button
+                                          onClick={() => handleOpenStockAdjustModal(inv, 'BRANCH')}
+                                          className="px-2.5 py-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition cursor-pointer inline-flex items-center gap-1 font-bold text-xs whitespace-nowrap"
+                                          title="Edit / Opname Stok Cabang Direct"
+                                        >
+                                          <Sliders className="w-3.5 h-3.5" />
+                                          <span>Edit Stok</span>
+                                        </button>
+                                      )}
+                                      {!isBranchStaff && isPending && (
+                                        <button
+                                          onClick={() => handleApprove(inv.id)}
+                                          className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition cursor-pointer whitespace-nowrap shadow-2xs"
+                                        >
+                                          Setujui
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
                   </div>
                 </>
               )}
@@ -3261,12 +3307,20 @@ export default function ProductManagement({
                   <span>{requestError}</span>
                 </div>
               )}
-
               {/* 1. Master Product Selector */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                  1. Pilih Produk dari Katalog Master ({products.filter(p => p.status !== 'INACTIVE').length} Tersedia):
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                    1. Pilih Produk dari Katalog Master ({products.filter(p => p.status !== 'INACTIVE').length} Tersedia):
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleToggleAllFilteredInRequest}
+                    className="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1 rounded-lg transition"
+                  >
+                    Pilih / Batalkan Semua
+                  </button>
+                </div>
                 <div className="relative mb-2">
                   <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
@@ -3281,10 +3335,7 @@ export default function ProductManagement({
                 <div className="max-h-44 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
                   {products
                     .filter(p => 
-                      p.status !== 'INACTIVE' &&
-                      ((p.name || '').toLowerCase().includes(requestSearchTerm.toLowerCase()) ||
-                       (p.sku || '').toLowerCase().includes(requestSearchTerm.toLowerCase()) ||
-                       (p.brand || '').toLowerCase().includes(requestSearchTerm.toLowerCase()))
+                      p.status !== 'INACTIVE' && matchesSearch(requestSearchTerm, p.name, p.sku, p.brand)
                     )
                     .map(prod => {
                       const isSelected = requestItems.some(item => item.productId === prod.id);
@@ -4406,7 +4457,7 @@ export default function ProductManagement({
               </button>
               <button
                 type="button"
-                onClick={handleExecuteApprove}
+                onClick={handleExecuteApproveSingle}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition cursor-pointer flex items-center gap-1.5"
               >
                 <Check className="w-4 h-4" />

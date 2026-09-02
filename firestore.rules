@@ -60,6 +60,10 @@ service cloud.firestore {
       allow read, write: if isAdminOrPusat();
     }
 
+    match /product_pricings/{doc} {
+      allow read, write: if isAdminOrPusat();
+    }
+
     // Manajemen Pengguna & Profil
     match /users/{userId} {
       // User hanya bisa baca profilnya sendiri (berdasarkan UID atau Email), Admin/Pusat bisa akses semua
@@ -78,32 +82,19 @@ service cloud.firestore {
 
     // Operasional Inventaris & Mutasi Stok
     match /branch_inventories/{doc} {
-      allow read: if isAdminOrPusat() || (isStaffBranch() && isBranchContext(resource.data.branchId));
-      allow create: if isAdminOrPusat() || (isStaffBranch() && isBranchContext(request.resource.data.branchId));
-      allow update: if isAdminOrPusat() || (isStaffBranch() && isBranchContext(resource.data.branchId) && isBranchContext(request.resource.data.branchId));
-      allow delete: if isAdminOrPusat();
+      allow read, write: if isAuthenticated();
     }
 
     match /stock_transfers/{doc} {
-      allow read: if isAuthenticated();
-      // Hanya pusat yang bisa kirim, cabang hanya bisa update status penerimaan
-      allow create: if isAdminOrPusat();
-      allow update: if isAdminOrPusat();
-      allow delete: if isAdminOrPusat();
+      allow read, write: if isAuthenticated();
     }
 
     match /stock_requests/{doc} {
-      allow read: if isAuthenticated();
-      // Cabang hanya boleh request untuk cabangnya sendiri
-      allow create: if isStaffBranch() && isBranchContext(request.resource.data.branchId);
-      allow update: if isAdminOrPusat();
-      allow delete: if isAdminOrPusat();
+      allow read, write: if isAuthenticated();
     }
 
     match /stock_movements/{doc} {
-      allow read: if isAuthenticated();
-      allow create: if isAdminOrPusat() || (isStaffBranch() && isBranchContext(request.resource.data.branchId));
-      allow update, delete: if isAdminOrPusat();
+      allow read, write: if isAuthenticated();
     }
 
     match /notifications/{doc} {
@@ -126,12 +117,12 @@ service cloud.firestore {
 
     match /invoices/{doc} {
       allow read: if isAuthenticated();
-      allow write: if false;
+      allow write: if isAdminOrPusat();
     }
 
     match /credit_limit_audit_logs/{doc} {
       allow read: if isAuthenticated();
-      allow write: if false;
+      allow write: if isAdminOrPusat();
     }
 
     // Default Deny: Tolak seluruh akses unauthenticated / unhandled

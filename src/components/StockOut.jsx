@@ -32,8 +32,9 @@ import GlobalSuccessModal from './GlobalSuccessModal';
 import ProductSearchPicker from './ProductSearchPicker';
 import CustomAlertModal from './CustomAlertModal';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { callCreateStockTransfer } from '../services/cloudFunctionsService';
+import { createSparkPlanStockTransfer } from '../services/dataService';
 
 
 export default function StockOut({ 
@@ -291,6 +292,7 @@ export default function StockOut({
           productName: product.name,
           brand: product.brand || 'Generic',
           price: Number(product.price) || 0,
+          costPrice: Number(product.costPrice) || 0,
           currentStock: maxStock,
           qty: 1
         }
@@ -515,6 +517,7 @@ const parseScannedSKU = (text) => {
           productName: selectedProduct.name,
           brand: selectedProduct.brand || 'Generic',
           price: Number(selectedProduct.price) || 0,
+          costPrice: Number(selectedProduct.costPrice) || 0,
           currentStock: currentAvailable,
           qty: Number(qty)
         };
@@ -529,6 +532,17 @@ const parseScannedSKU = (text) => {
     const insufficientItem = salesCart.find(i => (Number(i.qty) || 0) > (Number(i.currentStock) || 0));
     if (insufficientItem) {
       showAlert("Stok Tidak Mencukupi 📦", `Stok produk "${insufficientItem.productName}" tidak mencukupi! Tersedia: ${insufficientItem.currentStock} Pcs, Diminta: ${insufficientItem.qty} Pcs.`, "WARNING");
+      return;
+    }
+
+    // Validate cost price for each item in cart
+    const underpricedItem = salesCart.find(i => Number(i.price) < Number(i.costPrice));
+    if (underpricedItem) {
+      showAlert(
+        "Harga Jual Terlalu Rendah ⚠️", 
+        `Harga jual untuk "${underpricedItem.productName}" (Rp ${Number(underpricedItem.price).toLocaleString('id-ID')}) berada di bawah harga modal (Rp ${Number(underpricedItem.costPrice).toLocaleString('id-ID')}). Transaksi ditolak.`, 
+        "ERROR"
+      );
       return;
     }
 
@@ -548,6 +562,7 @@ const parseScannedSKU = (text) => {
       sku: salesCart.length === 1 ? salesCart[0].sku : 'MULTI-ITEM',
       productName: salesCart.length === 1 ? salesCart[0].productName : `[PENJUALAN] ${salesCart.length} Jenis Barang`,
       type: 'OUT',
+      branchId: isBranchStaff ? currentUser?.branchId : undefined,
       qty: totalPcs,
       unit: 'Pcs',
       notes: finalNotes,
@@ -566,6 +581,7 @@ const parseScannedSKU = (text) => {
         sku: item.sku,
         brand: item.brand,
         price: Number(item.price) || 0,
+        costPrice: Number(item.costPrice) || 0,
         qty: Number(item.qty) || 1
       }))
     };
@@ -616,44 +632,14 @@ const parseScannedSKU = (text) => {
         const isBatch = pendingConfirm.isBatchTransfer && pendingConfirm.batchItems;
         const items = isBatch ? pendingConfirm.batchItems : [pendingConfirm];
         
-        // 1. Panggil Cloud Function V3.0
-        const mappedItems = items.map(item => ({
-          productId: item.productId,
-          qty_pcs: Number(item.qty)
-        }));
+        // 1. Panggil createSparkPlanStockTransfer (which handles items array properly with tier pricing & limits)
+        const deliveryNote = pendingConfirm.deliveryNote || `SJ-HQ-${Date.now().toString().slice(-6)}`;
         
-        const cfResult = await callCreateStockTransfer({
+        await createSparkPlanStockTransfer({
+          items: items.map(i => ({ ...i, qty: Number(i.qty) || 1 })),
           toBranchId: pendingConfirm.targetBranchId,
-          items: mappedItems,
-          shippingNotes: pendingConfirm.notes
-        });
-
-        // 2. Generate PDF Surat Jalan
-        try {
-          const doc = new jsPDF();
-          doc.setFontSize(16);
-          doc.text("SURAT JALAN / PENGIRIMAN BARANG", 14, 20);
-          doc.setFontSize(11);
-          doc.text(`ID Transfer   : ${cfResult.transferId}`, 14, 30);
-          doc.text(`Tujuan Cabang : ${pendingConfirm.targetBranchName}`, 14, 36);
-          doc.text(`Tanggal       : ${new Date().toLocaleDateString('id-ID')}`, 14, 42);
-
-          const tableData = items.map((item, index) => [
-            index + 1, item.sku, item.productName || item.product_name, `${item.qty} Pcs`
-          ]);
-
-          doc.autoTable({
-            startY: 50,
-            head: [['No', 'SKU', 'Nama Barang', 'Kuantitas']],
-            body: tableData,
-            theme: 'grid'
-          });
-
-          doc.save(`Surat_Jalan_${pendingConfirm.targetBranchName}.pdf`);
-          showAlert("Surat Jalan Berhasil Dibuat", "File PDF Surat Jalan otomatis diunduh. Harap segera simpan/kirimkan file tersebut karena sistem tidak menyimpannya di cloud.", "INFO");
-        } catch (pdfErr) {
-          console.error("PDF Gen Error:", pdfErr);
-        }
+          shippingNotes: `${pendingConfirm.notes || ''} | SJ: ${deliveryNote}`
+        }, currentUser?.uid || 'admin');
 
         // 3. Catat di Audit Log Frontend (onRecordMovement)
         for (const item of items) {
@@ -662,30 +648,41 @@ const parseScannedSKU = (text) => {
             transactionType: 'STOCK_TRANSFER_TO_BRANCH',
             targetBranchId: pendingConfirm.targetBranchId,
             targetBranchName: pendingConfirm.targetBranchName,
-            deliveryNote: cfResult.transferId,
+            deliveryNote: deliveryNote,
             notes: pendingConfirm.notes,
-            user: pendingConfirm.user
+            user: pendingConfirm.user,
+            skipMasterProductUpdate: isBranchStaff
           });
         }
         if (isBatch) setTransferCart([]);
       } else if (pendingConfirm.isMultiItem && pendingConfirm.items) {
         await onRecordMovement({
           ...pendingConfirm,
-          items: pendingConfirm.items
+          items: pendingConfirm.items,
+          skipMasterProductUpdate: isBranchStaff
         });
         setSalesCart([]);
       } else if (pendingConfirm.transactionType === 'CUSTOM_BUNDLING' && pendingConfirm.bundleItems) {
         await onRecordMovement({
           ...pendingConfirm,
           isBundling: true,
-          items: pendingConfirm.bundleItems
+          items: pendingConfirm.bundleItems,
+          skipMasterProductUpdate: isBranchStaff
         });
       } else {
-        await onRecordMovement(pendingConfirm);
+        await onRecordMovement({
+          ...pendingConfirm,
+          skipMasterProductUpdate: isBranchStaff
+        });
       }
 
       // Trigger Success Receipt Modal
-      setSuccessModalData(pendingConfirm);
+      setSuccessModalData({
+        ...pendingConfirm,
+        items: pendingConfirm.isBatchTransfer 
+          ? pendingConfirm.batchItems 
+          : (pendingConfirm.isBundling ? pendingConfirm.bundleItems : (pendingConfirm.items || [pendingConfirm]))
+      });
 
       // Reset form states
       setQty(1);
@@ -739,6 +736,7 @@ const parseScannedSKU = (text) => {
       sku: 'PAKET-BUNDLE',
       productName: `[BUNDLING] ${bundleName}`,
       type: 'OUT',
+      branchId: isBranchStaff ? currentUser?.branchId : undefined,
       qty: bundleItems.reduce((acc, i) => acc + Number(i.qty), 0),
       unit: 'Paket',
       notes: `Penjualan Paket Bundling (${platformName} • ${locationLabel}) • "${bundleName}" [${itemsSummary}] • Pembeli: ${customerName || 'Walk-in Customer'} • Total: Rp ${totalBundlePrice.toLocaleString('id-ID')} • No. Nota/Pesanan: ${notaNo}`,
@@ -756,7 +754,9 @@ const parseScannedSKU = (text) => {
           productId: bi.productId,
           productName: p?.name,
           sku: p?.sku,
-          qty: Number(bi.qty)
+          qty: Number(bi.qty),
+          price: Number(p?.price) || 0,
+          costPrice: Number(p?.costPrice) || 0
         };
       })
     };

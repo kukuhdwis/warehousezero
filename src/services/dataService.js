@@ -431,6 +431,15 @@ export const createProduct = async (productData) => {
       ...newProd,
       createdAt: serverTimestamp()
     });
+
+    // Zero-Trust Tiering: Save pricing to secret collection
+    await setDoc(doc(db, "product_pricings", docRef.id), {
+      distributor_price: sellingPrice,
+      reseller_price: resellerPrice,
+      cost_price: resellerPrice,
+      updated_at: serverTimestamp()
+    });
+
     return { id: docRef.id, ...newProd };
   } catch (err) {
     console.error("Firestore error creating product:", err);
@@ -484,6 +493,15 @@ export const updateProduct = async (id, productData) => {
   try {
     const docRef = doc(db, "products", id);
     await updateDoc(docRef, updatedData);
+
+    // Zero-Trust Tiering: Save pricing to secret collection
+    await setDoc(doc(db, "product_pricings", id), {
+      distributor_price: sellingPrice,
+      reseller_price: resellerPrice,
+      cost_price: resellerPrice,
+      updated_at: serverTimestamp()
+    }, { merge: true });
+
     return { id, ...updatedData };
   } catch (err) {
     console.error("Firestore error updating product:", err);
@@ -942,6 +960,7 @@ export const subscribeBranchInventories = (currentUser, onUpdate) => {
 
   try {
     const q = collection(db, "branch_inventories");
+    
     return onSnapshot(q, (snapshot) => {
       const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
       const filtered = (currentUser?.role === 'STAFF_BRANCH')
@@ -981,7 +1000,12 @@ export const subscribeStockRequests = (currentUser, onUpdate) => {
 export const subscribeStockMovements = (currentUser, onUpdate) => {
   ensureFirebase();
   try {
-    const q = query(collection(db, "stock_movements"), orderBy("createdAt", "desc"), limit(200));
+    const q = query(
+      collection(db, "stock_movements"),
+      orderBy("createdAt", "desc"),
+      limit(200)
+    );
+
     return onSnapshot(q, (snapshot) => {
       const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
       const filtered = (currentUser?.role === 'STAFF_BRANCH')
@@ -1219,7 +1243,8 @@ export const confirmBatchTransferReceipt = async (transferListOrIds, receiverUse
         source: 'KANTOR_PUSAT',
         deliveryNote: transferObj?.deliveryNote || '-',
         notes: `Konfirmasi Penerimaan Kiriman • ${transferObj?.productName || ''} (+${qtyToAdd} Pcs)${receiverNotes ? ` • Catatan: ${receiverNotes}` : ''}`,
-        user: receiverUser?.name || 'Staff Cabang'
+        user: receiverUser?.name || 'Staff Cabang',
+        skipMasterProductUpdate: true
       });
 
       // 2. Update or create branch inventory record so stock physically increases in branch inventory
@@ -1259,9 +1284,8 @@ export const confirmBatchTransferReceipt = async (transferListOrIds, receiverUse
         }
 
         if (branchInvId) {
-          const newQty = currentBranchStock + qtyToAdd;
           await updateDoc(doc(db, "branch_inventories", branchInvId), {
-            stockQuantity: newQty,
+            stockQuantity: increment(qtyToAdd),
             status: 'APPROVED',
             updatedAt: new Date().toISOString()
           });
@@ -1503,6 +1527,43 @@ export const fetchTransactions = async () => {
   }
 };
 
+export const purgeTransactions = async (branchId, currentUser) => {
+  ensureFirebase();
+  if (currentUser?.role !== 'ADMIN') {
+    throw new Error('Akses Ditolak: Hanya Administrator pusat yang diizinkan untuk menghapus data riwayat transaksi secara permanen.');
+  }
+
+  try {
+    const colRef = collection(db, "stock_movements");
+    const snapshot = await getDocs(query(colRef));
+    
+    const docsToDelete = snapshot.docs.filter(doc => {
+      const data = doc.data();
+      if (!branchId || branchId === 'ALL') return true;
+      return data.branchId === branchId || data.targetBranchId === branchId;
+    });
+
+    if (docsToDelete.length === 0) return 0;
+
+    // Batch delete with chunking (Firestore limit is 500 per batch)
+    const chunkSize = 500;
+    for (let i = 0; i < docsToDelete.length; i += chunkSize) {
+      const chunk = docsToDelete.slice(i, i + chunkSize);
+      const batch = writeBatch(db);
+      for (const docSnap of chunk) {
+        batch.delete(docSnap.ref);
+      }
+      await batch.commit();
+    }
+    
+    console.warn(`[PURGE ALERT] Admin ${currentUser.name} (${currentUser.email}) has permanently purged ${docsToDelete.length} transaction records for branch filter: ${branchId}`);
+    return docsToDelete.length;
+  } catch (err) {
+    console.error("Firestore error purging transactions:", err);
+    throw new Error(`Gagal menghapus data riwayat transaksi secara permanen: ${err.message}`);
+  }
+};
+
 export const recordStockMovement = async (movementData) => {
   ensureFirebase();
   const isIncrement = movementData.type === 'IN';
@@ -1521,23 +1582,51 @@ export const recordStockMovement = async (movementData) => {
       createdAt: serverTimestamp()
     });
 
-    // Update product stock in Firestore
-    if (hasMultipleItems) {
-      for (const item of movementData.items) {
-        if (item.productId) {
-          const prodRef = doc(db, "products", item.productId);
-          await updateDoc(prodRef, {
-            currentStock: increment(-Number(item.qty || 1)),
+    // Update product stock in Firestore ONLY if not skipped
+    if (!movementData.skipMasterProductUpdate) {
+      if (hasMultipleItems) {
+        for (const item of movementData.items) {
+          if (item.productId) {
+            const prodRef = doc(db, "products", item.productId);
+            await updateDoc(prodRef, {
+              currentStock: increment(-Number(item.qty || 1)),
+              updatedAt: new Date().toISOString()
+            });
+          }
+        }
+      } else if (movement.productId) {
+        const prodRef = doc(db, "products", movement.productId);
+        await updateDoc(prodRef, {
+          currentStock: increment(isIncrement ? qtyChange : -qtyChange),
+          updatedAt: new Date().toISOString()
+        });
+      }
+    } else if (movementData.branchId && (movementData.type === 'OUT' || (movementData.type === 'IN' && movementData.isCorrection))) {
+      // Update branch_inventories instead
+      const branchInvRef = collection(db, "branch_inventories");
+      if (hasMultipleItems) {
+        for (const item of movementData.items) {
+          if (item.productId) {
+            const q = query(branchInvRef, where("branchId", "==", movementData.branchId), where("productId", "==", item.productId));
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+              await updateDoc(snap.docs[0].ref, {
+                stockQuantity: increment(-Number(item.qty || 1)),
+                updatedAt: new Date().toISOString()
+              });
+            }
+          }
+        }
+      } else if (movement.productId) {
+        const q = query(branchInvRef, where("branchId", "==", movementData.branchId), where("productId", "==", movement.productId));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          await updateDoc(snap.docs[0].ref, {
+            stockQuantity: increment(isIncrement ? qtyChange : -qtyChange),
             updatedAt: new Date().toISOString()
           });
         }
       }
-    } else if (movement.productId) {
-      const prodRef = doc(db, "products", movement.productId);
-      await updateDoc(prodRef, {
-        currentStock: increment(isIncrement ? qtyChange : -qtyChange),
-        updatedAt: new Date().toISOString()
-      });
     }
 
     return { id: docRef.id, ...movement };
@@ -1605,10 +1694,9 @@ export const createBranch = async (branchData) => {
     }
   }
 
-  const { branchType, ...publicBranchData } = branchData;
-
   const newBranch = {
-    ...publicBranchData,
+    ...branchData,
+    branchType: branchData.branchType || (isPusatChoice ? 'INTERNAL' : 'RESELLER'),
     code: isPusatChoice ? "GUDANG-PUSAT" : (branchData.code || `BR-${Math.floor(100 + Math.random() * 900)}`),
     status: branchData.status || "ACTIVE",
     isPusat: isPusatChoice,
@@ -1622,15 +1710,8 @@ export const createBranch = async (branchData) => {
       createdAt: serverTimestamp()
     });
 
-    if (!isPusatChoice) {
-      await setDoc(doc(db, "branch_secrets", docRef.id), {
-        type: branchType || 'INTERNAL',
-        createdAt: serverTimestamp()
-      });
-    }
-
     await markBootstrapDone();
-    return { id: docRef.id, ...newBranch, branchType };
+    return { id: docRef.id, ...newBranch };
   } catch (err) {
     console.error("Firestore error creating branch:", err);
     throw new Error(`Gagal membuat Cabang baru di Firestore: ${err.message}`);
@@ -1639,9 +1720,8 @@ export const createBranch = async (branchData) => {
 
 export const updateBranch = async (id, branchData) => {
   ensureFirebase();
-  const { branchType, ...publicBranchData } = branchData;
   const updatedData = {
-    ...publicBranchData,
+    ...branchData,
     updatedAt: new Date().toISOString()
   };
 
@@ -1649,32 +1729,10 @@ export const updateBranch = async (id, branchData) => {
     const docRef = doc(db, "branches", id);
     await updateDoc(docRef, updatedData);
     
-    if (branchType) {
-      await setDoc(doc(db, "branch_secrets", id), {
-        type: branchType,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-    }
-    
-    return { id, ...updatedData, branchType };
+    return { id, ...updatedData };
   } catch (err) {
     console.error("Firestore error updating branch:", err);
     throw new Error(`Gagal memperbarui Cabang di Firestore: ${err.message}`);
-  }
-};
-
-export const getBranchSecret = async (id) => {
-  ensureFirebase();
-  try {
-    const docRef = doc(db, "branch_secrets", id);
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
-      return snap.data().type || 'INTERNAL';
-    }
-    return null;
-  } catch (err) {
-    console.warn("Could not fetch branch secret:", err);
-    return null;
   }
 };
 
@@ -1688,6 +1746,20 @@ export const deleteBranch = async (id) => {
       if (data.isPusat === true || data.code === 'GUDANG-PUSAT' || data.isProtected === true) {
         throw new Error("Gudang Utama Pusat adalah lokasi master sistem dan tidak dapat dihapus.");
       }
+    }
+    // Mark all users in this branch as INACTIVE
+    const usersQuery = query(collection(db, "users"), where("branchId", "==", id));
+    const usersSnap = await getDocs(usersQuery);
+    if (!usersSnap.empty) {
+      const { writeBatch } = await import('firebase/firestore');
+      const batch = writeBatch(db);
+      usersSnap.forEach(uDoc => {
+        batch.update(uDoc.ref, { 
+          status: 'INACTIVE',
+          branchName: '(Cabang Dihapus)' 
+        });
+      });
+      await batch.commit();
     }
 
     await deleteDoc(docRef);
@@ -1738,11 +1810,17 @@ export const fetchUsers = async () => {
 
     const seededUsers = [];
     for (const user of INITIAL_DEFAULT_USERS) {
-      const docRef = await addDoc(collection(db, "users"), {
-        ...user,
-        createdAt: serverTimestamp()
-      });
-      seededUsers.push({ id: docRef.id, ...user });
+      const qCheck = query(collection(db, "users"), where("email", "==", user.email));
+      const existSnap = await getDocs(qCheck);
+      if (existSnap.empty) {
+        const docRef = await addDoc(collection(db, "users"), {
+          ...user,
+          createdAt: serverTimestamp()
+        });
+        seededUsers.push({ id: docRef.id, ...user });
+      } else {
+        seededUsers.push({ id: existSnap.docs[0].id, ...existSnap.docs[0].data() });
+      }
     }
     await markBootstrapDone();
     return seededUsers;
@@ -1764,9 +1842,19 @@ export const createUser = async (userData) => {
     assignedBranchName = pusatBranch ? pusatBranch.name : "Gudang Utama Pusat";
   }
 
+  const email = (userData.email || '').trim().toLowerCase();
+  
+  if (email) {
+    const q = query(collection(db, "users"), where("email", "==", email));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      throw new Error("Email sudah terdaftar. Silakan gunakan email lain.");
+    }
+  }
+
   const payload = {
     ...userData,
-    email: (userData.email || '').trim().toLowerCase(),
+    email,
     role: userData.role || "STAFF_BRANCH",
     branchId: assignedBranchId,
     branchName: assignedBranchName,
@@ -1822,9 +1910,20 @@ export const updateUser = async (id, userData) => {
     assignedBranchName = pusatBranch ? pusatBranch.name : "Gudang Utama Pusat";
   }
 
+  const email = (userData.email || '').trim().toLowerCase();
+
+  if (email) {
+    const q = query(collection(db, "users"), where("email", "==", email));
+    const snap = await getDocs(q);
+    const duplicates = snap.docs.filter(d => d.id !== id);
+    if (duplicates.length > 0) {
+      throw new Error("Email sudah digunakan oleh pengguna lain.");
+    }
+  }
+
   const updatedData = {
     ...userData,
-    email: (userData.email || '').trim().toLowerCase(),
+    email,
     ...(assignedBranchId ? { branchId: assignedBranchId, branchName: assignedBranchName } : {}),
     updatedAt: new Date().toISOString()
   };
@@ -1864,8 +1963,116 @@ export const deleteUser = async (id) => {
 };
 
 // ==========================================
-// EXPORT UTILITIES
+// EXPORT UTILITIES & SPARK PLAN FALLBACKS
 // ==========================================
+
+export const createSparkPlanStockTransfer = async (transferData, callerUid = 'admin') => {
+  ensureFirebase();
+  const { items, toBranchId, shippingNotes } = transferData;
+
+  // 1. Get branch details and tier
+  const branchDoc = await getDoc(doc(db, "branches", toBranchId));
+  if (!branchDoc.exists()) throw new Error("Cabang tidak ditemukan.");
+  const branchData = branchDoc.data();
+
+  let branchType = branchData.branchType || 'RESELLER';
+
+  // 2. Resolve items with Tier Pricing
+  let totalValue = 0;
+  const calculatedItems = [];
+
+  for (const item of items) {
+    let appliedPrice = 0;
+    try {
+      const pricingDoc = await getDoc(doc(db, "product_pricings", item.productId));
+      if (pricingDoc.exists()) {
+        const pData = pricingDoc.data();
+        if (branchType === 'DISTRIBUTOR') appliedPrice = pData.distributor_price || 0;
+        else if (branchType === 'RESELLER') appliedPrice = pData.reseller_price || 0;
+        else appliedPrice = pData.cost_price || 0;
+      } else {
+        const prodDoc = await getDoc(doc(db, "products", item.productId));
+        if (prodDoc.exists()) appliedPrice = prodDoc.data().reseller_price || prodDoc.data().price || 0;
+      }
+    } catch (e) {
+      console.warn("Could not read product_pricings for", item.productId);
+    }
+    
+    totalValue += (appliedPrice * item.qty);
+    calculatedItems.push({
+      productId: item.productId,
+      productName: item.productName || item.name,
+      brand: item.brand,
+      sku: item.sku,
+      qty: item.qty,
+      unit: item.unit || 'Pcs',
+      price: appliedPrice,
+      subtotal: appliedPrice * item.qty
+    });
+  }
+
+  // 3. Credit Limit Check (if not CASH)
+  if (branchData.payment_terms !== 'CASH') {
+    const currentCredit = Number(branchData.credit_used) || 0;
+    const limit = Number(branchData.credit_limit) || 0;
+    // Jika limit = 0, anggap belum diset (unlimited) selama masa uji coba
+    if (limit > 0 && (currentCredit + totalValue > limit)) {
+      throw new Error(`Kredit Limit Tidak Cukup. Sisa limit: Rp ${(limit - currentCredit).toLocaleString('id-ID')}, Nilai Transfer: Rp ${totalValue.toLocaleString('id-ID')}`);
+    }
+
+    await updateDoc(doc(db, "branches", toBranchId), {
+      credit_used: currentCredit + totalValue,
+      updated_at: serverTimestamp()
+    });
+
+    const invoiceId = `INV-${Date.now()}-${toBranchId.substring(0,4).toUpperCase()}`;
+    await setDoc(doc(db, "invoices", invoiceId), {
+      id: invoiceId,
+      branch_id: toBranchId,
+      branch_name: branchData.name,
+      total_amount: totalValue,
+      paid_amount: 0,
+      status: 'UNPAID',
+      due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      created_at: serverTimestamp()
+    });
+  }
+
+  // 4. Create Stock Transfer (1 document per item)
+  const deliveryNote = `SJ-HQ-${Math.floor(1000 + Math.random() * 9000)}`;
+  
+  for (const item of calculatedItems) {
+    const transferId = `TRF-${Date.now()}-${(item.sku || 'SKU').substring(0,5)}-${Math.floor(Math.random() * 1000)}`;
+    const transferPayload = {
+      id: transferId,
+      productId: item.productId,
+      productName: item.productName,
+      brand: item.brand || 'Generic',
+      sku: item.sku,
+      qty: item.qty,
+      unit: item.unit || 'Pcs',
+      price: item.price,
+      subtotal: item.subtotal,
+      
+      targetBranchId: toBranchId, 
+      to_branch_id: toBranchId,
+      targetBranchName: branchData.name,
+      branch_name: branchData.name,
+      
+      status: 'IN_TRANSIT',
+      created_by: callerUid,
+      created_at: serverTimestamp(),
+      sentAt: serverTimestamp(),
+      shippingNotes: shippingNotes || '',
+      shipping_notes: shippingNotes || '',
+      deliveryNote: deliveryNote,
+      senderName: 'Pusat'
+    };
+    await setDoc(doc(db, "stock_transfers", transferId), transferPayload);
+  }
+
+  return { id: deliveryNote };
+};
 
 export const exportToCSV = (data, filename = "wms-export.csv") => {
   if (!data || !data.length) return;
