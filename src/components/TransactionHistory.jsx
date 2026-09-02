@@ -32,8 +32,13 @@ export default function TransactionHistory({ transactions = [], currentUser, onT
     if (isBranchStaff && branchId) {
       return tx.branchId === branchId || tx.targetBranchId === branchId;
     }
-    if (!isBranchStaff && selectedBranchFilter !== 'ALL') {
-      return tx.branchId === selectedBranchFilter || tx.targetBranchId === selectedBranchFilter;
+    if (!isBranchStaff) {
+      if (selectedBranchFilter !== 'ALL') {
+        return tx.branchId === selectedBranchFilter || tx.targetBranchId === selectedBranchFilter;
+      } else {
+        // Admin default view: Only show Pusat transactions
+        return !tx.branchId || tx.branchId === 'ALL' || tx.branchId === 'PUSAT' || tx.source === 'PUSAT' || tx.targetBranchId === 'PUSAT';
+      }
     }
     return true;
   });
