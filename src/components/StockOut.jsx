@@ -24,7 +24,9 @@ import {
   Send,
   Sparkles,
   Tag,
-  PackageCheck
+  PackageCheck,
+  CheckCheck,
+  XCircle
 } from 'lucide-react';
 
 import ScannerModal from './ScannerModal';
@@ -90,8 +92,8 @@ export default function StockOut({
   const [successModalData, setSuccessModalData] = useState(null);
   const [activeFulfillmentRequest, setActiveFulfillmentRequest] = useState(initialRequestData);
 
-  // Rejection State
-  const [rejectingRequest, setRejectingRequest] = useState(null);
+  // Rejection State (Supports Single Request or Batch of Requests)
+  const [rejectingBatch, setRejectingBatch] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [isSubmittingReject, setIsSubmittingReject] = useState(false);
 
@@ -267,49 +269,136 @@ export default function StockOut({
   }, [initialRequestData]);
 
   const handleOpenRejectModal = (req) => {
-    setRejectingRequest(req);
+    setRejectingBatch([req]);
     setRejectionReason('');
+  };
+
+  const handleOpenRejectBatchModal = (requestsList) => {
+    if (!requestsList || requestsList.length === 0) return;
+    setRejectingBatch(requestsList);
+    setRejectionReason('');
+  };
+
+  // Bulk Accept: Put all requests into transferCart at once
+  const handleAcceptAllRequests = (requestsToAccept) => {
+    if (!requestsToAccept || requestsToAccept.length === 0) return;
+
+    // Verify all requests belong to the same branch
+    const uniqueBranchIds = [...new Set(requestsToAccept.map(r => r.branchId))];
+    if (uniqueBranchIds.length > 1) {
+      showAlert(
+        "Pilih Cabang Terlebih Dahulu ⚠️",
+        "Terdapat permintaan dari beberapa cabang berbeda. Silakan gunakan filter tab cabang untuk memproses satu cabang per satu pengiriman.",
+        "INFO"
+      );
+      return;
+    }
+
+    const targetBId = uniqueBranchIds[0];
+    if (targetBranchId && targetBranchId !== targetBId && transferCart.length > 0) {
+      const currentBranchObj = branches.find(b => b.id === targetBranchId);
+      showAlert(
+        "Cabang Berbeda ⚠️",
+        `List kiriman saat ini untuk "${currentBranchObj?.name || 'Cabang Lain'}". Selesaikan atau kosongkan list terlebih dahulu sebelum memproses cabang ini.`,
+        "WARNING"
+      );
+      return;
+    }
+
+    setOutboundMode('STOCK_TRANSFER_TO_BRANCH');
+    setTargetBranchId(targetBId);
+
+    const newItems = [];
+    const allNotes = [...transferCart.map(i => i.reqNotes)];
+
+    requestsToAccept.forEach(req => {
+      const targetProduct = products.find(p => 
+        p.id === req.productId || 
+        (req.sku && p.sku && p.sku.toLowerCase() === req.sku.toLowerCase()) ||
+        (req.productName && p.name && p.name.trim().toLowerCase() === req.productName.trim().toLowerCase())
+      );
+      const maxStock = Number(targetProduct?.currentStock) || 0;
+      const reqQty = Number(req.qty) || 1;
+      const finalQty = maxStock > 0 ? Math.min(maxStock, reqQty) : reqQty;
+
+      newItems.push({
+        requestId: req.id,
+        productId: targetProduct ? targetProduct.id : req.productId,
+        sku: targetProduct?.sku || req.sku || '-',
+        productName: targetProduct?.name || req.productName || 'Produk',
+        brand: targetProduct?.brand || req.brand || 'Generic',
+        price: Number(targetProduct?.price) || 0,
+        currentStock: maxStock,
+        qty: finalQty,
+        reqNotes: req.notes || ''
+      });
+
+      if (req.notes) allNotes.push(req.notes);
+    });
+
+    setTransferCart(prev => {
+      const map = new Map();
+      prev.forEach(item => map.set(item.productId, item));
+      newItems.forEach(item => map.set(item.productId, item));
+      return Array.from(map.values());
+    });
+
+    const uniqueNotes = [...new Set(allNotes.filter(Boolean))];
+    if (uniqueNotes.length > 0) {
+      setNotes(`Memenuhi Permintaan Cabang: ${uniqueNotes.join('; ')}`);
+    }
+
+    // Smooth scroll directly to the transfer cart section
+    setTimeout(() => {
+      const targetEl = document.getElementById('transfer-cart-section');
+      if (targetEl) {
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 150);
   };
 
   const handleConfirmRejectSubmit = async (e) => {
     e.preventDefault();
-    if (!rejectingRequest) return;
+    if (!rejectingBatch || rejectingBatch.length === 0) return;
     if (!rejectionReason.trim()) {
       showAlert("Alasan Wajib Diisi ⚠️", "Harap berikan alasan penolakan permintaan stok!", "WARNING");
       return;
     }
 
-
     setIsSubmittingReject(true);
     try {
-      const savedBranchName = rejectingRequest.branchName;
-      const savedProductName = rejectingRequest.productName;
-      const savedQty = rejectingRequest.qty;
       const savedReason = rejectionReason.trim();
+      const ids = rejectingBatch.map(r => r.id);
+      const firstReq = rejectingBatch[0];
+      const savedBranchName = firstReq.branchName || 'Cabang';
+      const totalCount = rejectingBatch.length;
 
       if (onRejectStockRequest) {
-        await onRejectStockRequest(rejectingRequest.id, savedReason);
+        await onRejectStockRequest(ids, savedReason);
       }
       
-      // If the currently active form is processing this request, immediately clear it and reset the form
-      if (
-        !activeFulfillmentRequest || 
-        activeFulfillmentRequest.id === rejectingRequest.id || 
-        activeFulfillmentRequest.requestId === rejectingRequest.id ||
-        activeFulfillmentRequest.branchId === rejectingRequest.branchId
-      ) {
+      // Remove rejected items from transferCart if they were staged
+      setTransferCart(prev => prev.filter(item => !ids.includes(item.requestId)));
+      
+      // If the currently active form is processing any of these requests, cancel/clear it
+      if (activeFulfillmentRequest && ids.includes(activeFulfillmentRequest.id)) {
         handleCancelFulfillment();
       }
       
-      setRejectingRequest(null);
+      const summaryItems = totalCount === 1
+        ? `${firstReq.qty} Pcs "${firstReq.productName}"`
+        : `${totalCount} Produk (${firstReq.productName}${totalCount > 1 ? ` +${totalCount - 1} lainnya` : ''})`;
+
+      setRejectingBatch(null);
       setRejectionReason('');
 
       setRejectSuccessData({
-        title: "Penolakan Berhasil Dikirim!",
-        message: "Pemberitahuan penolakan permintaan stok beserta alasan resmi telah terkirim ke Cabang pemohon.",
+        title: totalCount > 1 ? "Penolakan Batch Berhasil Dikirim!" : "Penolakan Berhasil Dikirim!",
+        message: `Pemberitahuan penolakan (${totalCount} permintaan stok) beserta alasan resmi telah terkirim ke ${savedBranchName}.`,
         details: [
           { label: "Cabang Pemohon", value: savedBranchName },
-          { label: "Barang & Kuantitas", value: `${savedQty} Pcs "${savedProductName}"` },
+          { label: "Total Permintaan", value: `${totalCount} Produk`, highlight: true },
+          { label: "Rincian Barang", value: summaryItems },
           { label: "Alasan Penolakan", value: `"${savedReason}"`, highlight: true }
         ]
       });
@@ -1220,6 +1309,77 @@ const parseScannedSKU = (text) => {
               ))}
             </div>
           )}
+
+          {/* Quick Review & Bulk Action Toolbar for Branch Requests */}
+          {displayedStockRequests.length > 0 && (() => {
+            const inCartCount = displayedStockRequests.filter(req => 
+              transferCart.some(item => item.requestId === req.id || (item.productId && req.productId && item.productId === req.productId))
+            ).length;
+            const notInCartRequests = displayedStockRequests.filter(req => 
+              !transferCart.some(item => item.requestId === req.id || (item.productId && req.productId && item.productId === req.productId))
+            );
+            const isSingleBranchScope = pendingBranchesList.length <= 1 || requestBranchFilter !== 'ALL';
+            const scopeBranchName = isSingleBranchScope 
+              ? (pendingBranchesList.find(b => b.id === requestBranchFilter)?.name || displayedStockRequests[0]?.branchName || 'Cabang')
+              : 'Semua Cabang';
+
+            return (
+              <div className="bg-white/95 backdrop-blur-xs border border-indigo-200/90 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2.5 shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-indigo-500 animate-ping" />
+                  <span className="text-xs font-bold text-slate-800">
+                    Opsi Cepat {isSingleBranchScope ? `(${scopeBranchName})` : ''}:
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    {inCartCount > 0 ? (
+                      <span className="font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">
+                        {inCartCount} dipilih ke kiriman, {notInCartRequests.length} belum
+                      </span>
+                    ) : (
+                      <span>{displayedStockRequests.length} barang menunggu respon</span>
+                    )}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Terima Seluruh */}
+                  <button
+                    type="button"
+                    onClick={() => handleAcceptAllRequests(displayedStockRequests)}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+                    title="Masukkan seluruh barang permintaan cabang ini ke dalam list pengiriman"
+                  >
+                    <CheckCheck className="w-3.5 h-3.5" />
+                    <span>✓ Terima Seluruh ({displayedStockRequests.length})</span>
+                  </button>
+
+                  {/* Tolak Sisa (Muncul jika ada sebagian yang sudah dipilih dan ada yang belum) */}
+                  {inCartCount > 0 && notInCartRequests.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenRejectBatchModal(notInCartRequests)}
+                      className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                      title="Tolak sisa barang yang tidak dimasukkan ke list kiriman"
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                      <span>✕ Tolak Sisa ({notInCartRequests.length})</span>
+                    </button>
+                  )}
+
+                  {/* Tolak Seluruh */}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenRejectBatchModal(displayedStockRequests)}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 hover:border-rose-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                    title="Tolak seluruh permohonan cabang ini dengan alasan resmi"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>✕ Tolak Seluruh ({displayedStockRequests.length})</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             {displayedStockRequests.map(req => {
@@ -2588,8 +2748,8 @@ const parseScannedSKU = (text) => {
         onClose={() => setSuccessModalData(null)}
       />
 
-      {/* MODAL 3: REJECT STOCK REQUEST WITH REASON DIALOG */}
-      {rejectingRequest && (
+      {/* MODAL 3: REJECT STOCK REQUEST WITH REASON DIALOG (SINGLE & BATCH) */}
+      {rejectingBatch && rejectingBatch.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-150">
             <div className="p-6 space-y-4">
@@ -2600,12 +2760,18 @@ const parseScannedSKU = (text) => {
                     <X className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-900 text-base">Tolak Permintaan Stok</h3>
-                    <p className="text-xs text-slate-500">Berikan alasan resmi penolakan kepada cabang.</p>
+                    <h3 className="font-bold text-slate-900 text-base">
+                      {rejectingBatch.length > 1 
+                        ? `Tolak ${rejectingBatch.length} Permintaan Stok Sekaligus` 
+                        : 'Tolak Permintaan Stok'}
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Berikan alasan resmi penolakan ke {rejectingBatch[0]?.branchName || 'Cabang'}.
+                    </p>
                   </div>
                 </div>
                 <button 
-                  onClick={() => setRejectingRequest(null)}
+                  onClick={() => setRejectingBatch(null)}
                   className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition cursor-pointer"
                 >
                   <X className="w-5 h-5" />
@@ -2613,18 +2779,35 @@ const parseScannedSKU = (text) => {
               </div>
 
               {/* Request Info Card */}
-              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs space-y-1.5">
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs space-y-2 max-h-52 overflow-y-auto">
                 <div className="flex justify-between">
                   <span className="text-slate-500">Cabang Pemohon:</span>
-                  <span className="font-bold text-slate-800">{rejectingRequest.branchName}</span>
+                  <span className="font-bold text-slate-800">{rejectingBatch[0]?.branchName}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Barang & Kuantitas:</span>
-                  <span className="font-bold text-indigo-700">{rejectingRequest.qty} Pcs "{rejectingRequest.productName}"</span>
-                </div>
-                {rejectingRequest.notes && (
-                  <div className="pt-1 border-t border-slate-200 text-slate-600 italic">
-                    "Catatan Cabang: {rejectingRequest.notes}"
+
+                {rejectingBatch.length === 1 ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Barang & Kuantitas:</span>
+                      <span className="font-bold text-indigo-700">{rejectingBatch[0].qty} Pcs "{rejectingBatch[0].productName}"</span>
+                    </div>
+                    {rejectingBatch[0].notes && (
+                      <div className="pt-1 border-t border-slate-200 text-slate-600 italic">
+                        "Catatan Cabang: {rejectingBatch[0].notes}"
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="border-t border-slate-200/80 pt-2 space-y-1.5">
+                    <span className="text-slate-500 block font-semibold">
+                      Daftar {rejectingBatch.length} Barang yang Akan Ditolak:
+                    </span>
+                    {rejectingBatch.map(item => (
+                      <div key={item.id} className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-200/60">
+                        <span className="font-medium text-slate-700 truncate mr-2">{item.productName}</span>
+                        <span className="font-bold text-rose-600 shrink-0">{item.qty} Pcs</span>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -2649,7 +2832,7 @@ const parseScannedSKU = (text) => {
                   <button
                     type="button"
                     disabled={isSubmittingReject}
-                    onClick={() => setRejectingRequest(null)}
+                    onClick={() => setRejectingBatch(null)}
                     className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
                   >
                     Batal
@@ -2659,8 +2842,14 @@ const parseScannedSKU = (text) => {
                     disabled={isSubmittingReject}
                     className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:bg-slate-300 text-white font-bold rounded-xl text-xs shadow-md shadow-rose-600/20 transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    <X className="w-4 h-4" />
-                    <span>{isSubmittingReject ? 'Mengirim...' : '✕ Kirim Penolakan'}</span>
+                    {isSubmittingReject ? (
+                      <span className="animate-pulse">Mengirim...</span>
+                    ) : (
+                      <>
+                        <X className="w-4 h-4" />
+                        <span>✕ Kirim Penolakan ({rejectingBatch.length})</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>

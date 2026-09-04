@@ -524,9 +524,7 @@ const parseScannedSKU = (text) => {
     setIsExecutingAction(true);
     try {
       if (onRequestStock) {
-        for (const req of pendingConfirmRequest) {
-           await onRequestStock(req);
-        }
+        await onRequestStock(pendingConfirmRequest);
       }
 
       setIsRequestModalOpen(false);

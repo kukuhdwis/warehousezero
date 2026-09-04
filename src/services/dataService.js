@@ -1377,9 +1377,17 @@ export const subscribeUsers = (currentUser, onUpdate) => {
   }
 };
 
-// Subtle and pleasant Web Audio API notification chime
+// Subtle and pleasant Web Audio API notification chime with throttle cooldown
+let lastNotificationSoundTime = 0;
 export const playNotificationSound = () => {
   try {
+    const nowMs = Date.now();
+    // Throttle sound so rapid multi-item arrivals only chime once within 3.5 seconds
+    if (nowMs - lastNotificationSoundTime < 3500) {
+      return;
+    }
+    lastNotificationSoundTime = nowMs;
+
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
@@ -1827,6 +1835,64 @@ export const createStockRequest = async (requestData, currentUser) => {
   }
 };
 
+export const createBatchStockRequests = async (requestItems, currentUser) => {
+  ensureFirebase();
+  if (!Array.isArray(requestItems) || requestItems.length === 0) return [];
+  
+  const branchName = currentUser?.branchName || requestItems[0]?.branchName || 'Cabang';
+  const branchId = currentUser?.branchId || requestItems[0]?.branchId;
+  const requestedBy = currentUser?.name || 'Staff Cabang';
+  const nowIso = new Date().toISOString();
+  const createdList = [];
+
+  try {
+    const batch = writeBatch(db);
+
+    for (const item of requestItems) {
+      const docRef = doc(collection(db, "stock_requests"));
+      const newReq = {
+        productId: item.productId,
+        sku: item.sku,
+        productName: item.productName,
+        brand: item.brand || 'Generic',
+        qty: Number(item.qty) || 1,
+        unit: 'Pcs',
+        branchId: branchId,
+        branchName: branchName,
+        requestedBy: requestedBy,
+        notes: item.notes || '',
+        status: 'PENDING',
+        requestedAt: nowIso
+      };
+      batch.set(docRef, {
+        ...newReq,
+        createdAt: serverTimestamp()
+      });
+      createdList.push({ id: docRef.id, ...newReq });
+    }
+
+    await batch.commit();
+
+    // Send single consolidated notification for entire batch submission
+    const previewSummary = requestItems.length <= 2 
+      ? requestItems.map(i => `${i.qty} Pcs "${i.productName}"`).join(', ')
+      : `${requestItems.slice(0, 2).map(i => `${i.qty} Pcs "${i.productName}"`).join(', ')}, dan ${requestItems.length - 2} produk lainnya`;
+
+    await createNotification({
+      type: 'STOCK_REQUEST_SUBMITTED',
+      title: 'Permintaan Kiriman Stok dari Cabang 📦',
+      message: `${branchName} mengajukan permintaan ${requestItems.length} produk (${previewSummary}).`,
+      targetRole: 'ADMIN_AND_PUSAT',
+      metaId: createdList[0]?.id
+    });
+
+    return createdList;
+  } catch (err) {
+    console.error("Firestore error creating batch stock requests:", err);
+    throw new Error(`Gagal membuat batch Permintaan Stok: ${err.message}`);
+  }
+};
+
 export const rejectStockRequest = async (requestId, reason, currentUser) => {
   ensureFirebase();
   try {
@@ -1850,6 +1916,41 @@ export const rejectStockRequest = async (requestId, reason, currentUser) => {
   } catch (err) {
     console.error("Firestore error rejecting stock request:", err);
     throw new Error(`Gagal menolak Permintaan Stok di Firestore: ${err.message}`);
+  }
+};
+
+export const rejectBatchStockRequests = async (requestIds, reason, currentUser) => {
+  ensureFirebase();
+  try {
+    const list = Array.isArray(requestIds) ? requestIds : [requestIds];
+    if (list.length === 0) return { count: 0 };
+
+    const updateData = {
+      status: 'REJECTED',
+      rejectionReason: reason,
+      rejectedBy: currentUser?.name || 'Staff Pusat',
+      rejectedAt: new Date().toISOString()
+    };
+
+    const batch = writeBatch(db);
+    list.forEach(id => {
+      const docRef = doc(db, "stock_requests", id);
+      batch.update(docRef, updateData);
+    });
+    await batch.commit();
+
+    await createNotification({
+      type: 'STOCK_REQUEST_REJECTED',
+      title: 'Permintaan Stok Ditolak oleh Pusat ❌',
+      message: `${list.length} permintaan stok ditolak oleh Kantor Pusat. Alasan: "${reason}".`,
+      targetRole: 'STAFF_BRANCH',
+      metaId: list[0]
+    });
+
+    return { count: list.length, ...updateData };
+  } catch (err) {
+    console.error("Firestore error rejecting batch stock requests:", err);
+    throw new Error(`Gagal menolak batch Permintaan Stok: ${err.message}`);
   }
 };
 

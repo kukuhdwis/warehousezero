@@ -68,7 +68,9 @@ import {
   fetchStockRequests,
   subscribeStockRequests,
   createStockRequest,
+  createBatchStockRequests,
   rejectStockRequest,
+  rejectBatchStockRequests,
   fulfillStockRequest,
   playNotificationSound,
 
@@ -717,35 +719,43 @@ export default function App() {
     return result;
   };
 
-  // Handler for Branch Requesting Stock from Central Office
-  const handleRequestStock = async (requestData) => {
-    const result = await createStockRequest(requestData, currentUser);
+  // Handler for Branch Requesting Stock from Central Office (Supports Single or Batch)
+  const handleRequestStock = async (requestDataOrList) => {
+    const isArray = Array.isArray(requestDataOrList);
+    let result;
+    if (isArray) {
+      result = await createBatchStockRequests(requestDataOrList, currentUser);
+    } else {
+      result = await createStockRequest(requestDataOrList, currentUser);
+    }
+
+    const count = isArray ? requestDataOrList.length : 1;
+    const firstItem = isArray ? requestDataOrList[0] : requestDataOrList;
+
     setGlobalSuccessPopup({
       title: "Permintaan Stok Berhasil Dikirim!",
-      message: "Pengajuan permintaan stok barang telah berhasil tercatat dan ternotifikasi ke Kantor Pusat.",
+      message: `Pengajuan permintaan stok (${count} produk) telah berhasil tercatat dan ternotifikasi ke Kantor Pusat.`,
       details: [
-        { label: "Nama Produk", value: requestData.productName },
-        { label: "Kuantitas Diminta", value: `+${requestData.qty} Pcs`, highlight: true },
+        { label: "Jumlah Permintaan", value: `${count} Produk`, highlight: true },
+        { label: "Rincian Barang", value: isArray && count > 1 ? `${firstItem?.productName || 'Produk'} (+${count - 1} lainnya)` : `${firstItem?.qty || 1} Pcs "${firstItem?.productName || 'Produk'}"` },
         { label: "Status", value: "⏳ Menunggu Respon Pusat" },
-        ...(requestData.notes ? [{ label: "Catatan", value: requestData.notes }] : [])
+        ...(firstItem?.notes ? [{ label: "Catatan", value: firstItem.notes }] : [])
       ]
     });
     return result;
   };
 
-  // Handler for Central Warehouse Rejecting Stock Request
-  const handleRejectStockRequest = async (requestId, reason) => {
-    const matched = stockRequests.find(r => r.id === requestId);
-    const result = await rejectStockRequest(requestId, reason, currentUser);
-    setGlobalSuccessPopup({
-      title: "Permintaan Stok Ditolak",
-      message: "Pemberitahuan penolakan permintaan stok beserta alasan resmi telah terkirim ke Cabang pemohon.",
-      details: [
-        { label: "Cabang", value: matched?.branchName || 'Cabang' },
-        { label: "Produk", value: matched?.productName || 'Produk' },
-        { label: "Alasan Penolakan", value: `"${reason}"`, highlight: true }
-      ]
-    });
+  // Handler for Central Warehouse Rejecting Stock Request (Supports Single ID or Array of IDs)
+  const handleRejectStockRequest = async (requestIdOrList, reason) => {
+    const isArray = Array.isArray(requestIdOrList);
+    let result;
+    if (isArray) {
+      result = await rejectBatchStockRequests(requestIdOrList, reason, currentUser);
+    } else {
+      result = await rejectStockRequest(requestIdOrList, reason, currentUser);
+    }
+    // Note: StockOut.jsx provides its own comprehensive rejection success modal with exact items,
+    // so we don't trigger a duplicate popup here to prevent the user having to click twice.
     return result;
   };
 
