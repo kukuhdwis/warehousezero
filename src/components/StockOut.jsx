@@ -111,44 +111,116 @@ export default function StockOut({
   const [selectedTransferBundleId, setSelectedTransferBundleId] = useState('');
   const [transferBundleQty, setTransferBundleQty] = useState(1);
 
-  // Handle incoming initialRequestData (e.g. from notification click)
-  useEffect(() => {
-    if (initialRequestData) {
-      setActiveFulfillmentRequest(initialRequestData);
-      setOutboundMode('STOCK_TRANSFER_TO_BRANCH');
-      if (initialRequestData.targetBranchId || initialRequestData.branchId) {
-        setTargetBranchId(initialRequestData.targetBranchId || initialRequestData.branchId);
+  // Toggle request fulfillment: adds requested product directly into transferCart, or removes it if already in cart
+  const handleToggleRequestFulfillment = (req) => {
+    if (!req) return;
+
+    // Check if this request's item is already in transferCart
+    const existingIndex = transferCart.findIndex(item => 
+      item.requestId === req.id || 
+      (item.productId && req.productId && item.productId === req.productId) || 
+      (item.sku && req.sku && item.sku.toLowerCase() === req.sku.toLowerCase())
+    );
+
+    if (existingIndex !== -1) {
+      // Toggle OFF: Remove from transferCart
+      const updatedCart = transferCart.filter((_, idx) => idx !== existingIndex);
+      setTransferCart(updatedCart);
+      if (updatedCart.length === 0) {
+        setActiveFulfillmentRequest(null);
+        setSelectedProductId('');
+        setQty(1);
+        setNotes('');
       }
-      if (initialRequestData.productId) {
-        setSelectedProductId(initialRequestData.productId);
-      }
-      if (initialRequestData.qty) {
-        setQty(Number(initialRequestData.qty));
-      }
-      if (initialRequestData.notes) {
-        setNotes(`Memenuhi Permintaan Cabang: ${initialRequestData.notes}`);
-      }
-    } else {
-      setActiveFulfillmentRequest(null);
+      return;
     }
-  }, [initialRequestData]);
 
-  // Safe pending requests from branches for Pusat/Admin
-  const pendingStockRequests = (!isBranchStaff && Array.isArray(stockRequests))
-    ? stockRequests.filter(r => r && r.status === 'PENDING')
-    : [];
+    // Check if user is switching to a different branch while transferCart is not empty
+    if (targetBranchId && targetBranchId !== req.branchId && transferCart.length > 0) {
+      const currentBranchObj = branches.find(b => b.id === targetBranchId);
+      const currentBranchName = currentBranchObj?.name || 'Cabang Lain';
+      showAlert(
+        "Cabang Berbeda ⚠️",
+        `List kiriman saat ini untuk "${currentBranchName}". Selesaikan atau kosongkan list terlebih dahulu sebelum merespon permintaan dari "${req.branchName || 'Cabang Lain'}".`,
+        "WARNING"
+      );
+      return;
+    }
 
-  const handleSelectRequestToFulfill = (req) => {
-    setActiveFulfillmentRequest(req);
+    // Set branch and switch to transfer mode
     setOutboundMode('STOCK_TRANSFER_TO_BRANCH');
     setTargetBranchId(req.branchId);
-    setSelectedProductId(req.productId);
-    setQty(Number(req.qty) || 1);
-    setNotes(`Memenuhi Permintaan Cabang: ${req.notes || '-'}`);
-    
-    // Smooth scroll to form
-    window.scrollTo({ top: 350, behavior: 'smooth' });
+
+    // Find master product from products list
+    const targetProduct = products.find(p => 
+      p.id === req.productId || 
+      (req.sku && p.sku && p.sku.toLowerCase() === req.sku.toLowerCase()) ||
+      (req.productName && p.name && p.name.trim().toLowerCase() === req.productName.trim().toLowerCase())
+    );
+
+    const maxStock = Number(targetProduct?.currentStock) || 0;
+    const reqQty = Number(req.qty) || 1;
+
+    if (maxStock <= 0) {
+      showAlert(
+        "Stok Pusat Kosong 📦", 
+        `Stok produk "${targetProduct?.name || req.productName}" di gudang pusat saat ini 0 Pcs. Anda dapat tetap menambahkannya atau lakukan restok terlebih dahulu.`, 
+        "WARNING"
+      );
+    } else if (reqQty > maxStock) {
+      showAlert(
+        "Stok Pusat Terbatas ⚠️",
+        `Permintaan cabang ${reqQty} Pcs melebihi stok gudang pusat yang tersedia (${maxStock} Pcs). Kuantitas dimasukkan sebesar ${maxStock} Pcs.`,
+        "INFO"
+      );
+    }
+
+    const finalQty = maxStock > 0 ? Math.min(maxStock, reqQty) : reqQty;
+
+    const newItem = {
+      requestId: req.id,
+      productId: targetProduct ? targetProduct.id : req.productId,
+      sku: targetProduct?.sku || req.sku || '-',
+      productName: targetProduct?.name || req.productName || 'Produk',
+      brand: targetProduct?.brand || req.brand || 'Generic',
+      price: Number(targetProduct?.price) || 0,
+      currentStock: maxStock,
+      qty: finalQty,
+      reqNotes: req.notes || ''
+    };
+
+    setTransferCart(prev => {
+      const existingIdx = prev.findIndex(item => item.productId === newItem.productId);
+      if (existingIdx !== -1) {
+        const next = [...prev];
+        next[existingIdx].qty = finalQty;
+        next[existingIdx].requestId = req.id;
+        return next;
+      }
+      return [...prev, newItem];
+    });
+
+    setActiveFulfillmentRequest(req);
+    setSelectedProductId(newItem.productId);
+    setQty(finalQty);
+
+    // Combine notes
+    setNotes(prev => {
+      const allNotes = [...transferCart.map(i => i.reqNotes), req.notes].filter(Boolean);
+      const uniqueNotes = [...new Set(allNotes)];
+      return uniqueNotes.length > 0 ? `Memenuhi Permintaan Cabang: ${uniqueNotes.join('; ')}` : (prev || 'Memenuhi Permintaan Cabang');
+    });
+
+    // Smooth scroll directly to the transfer cart section (Box 2)
+    setTimeout(() => {
+      const targetEl = document.getElementById('transfer-cart-section');
+      if (targetEl) {
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
   };
+
+  const handleSelectRequestToFulfill = handleToggleRequestFulfillment;
 
   const handleCancelFulfillment = () => {
     setActiveFulfillmentRequest(null);
@@ -156,7 +228,15 @@ export default function StockOut({
     setSelectedProductId('');
     setNotes('');
     setQty(1);
+    setTransferCart([]);
   };
+
+  // Handle incoming initialRequestData (e.g. from notification click)
+  useEffect(() => {
+    if (initialRequestData) {
+      handleToggleRequestFulfillment(initialRequestData);
+    }
+  }, [initialRequestData]);
 
   const handleOpenRejectModal = (req) => {
     setRejectingRequest(req);
@@ -1079,7 +1159,11 @@ const parseScannedSKU = (text) => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             {pendingStockRequests.map(req => {
-              const isCurrentlySelected = activeFulfillmentRequest?.id === req.id;
+              const isCurrentlySelected = transferCart.some(item => 
+                item.requestId === req.id || 
+                (item.productId && req.productId && item.productId === req.productId) || 
+                (item.sku && req.sku && item.sku.toLowerCase() === req.sku.toLowerCase())
+              );
               return (
                 <div 
                   key={req.id} 
@@ -1100,7 +1184,7 @@ const parseScannedSKU = (text) => {
                         </span>
                         {isCurrentlySelected && (
                           <span className="px-2 py-0.2 rounded text-[9px] font-extrabold bg-emerald-500 text-white uppercase tracking-wider">
-                            ✓ Aktif
+                            ✓ Dalam List
                           </span>
                         )}
                       </div>
@@ -1114,9 +1198,9 @@ const parseScannedSKU = (text) => {
                         {isCurrentlySelected && (
                           <button
                             type="button"
-                            onClick={handleCancelFulfillment}
+                            onClick={() => handleToggleRequestFulfillment(req)}
                             className="p-1 rounded-md text-white hover:text-rose-200 bg-white/20 hover:bg-rose-500 transition cursor-pointer flex items-center justify-center"
-                            title="Batal pilih request ini / Reset form"
+                            title="Batal pilih request ini dari list kiriman"
                           >
                             <X className="w-3.5 h-3.5 stroke-[2.5]" />
                           </button>
@@ -1156,7 +1240,7 @@ const parseScannedSKU = (text) => {
 
                     <button
                       type="button"
-                      onClick={() => isCurrentlySelected ? handleCancelFulfillment() : handleSelectRequestToFulfill(req)}
+                      onClick={() => handleToggleRequestFulfillment(req)}
                       className={`flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
                         isCurrentlySelected 
                           ? 'bg-white text-indigo-900 shadow-xs hover:bg-indigo-50' 
@@ -1277,7 +1361,7 @@ const parseScannedSKU = (text) => {
               </div>
 
               {/* Step 2: Transfer Staging Cart Table with Inline Qty Input */}
-              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
+              <div id="transfer-cart-section" className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
                 <div className="p-3 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between">
                   <span className="font-bold text-xs text-slate-700 uppercase tracking-wider">
                     📋 List Barang Kiriman Cabang ({transferCart.length} Jenis Produk Dipilih)
