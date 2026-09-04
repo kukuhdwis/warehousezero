@@ -22,7 +22,8 @@ import {
   Ban,
   ChevronDown,
   ChevronUp,
-  Trash2
+  Trash2,
+  Search
 } from 'lucide-react';
 import { db } from '../services/firebase';
 import { matchesSearch } from '../utils/searchUtils';
