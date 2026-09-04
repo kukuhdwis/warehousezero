@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node ./scripts/verify_imports.js && vite build",
+    "check-imports": "node ./scripts/verify_imports.js",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -23,7 +23,8 @@ import {
   ChevronDown,
   ChevronUp,
   Trash2,
-  Search
+  Search,
+  AlertCircle
 } from 'lucide-react';
 import { db } from '../services/firebase';
 import { matchesSearch } from '../utils/searchUtils';

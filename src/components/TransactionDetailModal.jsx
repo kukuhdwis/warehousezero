@@ -17,7 +17,8 @@ import {
   MapPin, 
   CreditCard,
   Copy,
-  Check
+  Check,
+  AlertTriangle
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
