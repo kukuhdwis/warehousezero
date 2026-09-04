@@ -243,9 +243,30 @@ export default function ProductManagement({
   // Selected Branch Container State (Wadah Cabang)
   // null = Show overview of all branch containers
   // 'GUDANG-PUSAT' | branchId = View products & brands inside that specific branch
-  const [selectedBranchId, setSelectedBranchId] = useState(
-    isBranchStaff ? (currentUser?.branchId || 'CABANG') : null
-  );
+  const [selectedBranchId, setSelectedBranchId] = useState(() => {
+    if (isBranchStaff) return currentUser?.branchId || 'CABANG';
+    try {
+      const saved = sessionStorage.getItem('wms_selected_branch_container_id');
+      if (saved) return saved;
+    } catch (e) {
+      // ignore
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (!isBranchStaff) {
+      try {
+        if (selectedBranchId) {
+          sessionStorage.setItem('wms_selected_branch_container_id', selectedBranchId);
+        } else {
+          sessionStorage.removeItem('wms_selected_branch_container_id');
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [selectedBranchId, isBranchStaff]);
 
   // Sub-tabs
   // Admin/Pusat: 'BRANCH_CONTAINERS' | 'MASTER_CATALOG' | 'APPROVAL_REQUESTS' | 'ALL_BRANCH_INVENTORIES'

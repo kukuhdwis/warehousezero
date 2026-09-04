@@ -218,22 +218,23 @@ export default function App() {
     }
   };
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (showSpinner = false) => {
+    if (showSpinner) setLoading(true);
     try {
       // Data is populated automatically via onSnapshot real-time subscriptions.
-      // We just need a tiny delay to allow Firestore's local cache to resolve and avoid UI flashes.
-      await new Promise(resolve => setTimeout(resolve, 400));
+      if (showSpinner) {
+        await new Promise(resolve => setTimeout(resolve, 400));
+      }
     } catch (e) {
       console.error("Error loading data:", e);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   };
 
   useEffect(() => {
     if (currentUser) {
-      loadData();
+      loadData(true);
       loadBundles();
     }
   }, [currentUser]);
