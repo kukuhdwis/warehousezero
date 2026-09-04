@@ -1020,6 +1020,7 @@ const parseScannedSKU = (text) => {
         for (const item of items) {
           await onRecordMovement({
             ...item,
+            type: 'OUT',
             transactionType: 'STOCK_TRANSFER_TO_BRANCH',
             targetBranchId: pendingConfirm.targetBranchId,
             targetBranchName: pendingConfirm.targetBranchName,

@@ -76,9 +76,12 @@ export default function TransactionHistory({
     );
     
     const isRetur = tx.transactionType === 'TRANSFER_REJECTED_RETURN' || tx.status === 'REJECTED_RETURN' || tx.transferStatus === 'REJECTED';
+    const isIn = tx.type === 'IN' && !isRetur;
+    const isOut = !isIn && !isRetur;
+
     let matchesType = true;
-    if (typeFilter === 'IN') matchesType = tx.type === 'IN' && tx.transactionType !== 'TRANSFER_REJECTED_RETURN';
-    else if (typeFilter === 'OUT') matchesType = tx.type === 'OUT';
+    if (typeFilter === 'IN') matchesType = isIn;
+    else if (typeFilter === 'OUT') matchesType = isOut;
     else if (typeFilter === 'RETUR') matchesType = isRetur;
 
     return matchesSearchTerm && matchesType;
@@ -89,13 +92,17 @@ export default function TransactionHistory({
     
     // Filter transactions based on the selected exportType
     const transactionsToExport = filteredTransactions.filter(tx => {
+      const isReturTx = tx.transactionType === 'TRANSFER_REJECTED_RETURN' || tx.status === 'REJECTED_RETURN' || tx.transferStatus === 'REJECTED';
+      const isInTx = tx.type === 'IN' && !isReturTx;
+      const isOutTx = !isInTx && !isReturTx;
+
       if (exportType === 'ALL') return true;
-      if (exportType === 'IN') return tx.type === 'IN';
-      if (exportType === 'OUT') return tx.type !== 'IN';
-      if (exportType === 'OUT_SHOPEE') return tx.type !== 'IN' && (tx.notes || '').toLowerCase().includes('shopee');
-      if (exportType === 'OUT_TOKOPEDIA') return tx.type !== 'IN' && (tx.notes || '').toLowerCase().includes('tokopedia');
-      if (exportType === 'OUT_TIKTOK') return tx.type !== 'IN' && (tx.notes || '').toLowerCase().includes('tiktok');
-      if (exportType === 'OUT_OFFLINE') return tx.type !== 'IN' && ((tx.notes || '').toLowerCase().includes('offline') || (tx.notes || '').toLowerCase().includes('cabang'));
+      if (exportType === 'IN') return isInTx;
+      if (exportType === 'OUT') return isOutTx;
+      if (exportType === 'OUT_SHOPEE') return isOutTx && (tx.notes || '').toLowerCase().includes('shopee');
+      if (exportType === 'OUT_TOKOPEDIA') return isOutTx && (tx.notes || '').toLowerCase().includes('tokopedia');
+      if (exportType === 'OUT_TIKTOK') return isOutTx && (tx.notes || '').toLowerCase().includes('tiktok');
+      if (exportType === 'OUT_OFFLINE') return isOutTx && ((tx.notes || '').toLowerCase().includes('offline') || (tx.notes || '').toLowerCase().includes('cabang'));
       return true;
     });
 
