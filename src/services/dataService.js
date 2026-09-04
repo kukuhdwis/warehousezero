@@ -1,21 +1,21 @@
 import { db, isFirebaseConfigured } from "./firebase";
 import { registerUserInFirebaseAuth } from "./authService";
-import { 
-  callCreateSystemUser, 
-  callUpdateSystemUser, 
-  callDeleteSystemUser 
+import {
+  callCreateSystemUser,
+  callUpdateSystemUser,
+  callDeleteSystemUser
 } from "./cloudFunctionsService";
-import { 
-  collection, 
-  getDocs, 
+import {
+  collection,
+  getDocs,
   getDoc,
   setDoc,
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
-  query, 
-  orderBy, 
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  query,
+  orderBy,
   limit,
   serverTimestamp,
   increment,
@@ -46,9 +46,9 @@ const isBootstrapInitialized = async () => {
 const markBootstrapDone = async () => {
   try {
     const metaRef = doc(db, "system_metadata", "bootstrap");
-    await setDoc(metaRef, { 
-      initialized: true, 
-      bootstrappedAt: serverTimestamp() 
+    await setDoc(metaRef, {
+      initialized: true,
+      bootstrappedAt: serverTimestamp()
     }, { merge: true });
   } catch (e) {
     console.warn("Gagal mencatat status bootstrap:", e);
@@ -111,7 +111,7 @@ export const DEFAULT_STAFF_JAKARTA = {
   createdAt: new Date().toISOString()
 };
 
-export const INITIAL_DEFAULT_USERS = [DEFAULT_ROOT_ADMIN, DEFAULT_STAFF_PUSAT, DEFAULT_STAFF_JAKARTA];
+export const INITIAL_DEFAULT_USERS = [DEFAULT_ROOT_ADMIN];
 
 // Single Protected Gudang Utama Pusat
 export const DEFAULT_GUDANG_PUSAT = {
@@ -128,29 +128,7 @@ export const DEFAULT_GUDANG_PUSAT = {
 };
 
 export const DEFAULT_INITIAL_BRANCHES = [
-  DEFAULT_GUDANG_PUSAT,
-  {
-    name: "Gudang Cabang Jakarta",
-    code: "BR-JKT",
-    address: "Jl. Sudirman No. 10, Jakarta Pusat",
-    managerName: "Budi Santoso",
-    pic: "Budi Santoso",
-    phone: "0812-1111-2222",
-    status: "ACTIVE",
-    isPusat: false,
-    createdAt: new Date().toISOString()
-  },
-  {
-    name: "Gudang Cabang Surabaya",
-    code: "BR-SBY",
-    address: "Jl. Pemuda No. 45, Surabaya",
-    managerName: "Siti Rahma",
-    pic: "Siti Rahma",
-    phone: "0813-3333-4444",
-    status: "ACTIVE",
-    isPusat: false,
-    createdAt: new Date().toISOString()
-  }
+  DEFAULT_GUDANG_PUSAT
 ];
 
 // ==========================================
@@ -165,7 +143,7 @@ export const fetchBrands = async () => {
     if (!snapshot.empty) {
       return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
     }
-    
+
     const isDone = await isBootstrapInitialized();
     if (isDone) {
       return [];
@@ -230,6 +208,245 @@ export const deleteBrand = async (brandIdOrName) => {
 };
 
 // ==========================================
+// BUNDLE / PAKET BUNDLING SERVICES (FIRESTORE)
+// ==========================================
+
+export const fetchBundles = async () => {
+  ensureFirebase();
+  try {
+    const q = query(collection(db, "stock_bundles"), orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(docSnap => ({
+      id: docSnap.id,
+      ...docSnap.data()
+    }));
+  } catch (err) {
+    try {
+      const fallbackSnap = await getDocs(collection(db, "stock_bundles"));
+      return fallbackSnap.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }));
+    } catch (fallbackErr) {
+      console.error("Firestore error fetching stock_bundles:", fallbackErr);
+      return [];
+    }
+  }
+};
+
+export const subscribeBundles = (callback) => {
+  ensureFirebase();
+  try {
+    const q = collection(db, "stock_bundles");
+    return onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }));
+      callback(list);
+    }, (err) => {
+      console.warn("Firestore error subscribing stock_bundles:", err);
+      // Fallback one-time fetch
+      fetchBundles().then(callback).catch(() => callback([]));
+    });
+  } catch (err) {
+    console.warn("Setup subscribeBundles error:", err);
+    fetchBundles().then(callback).catch(() => callback([]));
+    return () => {};
+  }
+};
+
+export const createBundle = async (bundleData) => {
+  ensureFirebase();
+  if (!bundleData.name || !bundleData.name.trim()) {
+    throw new Error("Nama paket bundling tidak boleh kosong.");
+  }
+
+  const payload = {
+    code: (bundleData.code || `BNDL-${Date.now().toString().slice(-6)}`).trim(),
+    name: bundleData.name.trim(),
+    brand: bundleData.brand || 'NDK Exhaust',
+    engine_type: bundleData.engine_type || bundleData.machineCategory || 'Universal',
+    car_variant: bundleData.car_variant || '-',
+    selling_price: Number(bundleData.selling_price ?? bundleData.price) || 0,
+    reseller_price: Number(bundleData.reseller_price) || 0,
+    distributor_price: Number(bundleData.distributor_price) || Number(bundleData.reseller_price) || 0,
+    imageUrl: bundleData.imageUrl || '',
+    description: bundleData.description || bundleData.keterangan || '',
+    admin_note: bundleData.admin_note || bundleData.adminNotes || bundleData.notes || '',
+    notes: bundleData.admin_note || bundleData.notes || '',
+    rawIsi: bundleData.rawIsi || '',
+    items: Array.isArray(bundleData.items) ? bundleData.items : [],
+    status: bundleData.status || 'ACTIVE',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  };
+
+  try {
+    const docRef = await addDoc(collection(db, "stock_bundles"), payload);
+    return { id: docRef.id, ...payload };
+  } catch (err) {
+    console.error("Firestore error creating bundle:", err);
+    throw new Error(`Gagal menyimpan paket bundling: ${err.message}`);
+  }
+};
+
+export const updateBundle = async (id, bundleData) => {
+  ensureFirebase();
+  if (!id) throw new Error("ID paket bundling wajib ada.");
+
+  const payload = {
+    code: (bundleData.code || '').trim(),
+    name: (bundleData.name || '').trim(),
+    brand: bundleData.brand || 'NDK Exhaust',
+    engine_type: bundleData.engine_type || bundleData.machineCategory || 'Universal',
+    car_variant: bundleData.car_variant || '-',
+    selling_price: Number(bundleData.selling_price ?? bundleData.price) || 0,
+    reseller_price: Number(bundleData.reseller_price) || 0,
+    distributor_price: Number(bundleData.distributor_price) || Number(bundleData.reseller_price) || 0,
+    imageUrl: bundleData.imageUrl || '',
+    description: bundleData.description || bundleData.keterangan || '',
+    admin_note: bundleData.admin_note || bundleData.adminNotes || bundleData.notes || '',
+    notes: bundleData.admin_note || bundleData.notes || '',
+    rawIsi: bundleData.rawIsi || '',
+    items: Array.isArray(bundleData.items) ? bundleData.items : [],
+    status: bundleData.status || 'ACTIVE',
+    updatedAt: serverTimestamp()
+  };
+
+  try {
+    const docRef = doc(db, "stock_bundles", id);
+    await updateDoc(docRef, payload);
+    return { id, ...payload };
+  } catch (err) {
+    console.error("Firestore error updating bundle:", err);
+    throw new Error(`Gagal memperbarui paket bundling: ${err.message}`);
+  }
+};
+
+export const deleteBundle = async (id) => {
+  ensureFirebase();
+  if (!id) return false;
+  try {
+    await deleteDoc(doc(db, "stock_bundles", id));
+    return true;
+  } catch (err) {
+    console.error("Firestore error deleting bundle:", err);
+    throw new Error(`Gagal menghapus paket bundling: ${err.message}`);
+  }
+};
+
+export const deleteBundlesBatch = async (ids = []) => {
+  ensureFirebase();
+  if (!ids || ids.length === 0) return true;
+  try {
+    const CHUNK_SIZE = 400;
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+      const chunk = ids.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach(id => {
+        batch.delete(doc(db, "stock_bundles", id));
+      });
+      await batch.commit();
+    }
+    return true;
+  } catch (err) {
+    console.error("Firestore error deleting bundles batch:", err);
+    throw new Error(`Gagal menghapus kumpulan paket bundling: ${err.message}`);
+  }
+};
+
+export const importBundlesBatch = async (bundleList = [], onProgress = null) => {
+  ensureFirebase();
+  if (!bundleList || bundleList.length === 0) {
+    return { total: 0, createdCount: 0, skippedCount: 0 };
+  }
+
+  // Auto-register brand baru dari bundleList jika belum ada di koleksi brands
+  try {
+    const uniqueBrands = new Set();
+    bundleList.forEach(b => {
+      if (b.brand && b.brand.trim()) uniqueBrands.add(b.brand.trim());
+    });
+
+    if (uniqueBrands.size > 0) {
+      const existingBrandsSnap = await getDocs(collection(db, "brands"));
+      const existingBrandNames = new Set(
+        existingBrandsSnap.docs.map(d => (d.data().name || '').trim().toLowerCase())
+      );
+
+      for (const bName of uniqueBrands) {
+        if (!existingBrandNames.has(bName.toLowerCase())) {
+          await addDoc(collection(db, "brands"), {
+            name: bName,
+            createdAt: serverTimestamp()
+          });
+          existingBrandNames.add(bName.toLowerCase());
+        }
+      }
+    }
+  } catch (brandErr) {
+    console.warn("Peringatan auto-register brand pada import bundling:", brandErr);
+  }
+
+  let createdCount = 0;
+  let skippedCount = 0;
+  const CHUNK_SIZE = 250;
+  const chunks = [];
+
+  for (let i = 0; i < bundleList.length; i += CHUNK_SIZE) {
+    chunks.push(bundleList.slice(i, i + CHUNK_SIZE));
+  }
+
+  let processedSoFar = 0;
+
+  for (const chunk of chunks) {
+    const batch = writeBatch(db);
+
+    for (const b of chunk) {
+      if (!b.name || !b.name.trim()) {
+        skippedCount++;
+        continue;
+      }
+
+      const docRef = doc(collection(db, "stock_bundles"));
+      batch.set(docRef, {
+        code: (b.code || `BNDL-${Date.now().toString().slice(-6)}`).trim(),
+        name: b.name.trim(),
+        brand: b.brand || 'NDK Exhaust',
+        engine_type: b.engine_type || 'Universal',
+        car_variant: b.car_variant || '-',
+        selling_price: Number(b.selling_price) || 0,
+        reseller_price: Number(b.reseller_price) || 0,
+        distributor_price: Number(b.distributor_price) || Number(b.reseller_price) || 0,
+        imageUrl: b.imageUrl || '',
+        description: b.description || b.keterangan || b.rawKet || '',
+        admin_note: b.admin_note || b.notes || '',
+        notes: b.admin_note || b.notes || '',
+        rawIsi: b.rawIsi || '',
+        items: Array.isArray(b.items) ? b.items : [],
+        status: b.status || 'ACTIVE',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      createdCount++;
+    }
+
+    await batch.commit();
+    processedSoFar += chunk.length;
+    if (onProgress) {
+      onProgress(Math.round((processedSoFar / bundleList.length) * 100));
+    }
+  }
+
+  return {
+    total: bundleList.length,
+    createdCount,
+    skippedCount
+  };
+};
+
+// ==========================================
 // MACHINE CATEGORY SERVICES (FIRESTORE)
 // ==========================================
 
@@ -241,7 +458,7 @@ export const fetchMachineCategories = async () => {
     if (!snapshot.empty) {
       return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
     }
-    
+
     const isDone = await isBootstrapInitialized();
     if (isDone) {
       return [];
@@ -333,7 +550,7 @@ export const subscribeProducts = (callback) => {
     });
   } catch (err) {
     console.error("Failed to subscribe products:", err);
-    return () => {};
+    return () => { };
   }
 };
 
@@ -385,8 +602,9 @@ export const createProduct = async (productData) => {
   ensureFirebase();
   const sellingPrice = Number(productData.selling_price ?? productData.sellingPrice ?? productData.price) || 0;
   const resellerPrice = Number(productData.reseller_price ?? productData.resellerPrice) || 0;
-  const profitAmount = productData.profit_amount !== undefined 
-    ? Number(productData.profit_amount) 
+  const distributorPrice = Number(productData.distributor_price ?? productData.distributorPrice ?? productData.distributor) || sellingPrice;
+  const profitAmount = productData.profit_amount !== undefined
+    ? Number(productData.profit_amount)
     : (sellingPrice - resellerPrice);
   const profitPercentage = productData.profit_percentage !== undefined
     ? Number(productData.profit_percentage)
@@ -410,6 +628,7 @@ export const createProduct = async (productData) => {
     material_finish: productData.material_finish || productData.materialFinish || 'SS Polos',
     reseller_price: resellerPrice,
     selling_price: sellingPrice,
+    distributor_price: distributorPrice,
     price: sellingPrice, // Backward compatibility
     profit_amount: profitAmount,
     profit_percentage: Math.round(profitPercentage * 100) / 100,
@@ -434,7 +653,7 @@ export const createProduct = async (productData) => {
 
     // Zero-Trust Tiering: Save pricing to secret collection
     await setDoc(doc(db, "product_pricings", docRef.id), {
-      distributor_price: sellingPrice,
+      distributor_price: distributorPrice,
       reseller_price: resellerPrice,
       cost_price: resellerPrice,
       updated_at: serverTimestamp()
@@ -451,8 +670,9 @@ export const updateProduct = async (id, productData) => {
   ensureFirebase();
   const sellingPrice = Number(productData.selling_price ?? productData.sellingPrice ?? productData.price) || 0;
   const resellerPrice = Number(productData.reseller_price ?? productData.resellerPrice) || 0;
-  const profitAmount = productData.profit_amount !== undefined 
-    ? Number(productData.profit_amount) 
+  const distributorPrice = Number(productData.distributor_price ?? productData.distributorPrice ?? productData.distributor) || sellingPrice;
+  const profitAmount = productData.profit_amount !== undefined
+    ? Number(productData.profit_amount)
     : (sellingPrice - resellerPrice);
   const profitPercentage = productData.profit_percentage !== undefined
     ? Number(productData.profit_percentage)
@@ -476,6 +696,7 @@ export const updateProduct = async (id, productData) => {
     material_finish: productData.material_finish || productData.materialFinish || 'SS Polos',
     reseller_price: resellerPrice,
     selling_price: sellingPrice,
+    distributor_price: distributorPrice,
     price: sellingPrice, // Backward compatibility
     profit_amount: profitAmount,
     profit_percentage: Math.round(profitPercentage * 100) / 100,
@@ -496,7 +717,7 @@ export const updateProduct = async (id, productData) => {
 
     // Zero-Trust Tiering: Save pricing to secret collection
     await setDoc(doc(db, "product_pricings", id), {
-      distributor_price: sellingPrice,
+      distributor_price: distributorPrice,
       reseller_price: resellerPrice,
       cost_price: resellerPrice,
       updated_at: serverTimestamp()
@@ -546,12 +767,40 @@ export const importProductsBatch = async (itemsList, duplicateMode = 'UPDATE', o
     return { total: 0, createdCount: 0, updatedCount: 0, skippedCount: 0 };
   }
 
+  // 1. Auto-register brand baru dari itemsList jika belum ada di master brands
+  try {
+    const uniqueBrands = new Set();
+    itemsList.forEach(item => {
+      const b = (item.brand || '').trim();
+      if (b) uniqueBrands.add(b);
+    });
+
+    if (uniqueBrands.size > 0) {
+      const existingBrandsSnap = await getDocs(collection(db, "brands"));
+      const existingBrandNames = new Set(
+        existingBrandsSnap.docs.map(d => (d.data().name || '').trim().toLowerCase())
+      );
+
+      for (const bName of uniqueBrands) {
+        if (!existingBrandNames.has(bName.toLowerCase())) {
+          await addDoc(collection(db, "brands"), {
+            name: bName,
+            createdAt: serverTimestamp()
+          });
+          existingBrandNames.add(bName.toLowerCase());
+        }
+      }
+    }
+  } catch (brandErr) {
+    console.warn("Peringatan saat auto-register brand baru:", brandErr);
+  }
+
   let createdCount = 0;
   let updatedCount = 0;
   let skippedCount = 0;
 
-  // Split into chunks of 300 to stay well under Firestore's 500 batch limit
-  const CHUNK_SIZE = 300;
+  // Split into chunks of 200 (max 400 writes: product + product_pricings, under Firestore 500 limit)
+  const CHUNK_SIZE = 200;
   const chunks = [];
   for (let i = 0; i < itemsList.length; i += CHUNK_SIZE) {
     chunks.push(itemsList.slice(i, i + CHUNK_SIZE));
@@ -571,6 +820,7 @@ export const importProductsBatch = async (itemsList, duplicateMode = 'UPDATE', o
 
       const sellingPrice = Number(item.selling_price ?? item.price) || 0;
       const resellerPrice = Number(item.reseller_price) || 0;
+      const distributorPrice = Number(item.distributor_price) || (resellerPrice > 0 ? resellerPrice : sellingPrice);
       const profitAmount = Number(item.profit_amount) || (sellingPrice - resellerPrice);
       const profitPercentage = Number(item.profit_percentage) || (resellerPrice > 0 ? ((profitAmount / resellerPrice) * 100) : 0);
 
@@ -587,6 +837,7 @@ export const importProductsBatch = async (itemsList, duplicateMode = 'UPDATE', o
         material_finish: item.material_finish || 'SS Polos',
         reseller_price: resellerPrice,
         selling_price: sellingPrice,
+        distributor_price: distributorPrice,
         price: sellingPrice,
         profit_amount: profitAmount,
         profit_percentage: Math.round(profitPercentage * 100) / 100,
@@ -606,6 +857,12 @@ export const importProductsBatch = async (itemsList, duplicateMode = 'UPDATE', o
         if (duplicateMode === 'UPDATE' && item.existingId) {
           const docRef = doc(db, "products", item.existingId);
           batch.update(docRef, productPayload);
+          batch.set(doc(db, "product_pricings", item.existingId), {
+            distributor_price: distributorPrice,
+            reseller_price: resellerPrice,
+            cost_price: resellerPrice,
+            updated_at: serverTimestamp()
+          }, { merge: true });
           updatedCount++;
         } else {
           skippedCount++;
@@ -615,6 +872,12 @@ export const importProductsBatch = async (itemsList, duplicateMode = 'UPDATE', o
         batch.set(docRef, {
           ...productPayload,
           createdAt: serverTimestamp()
+        });
+        batch.set(doc(db, "product_pricings", docRef.id), {
+          distributor_price: distributorPrice,
+          reseller_price: resellerPrice,
+          cost_price: resellerPrice,
+          updated_at: serverTimestamp()
         });
         createdCount++;
       }
@@ -828,6 +1091,19 @@ export const updateBranchInventory = async (id, updateData) => {
   }
 };
 
+export const deleteBranchInventory = async (id) => {
+  ensureFirebase();
+  if (!id) return false;
+  try {
+    const docRef = doc(db, "branch_inventories", id);
+    await deleteDoc(docRef);
+    return true;
+  } catch (err) {
+    console.error("Firestore error deleting branch inventory:", err);
+    throw new Error(`Gagal menghapus Inventaris Cabang dari Firestore: ${err.message}`);
+  }
+};
+
 
 // ==========================================
 // NOTIFICATION SYSTEM SERVICES (FIRESTORE)
@@ -908,7 +1184,7 @@ export const markAllNotificationsAsRead = async (currentUser) => {
 
 export const subscribeNotifications = (currentUser, onUpdate) => {
   ensureFirebase();
-  if (!currentUser) return () => {};
+  if (!currentUser) return () => { };
 
   try {
     const q = query(collection(db, "notifications"), orderBy("createdAt", "desc"), limit(50));
@@ -929,13 +1205,13 @@ export const subscribeNotifications = (currentUser, onUpdate) => {
     });
   } catch (err) {
     console.error("Failed to subscribe notifications:", err);
-    return () => {};
+    return () => { };
   }
 };
 
 export const subscribeTransfers = (currentUser, onUpdate) => {
   ensureFirebase();
-  if (!currentUser) return () => {};
+  if (!currentUser) return () => { };
 
   try {
     const q = query(collection(db, "stock_transfers"), orderBy("sentAt", "desc"), limit(100));
@@ -950,21 +1226,31 @@ export const subscribeTransfers = (currentUser, onUpdate) => {
     });
   } catch (err) {
     console.error("Failed to subscribe transfers:", err);
-    return () => {};
+    return () => { };
   }
 };
 
 export const subscribeBranchInventories = (currentUser, onUpdate) => {
   ensureFirebase();
-  if (!currentUser) return () => {};
+  if (!currentUser) return () => { };
 
   try {
     const q = collection(db, "branch_inventories");
-    
+
     return onSnapshot(q, (snapshot) => {
       const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
       const filtered = (currentUser?.role === 'STAFF_BRANCH')
-        ? list.filter(b => b.branchId === currentUser.branchId)
+        ? list.filter(b => {
+            const userBranchId = (currentUser.branchId || '').toLowerCase();
+            const userBranchName = (currentUser.branchName || '').toLowerCase();
+            const itemBranchId = (b.branchId || '').toLowerCase();
+            const itemBranchName = (b.branchName || '').toLowerCase();
+
+            return (
+              (userBranchId && (itemBranchId === userBranchId || itemBranchName === userBranchId)) ||
+              (userBranchName && (itemBranchName === userBranchName || itemBranchId === userBranchName))
+            );
+          })
         : list;
       onUpdate(filtered);
     }, (err) => {
@@ -972,13 +1258,13 @@ export const subscribeBranchInventories = (currentUser, onUpdate) => {
     });
   } catch (err) {
     console.error("Failed to subscribe branch_inventories:", err);
-    return () => {};
+    return () => { };
   }
 };
 
 export const subscribeStockRequests = (currentUser, onUpdate) => {
   ensureFirebase();
-  if (!currentUser) return () => {};
+  if (!currentUser) return () => { };
 
   try {
     const q = query(collection(db, "stock_requests"), orderBy("requestedAt", "desc"), limit(100));
@@ -993,7 +1279,7 @@ export const subscribeStockRequests = (currentUser, onUpdate) => {
     });
   } catch (err) {
     console.error("Failed to subscribe stock_requests:", err);
-    return () => {};
+    return () => { };
   }
 };
 
@@ -1017,7 +1303,7 @@ export const subscribeStockMovements = (currentUser, onUpdate) => {
     });
   } catch (err) {
     console.error("Failed to subscribe stock_movements:", err);
-    return () => {};
+    return () => { };
   }
 };
 
@@ -1034,7 +1320,7 @@ export const subscribeBranches = (onUpdate) => {
     });
   } catch (err) {
     console.error("Failed to subscribe branches:", err);
-    return () => {};
+    return () => { };
   }
 };
 
@@ -1051,7 +1337,7 @@ export const subscribeBrands = (onUpdate) => {
     });
   } catch (err) {
     console.error("Failed to subscribe brands:", err);
-    return () => {};
+    return () => { };
   }
 };
 
@@ -1068,13 +1354,13 @@ export const subscribeMachineCategories = (onUpdate) => {
     });
   } catch (err) {
     console.error("Failed to subscribe machine_categories:", err);
-    return () => {};
+    return () => { };
   }
 };
 
 export const subscribeUsers = (currentUser, onUpdate) => {
   ensureFirebase();
-  if (!currentUser || currentUser.role === 'STAFF_BRANCH') return () => {};
+  if (!currentUser || currentUser.role === 'STAFF_BRANCH') return () => { };
 
   try {
     const q = collection(db, "users");
@@ -1087,7 +1373,7 @@ export const subscribeUsers = (currentUser, onUpdate) => {
     });
   } catch (err) {
     console.error("Failed to subscribe users:", err);
-    return () => {};
+    return () => { };
   }
 };
 
@@ -1213,7 +1499,7 @@ export const confirmBatchTransferReceipt = async (transferListOrIds, receiverUse
     const promises = list.map(async (transferOrId) => {
       const id = typeof transferOrId === 'string' ? transferOrId : transferOrId.id;
       let transferObj = typeof transferOrId === 'object' ? transferOrId : null;
-      
+
       const docRef = doc(db, "stock_transfers", id);
       if (!transferObj || !transferObj.productId || !transferObj.qty) {
         const snap = await getDoc(docRef);
@@ -1352,25 +1638,126 @@ export const rejectBatchTransferReceipt = async (transferListOrIds, receiverUser
   };
 
   try {
+    let totalRefundValue = 0;
+    let targetBranchId = null;
+    let resolvedDeliveryNote = '-';
+    let resolvedBranchName = receiverUser?.branchName || 'Cabang';
+
     const promises = list.map(async (transferOrId) => {
+      let transferObj = (typeof transferOrId === 'object' && transferOrId !== null) ? transferOrId : null;
       const id = typeof transferOrId === 'string' ? transferOrId : transferOrId.id;
       const docRef = doc(db, "stock_transfers", id);
+
+      // If full fields not passed, read from Firestore
+      if (!transferObj || !transferObj.productId || !transferObj.qty) {
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          transferObj = { id: snap.id, ...snap.data() };
+        }
+      }
+
       await updateDoc(docRef, updateData);
+
+      const qtyToReturn = Number(transferObj?.qty) || 1;
+      const prodId = transferObj?.productId;
+      const sku = transferObj?.sku || '-';
+      const productName = transferObj?.productName || 'Produk';
+      const unit = transferObj?.unit || 'Pcs';
+      const deliveryNote = transferObj?.deliveryNote || '-';
+      const branchName = receiverUser?.branchName || transferObj?.targetBranchName || transferObj?.branch_name || 'Cabang';
+      const branchId = transferObj?.targetBranchId || transferObj?.to_branch_id || receiverUser?.branchId;
+      const itemSubtotal = Number(transferObj?.subtotal) || (Number(transferObj?.price || 0) * qtyToReturn);
+
+      if (branchId) targetBranchId = branchId;
+      if (deliveryNote !== '-') resolvedDeliveryNote = deliveryNote;
+      if (branchName) resolvedBranchName = branchName;
+      totalRefundValue += itemSubtotal;
+
+      // 1. Record stock movement IN (Retur Gudang Pusat)
+      // Note: skipMasterProductUpdate is false by default, which triggers increment(qtyToReturn) on products/{prodId}.currentStock!
+      await recordStockMovement({
+        productId: prodId,
+        sku: sku,
+        productName: productName,
+        type: 'IN',
+        qty: qtyToReturn,
+        unit: unit,
+        transactionType: 'TRANSFER_REJECTED_RETURN',
+        deliveryNote: deliveryNote,
+        source: branchName,
+        targetBranchId: branchId,
+        targetBranchName: branchName,
+        branchId: 'ALL',
+        branchName: 'Pusat (Semua Cabang)',
+        notes: `[RETUR / DITOLAK CABANG] Kiriman ${deliveryNote} ditolak oleh ${branchName}. Alasan: "${reason}". Stok barang (+${qtyToReturn} ${unit}) otomatis dikembalikan ke inventaris Gudang Pusat.`,
+        user: receiverUser?.name || 'Staff Cabang',
+        rejectionReason: reason,
+        status: 'REJECTED_RETURN',
+        transferStatus: 'REJECTED',
+        skipMasterProductUpdate: false
+      });
+
+      // 2. Mark original OUT movement in stock_movements as REJECTED
+      try {
+        if (deliveryNote && deliveryNote !== '-') {
+          const smQ = query(collection(db, "stock_movements"), where("deliveryNote", "==", deliveryNote));
+          const smSnap = await getDocs(smQ);
+          for (const smDoc of smSnap.docs) {
+            const smData = smDoc.data();
+            if (smData.type === 'OUT') {
+              await updateDoc(smDoc.ref, {
+                transferStatus: 'REJECTED',
+                rejectionReason: reason
+              });
+            }
+          }
+        }
+      } catch (smErr) {
+        console.warn("Could not update original movement status:", smErr);
+      }
+
       return id;
     });
 
     const rejectedIds = await Promise.all(promises);
 
-    const firstItem = typeof list[0] === 'object' ? list[0] : null;
-    const deliveryNote = firstItem?.deliveryNote || '-';
-    const branchName = receiverUser?.branchName || firstItem?.targetBranchName || 'Cabang';
+    // 3. Revert credit_used on branch & cancel unpaid invoice if applicable
+    if (targetBranchId && totalRefundValue > 0) {
+      try {
+        await updateDoc(doc(db, "branches", targetBranchId), {
+          credit_used: increment(-totalRefundValue)
+        });
 
+        const invQ = query(
+          collection(db, "invoices"), 
+          where("branch_id", "==", targetBranchId), 
+          where("status", "==", "UNPAID")
+        );
+        const invSnap = await getDocs(invQ);
+        for (const invDoc of invSnap.docs) {
+          const invData = invDoc.data();
+          if (invData.total_amount === totalRefundValue) {
+            await updateDoc(invDoc.ref, {
+              status: 'CANCELLED',
+              cancellation_reason: `Kiriman ditolak cabang (SJ: ${resolvedDeliveryNote})`
+            });
+            break;
+          }
+        }
+      } catch (creditErr) {
+        console.warn("Could not revert branch credit/invoice:", creditErr);
+      }
+    }
+
+    // 4. Create Notification for Pusat/Admin
     await createNotification({
       type: 'STOCK_TRANSFER_REJECTED',
       title: 'Kiriman Ditolak oleh Cabang ⚠️',
-      message: `${branchName} MENOLAK paket kiriman (${rejectedIds.length} produk, No. Surat Jalan: ${deliveryNote}). Alasan: "${reason || '-'}"`,
+      message: `${resolvedBranchName} MENOLAK paket kiriman (${rejectedIds.length} produk, No. Surat Jalan: ${resolvedDeliveryNote}). Alasan: "${reason || '-'}"`,
       targetRole: 'ADMIN_AND_PUSAT',
-      metaId: rejectedIds[0]
+      metaId: rejectedIds[0],
+      deliveryNote: resolvedDeliveryNote,
+      rejectionReason: reason
     });
 
     return rejectedIds;
@@ -1516,8 +1903,8 @@ export const fetchTransactions = async () => {
   try {
     const q = query(collection(db, "stock_movements"), orderBy("createdAt", "desc"), limit(100));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(docSnap => ({ 
-      id: docSnap.id, 
+    return snapshot.docs.map(docSnap => ({
+      id: docSnap.id,
       ...docSnap.data(),
       createdAt: docSnap.data().createdAt?.toDate ? docSnap.data().createdAt.toDate().toISOString() : docSnap.data().createdAt
     }));
@@ -1536,7 +1923,7 @@ export const purgeTransactions = async (branchId, currentUser) => {
   try {
     const colRef = collection(db, "stock_movements");
     const snapshot = await getDocs(query(colRef));
-    
+
     const docsToDelete = snapshot.docs.filter(doc => {
       const data = doc.data();
       if (!branchId || branchId === 'ALL') return true;
@@ -1555,7 +1942,7 @@ export const purgeTransactions = async (branchId, currentUser) => {
       }
       await batch.commit();
     }
-    
+
     console.warn(`[PURGE ALERT] Admin ${currentUser.name} (${currentUser.email}) has permanently purged ${docsToDelete.length} transaction records for branch filter: ${branchId}`);
     return docsToDelete.length;
   } catch (err) {
@@ -1569,7 +1956,7 @@ export const recordStockMovement = async (movementData) => {
   const isIncrement = movementData.type === 'IN';
   const qtyChange = Number(movementData.qty) || 1;
   const hasMultipleItems = Boolean(movementData.items && Array.isArray(movementData.items) && movementData.items.length > 0);
-  
+
   const movement = {
     ...movementData,
     qty: qtyChange,
@@ -1685,7 +2072,7 @@ export const fetchBranches = async () => {
 export const createBranch = async (branchData) => {
   ensureFirebase();
   const isPusatChoice = Boolean(branchData.isPusat) || branchData.code === 'GUDANG-PUSAT';
-  
+
   if (isPusatChoice) {
     const snapshot = await getDocs(collection(db, "branches"));
     const existingPusat = snapshot.docs.some(docSnap => docSnap.data().isPusat === true || docSnap.data().code === 'GUDANG-PUSAT');
@@ -1728,7 +2115,7 @@ export const updateBranch = async (id, branchData) => {
   try {
     const docRef = doc(db, "branches", id);
     await updateDoc(docRef, updatedData);
-    
+
     return { id, ...updatedData };
   } catch (err) {
     console.error("Firestore error updating branch:", err);
@@ -1754,12 +2141,24 @@ export const deleteBranch = async (id) => {
       const { writeBatch } = await import('firebase/firestore');
       const batch = writeBatch(db);
       usersSnap.forEach(uDoc => {
-        batch.update(uDoc.ref, { 
+        batch.update(uDoc.ref, {
           status: 'INACTIVE',
-          branchName: '(Cabang Dihapus)' 
+          branchName: '(Cabang Dihapus)'
         });
       });
       await batch.commit();
+    }
+
+    // Also cleanup all branch_inventories belonging to this branch
+    const invQuery = query(collection(db, "branch_inventories"), where("branchId", "==", id));
+    const invSnap = await getDocs(invQuery);
+    if (!invSnap.empty) {
+      const { writeBatch } = await import('firebase/firestore');
+      const batchInv = writeBatch(db);
+      invSnap.forEach(iDoc => {
+        batchInv.delete(iDoc.ref);
+      });
+      await batchInv.commit();
     }
 
     await deleteDoc(docRef);
@@ -1843,7 +2242,7 @@ export const createUser = async (userData) => {
   }
 
   const email = (userData.email || '').trim().toLowerCase();
-  
+
   if (email) {
     const q = query(collection(db, "users"), where("email", "==", email));
     const snap = await getDocs(q);
@@ -1867,7 +2266,7 @@ export const createUser = async (userData) => {
     return result.user || { id: result.user?.id || Date.now(), ...payload };
   } catch (fnErr) {
     console.warn("Cloud function create user fallback, registering via client Firebase Auth:", fnErr);
-    
+
     let authUid = null;
     if (userData.password && userData.password.trim()) {
       try {
@@ -1951,10 +2350,20 @@ export const updateUser = async (id, userData) => {
 export const deleteUser = async (id) => {
   ensureFirebase();
   try {
+    const userDocRef = doc(db, "users", id);
+    const userSnap = await getDoc(userDocRef);
+    if (userSnap.exists()) {
+      const data = userSnap.data();
+      if (data.email === 'admin@perusahaan.com' || (data.role === 'ADMIN' && data.isProtected)) {
+        throw new Error("Akun Administrator Utama (Pusat) dilindungi sistem dan tidak dapat dihapus.");
+      }
+    }
+
     await callDeleteSystemUser(id);
     await markBootstrapDone();
     return true;
   } catch (fnErr) {
+    if (fnErr.message && fnErr.message.includes("tidak dapat dihapus")) throw fnErr;
     console.warn("Cloud function delete user fallback to direct Firestore:", fnErr);
     await deleteDoc(doc(db, "users", id));
     await markBootstrapDone();
@@ -1997,7 +2406,7 @@ export const createSparkPlanStockTransfer = async (transferData, callerUid = 'ad
     } catch (e) {
       console.warn("Could not read product_pricings for", item.productId);
     }
-    
+
     totalValue += (appliedPrice * item.qty);
     calculatedItems.push({
       productId: item.productId,
@@ -2025,7 +2434,7 @@ export const createSparkPlanStockTransfer = async (transferData, callerUid = 'ad
       updated_at: serverTimestamp()
     });
 
-    const invoiceId = `INV-${Date.now()}-${toBranchId.substring(0,4).toUpperCase()}`;
+    const invoiceId = `INV-${Date.now()}-${toBranchId.substring(0, 4).toUpperCase()}`;
     await setDoc(doc(db, "invoices", invoiceId), {
       id: invoiceId,
       branch_id: toBranchId,
@@ -2039,10 +2448,10 @@ export const createSparkPlanStockTransfer = async (transferData, callerUid = 'ad
   }
 
   // 4. Create Stock Transfer (1 document per item)
-  const deliveryNote = `SJ-HQ-${Math.floor(1000 + Math.random() * 9000)}`;
-  
+  const deliveryNote = transferData.deliveryNote || `SJ-HQ-${Math.floor(1000 + Math.random() * 9000)}`;
+
   for (const item of calculatedItems) {
-    const transferId = `TRF-${Date.now()}-${(item.sku || 'SKU').substring(0,5)}-${Math.floor(Math.random() * 1000)}`;
+    const transferId = `TRF-${Date.now()}-${(item.sku || 'SKU').substring(0, 5)}-${Math.floor(Math.random() * 1000)}`;
     const transferPayload = {
       id: transferId,
       productId: item.productId,
@@ -2053,12 +2462,12 @@ export const createSparkPlanStockTransfer = async (transferData, callerUid = 'ad
       unit: item.unit || 'Pcs',
       price: item.price,
       subtotal: item.subtotal,
-      
-      targetBranchId: toBranchId, 
+
+      targetBranchId: toBranchId,
       to_branch_id: toBranchId,
       targetBranchName: branchData.name,
       branch_name: branchData.name,
-      
+
       status: 'IN_TRANSIT',
       created_by: callerUid,
       created_at: serverTimestamp(),

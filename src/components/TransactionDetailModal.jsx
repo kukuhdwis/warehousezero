@@ -1,0 +1,544 @@
+import React from 'react';
+import { 
+  X, 
+  Download, 
+  Printer, 
+  ArrowDownLeft, 
+  ArrowUpRight, 
+  Boxes, 
+  User, 
+  Building2, 
+  Clock, 
+  Receipt, 
+  FileText, 
+  Calendar, 
+  CheckCircle2, 
+  ShoppingBag, 
+  MapPin, 
+  CreditCard,
+  Copy,
+  Check
+} from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+export default function TransactionDetailModal({ 
+  isOpen, 
+  onClose, 
+  transaction, 
+  products = [] 
+}) {
+  const [copiedInvoice, setCopiedInvoice] = React.useState(false);
+
+  if (!isOpen || !transaction) return null;
+
+  const isRejectedReturn = Boolean(transaction.transactionType === 'TRANSFER_REJECTED_RETURN' || transaction.status === 'REJECTED_RETURN');
+  const isOutboundRejected = Boolean(transaction.transferStatus === 'REJECTED');
+  const isRejected = isRejectedReturn || isOutboundRejected || Boolean(transaction.rejectionReason);
+
+  const isInbound = transaction.type === 'IN' && !isRejectedReturn;
+  const isTransfer = Boolean(
+    transaction.transactionType === 'STOCK_TRANSFER_TO_BRANCH' || 
+    transaction.transactionType === 'STOCK_TRANSFER' ||
+    transaction.targetBranchId ||
+    transaction.targetBranchName
+  );
+  const isSale = !isInbound && !isTransfer && !isRejectedReturn;
+  const isBundling = Boolean(transaction.isBundling || transaction.transactionType === 'CUSTOM_BUNDLING');
+
+  // Format date helper
+  const formatTime = (ts) => {
+    if (!ts) return '-';
+    try {
+      if (ts.toDate) return ts.toDate().toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      if (ts.seconds) return new Date(ts.seconds * 1000).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return new Date(ts).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+      return '-';
+    }
+  };
+
+  const invoiceNo = transaction.invoiceNumber || transaction.deliveryNote || transaction.id || `#TRX-${Date.now().toString().slice(-6)}`;
+  const dateFormatted = formatTime(transaction.createdAt || transaction.timestamp || transaction.date);
+
+  // Normalize items array
+  let rawItems = [];
+  if (isBundling) {
+    if (transaction.bundles && transaction.bundles.length > 0) {
+      rawItems = transaction.bundles.map(b => ({
+        sku: b.sku || b.code || 'PAKET-BUNDLE',
+        productName: b.productName || b.name || 'Paket Bundling',
+        qty: Number(b.qty || 1),
+        unit: b.unit || 'Paket',
+        price: Number(b.price || b.unitPrice || (b.subtotal ? b.subtotal / (Number(b.qty) || 1) : 0)),
+        costPrice: Number(b.costPrice || 0),
+        notes: b.notes || (b.items ? b.items.map(c => `${(Number(c.qty) || 1) * (Number(b.qty) || 1)}x ${c.productName}`).join(', ') : '-')
+      }));
+    } else {
+      // Single bundle fallback
+      const compSummary = transaction.items ? transaction.items.map(c => `${c.qty}x ${c.productName}`).join(', ') : '';
+      rawItems = [{
+        sku: transaction.sku || 'PAKET-BUNDLE',
+        productName: transaction.productName || 'Paket Bundling',
+        qty: Number(transaction.bundleQty || transaction.qty || 1),
+        unit: 'Paket',
+        price: Number(transaction.totalPrice ? (transaction.totalPrice / (Number(transaction.bundleQty || transaction.qty || 1))) : (transaction.price || 0)),
+        costPrice: Number(transaction.costPrice || 0),
+        notes: compSummary || transaction.notes || '-'
+      }];
+    }
+  } else {
+    rawItems = transaction.items || transaction.bundleItems || [];
+  }
+
+  const normalizedItems = rawItems.length > 0 
+    ? rawItems.map(it => ({
+        sku: it.sku || '-',
+        productName: it.productName || it.product_name || it.name || 'Produk',
+        qty: Number(it.qty || it.quantity || 1),
+        unit: it.unit || (isBundling ? 'Paket' : 'Pcs'),
+        price: Number(it.price || it.selling_price || it.sellingPrice || 0),
+        costPrice: Number(it.costPrice || it.cost_price || it.reseller_price || 0),
+        notes: it.notes || '-'
+      }))
+    : [{
+        sku: transaction.sku || '-',
+        productName: transaction.productName || 'Produk',
+        qty: Number(transaction.qty || 1),
+        unit: transaction.unit || (isBundling ? 'Paket' : 'Pcs'),
+        price: Number(transaction.price || (transaction.totalPrice ? (transaction.totalPrice / (Number(transaction.qty) || 1)) : 0)),
+        costPrice: Number(transaction.costPrice || 0),
+        notes: transaction.notes || '-'
+      }];
+
+  const totalCalculatedQty = normalizedItems.reduce((acc, it) => acc + it.qty, 0);
+  const totalCalculatedAmount = normalizedItems.reduce((acc, it) => acc + (it.price * it.qty), 0);
+  const displayTotalAmount = Number(transaction.totalPrice || totalCalculatedAmount);
+
+  // Copy invoice number to clipboard
+  const handleCopyInvoice = () => {
+    if (invoiceNo) {
+      navigator.clipboard.writeText(invoiceNo);
+      setCopiedInvoice(true);
+      setTimeout(() => setCopiedInvoice(false), 2000);
+    }
+  };
+
+  // Frontend On-Demand PDF Generation (jsPDF + autoTable)
+  const handleDownloadPDF = () => {
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      
+      // Determine Document Title
+      let title = "BUKTI TRANSAKSI";
+      let docSubtitle = "Warehouse Zero Inventory System";
+      if (isTransfer) {
+        title = "SURAT JALAN PENGIRIMAN";
+        docSubtitle = "Dokumen Resmi Pengiriman Barang Antar Gudang";
+      } else if (isSale) {
+        title = "NOTA PENJUALAN";
+        docSubtitle = "Faktur & Bukti Pembayaran Penjualan";
+      } else if (isInbound) {
+        title = "BUKTI PENERIMAAN BARANG";
+        docSubtitle = "Surat Tanda Terima Barang Masuk Gudang";
+      }
+
+      // --- HEADER ---
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.text(title, pageWidth - 14, 22, { align: 'right' });
+
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.text(docSubtitle, pageWidth - 14, 27, { align: 'right' });
+
+      // Company/Warehouse Brand Header
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text("WAREHOUSE ZERO", 14, 20);
+      
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      const branchOrigin = transaction.branchName || "Gudang Pusat";
+      doc.text(`Lokasi Gudang: ${branchOrigin}`, 14, 25);
+
+      // Horizontal separator
+      doc.setLineWidth(0.4);
+      doc.setDrawColor(200, 200, 200);
+      doc.line(14, 30, pageWidth - 14, 30);
+
+      // --- INFO METADATA ---
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.text("INFORMASI TRANSAKSI:", 14, 37);
+
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.text("No. Dokumen / Nota", 14, 43);
+      doc.text("Tanggal & Waktu", 14, 49);
+      doc.text("Petugas Pelaksana", 14, 55);
+
+      doc.setFont("helvetica", "normal");
+      doc.text(`: ${invoiceNo}`, 50, 43);
+      doc.text(`: ${dateFormatted}`, 50, 49);
+      doc.text(`: ${transaction.user || transaction.performerName || 'Staff'}`, 50, 55);
+
+      // Right-side Info: Customer / Destination
+      doc.setFont("helvetica", "bold");
+      if (isSale) {
+        doc.text("Nama Pembeli", pageWidth - 80, 43);
+        doc.text("Platform Penjualan", pageWidth - 80, 49);
+        doc.text("Metode Pembayaran", pageWidth - 80, 55);
+
+        doc.setFont("helvetica", "normal");
+        doc.text(`: ${transaction.customerName || 'Walk-in Customer'}`, pageWidth - 45, 43);
+        doc.text(`: ${transaction.platformName || transaction.salesPlatform || 'Offline'}`, pageWidth - 45, 49);
+        doc.text(`: ${transaction.paymentMethod || 'Tunai / Cash'}`, pageWidth - 45, 55);
+      } else if (isTransfer) {
+        doc.text("Gudang Asal", pageWidth - 80, 43);
+        doc.text("Cabang Tujuan", pageWidth - 80, 49);
+        doc.text("Status Kirim", pageWidth - 80, 55);
+
+        doc.setFont("helvetica", "normal");
+        doc.text(`: ${transaction.sourceBranchName || transaction.branchName || 'Pusat'}`, pageWidth - 45, 43);
+        doc.text(`: ${transaction.targetBranchName || 'Cabang Tujuan'}`, pageWidth - 45, 49);
+        doc.text(`: ${transaction.transferStatus || 'Terkirim'}`, pageWidth - 45, 55);
+      } else {
+        doc.text("Asal Barang", pageWidth - 80, 43);
+        doc.text("Gudang Tujuan", pageWidth - 80, 49);
+        doc.text("Status", pageWidth - 80, 55);
+
+        doc.setFont("helvetica", "normal");
+        doc.text(`: ${transaction.source || 'Pemasok / Pusat'}`, pageWidth - 45, 43);
+        doc.text(`: ${transaction.branchName || 'Gudang'}`, pageWidth - 45, 49);
+        doc.text(`: Selesai (Diterima)`, pageWidth - 45, 55);
+      }
+
+      // --- TABLE ITEMS ---
+      const tableColumn = ["No", "SKU", "Nama Produk & Spesifikasi", "Qty", "Satuan", "Harga Satuan (Rp)", "Total Nilai (Rp)"];
+      const tableRows = normalizedItems.map((it, idx) => {
+        const nameWithDetails = (it.notes && it.notes !== '-') ? `${it.productName}\n(Komponen: ${it.notes})` : it.productName;
+        return [
+          idx + 1,
+          it.sku,
+          nameWithDetails,
+          it.qty,
+          it.unit,
+          isSale && it.price > 0 ? `Rp ${it.price.toLocaleString('id-ID')}` : '-',
+          isSale && it.price > 0 ? `Rp ${(it.price * it.qty).toLocaleString('id-ID')}` : '-'
+        ];
+      });
+
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 62,
+        theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 2.5, textColor: [40, 40, 40], lineColor: [220, 220, 220], lineWidth: 0.1 },
+        headStyles: { fillColor: [240, 245, 250], textColor: [20, 30, 50], fontStyle: 'bold', lineColor: [200, 200, 200], lineWidth: 0.1 },
+        columnStyles: {
+          0: { cellWidth: 10, halign: 'center' },
+          1: { cellWidth: 28 },
+          2: { cellWidth: 'auto' },
+          3: { cellWidth: 14, halign: 'center' },
+          4: { cellWidth: 14, halign: 'center' },
+          5: { cellWidth: 32, halign: 'right' },
+          6: { cellWidth: 35, halign: 'right' }
+        }
+      });
+
+      const finalY = (doc.lastAutoTable && doc.lastAutoTable.finalY) ? doc.lastAutoTable.finalY : 70;
+
+      // --- TOTALS & SUMMARY ---
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "bold");
+      doc.text(`Total Kuantitas Fisik: ${totalCalculatedQty} Pcs (${normalizedItems.length} SKU)`, 14, finalY + 8);
+
+      if (isSale && displayTotalAmount > 0) {
+        doc.setFontSize(10);
+        doc.setTextColor(16, 115, 60);
+        doc.text(`TOTAL PEMBAYARAN: Rp ${displayTotalAmount.toLocaleString('id-ID')}`, pageWidth - 14, finalY + 8, { align: 'right' });
+        doc.setTextColor(0, 0, 0);
+      }
+
+      if (transaction.notes) {
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "italic");
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Catatan: ${transaction.notes}`, 14, finalY + 14);
+        doc.setTextColor(0, 0, 0);
+      }
+
+      // --- FOOTER & SIGNATURES ---
+      const sigY = finalY + (transaction.notes ? 20 : 15);
+      doc.setLineWidth(0.3);
+      doc.setDrawColor(200, 200, 200);
+      doc.line(14, sigY, pageWidth - 14, sigY);
+
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "italic");
+      const now = new Date();
+      const printTimeStr = new Intl.DateTimeFormat('id-ID', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZoneName: 'short'
+      }).format(now);
+      doc.setTextColor(110, 110, 110);
+      doc.text(`Dicetak pada: ${printTimeStr} • Dokumen sah Warehouse Zero`, 14, sigY + 5);
+      doc.setTextColor(0, 0, 0);
+
+      const signBoxY = sigY + 12;
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "bold");
+
+      if (isSale) {
+        doc.text("Penerima / Pembeli", 35, signBoxY, { align: 'center' });
+        doc.text("Kasir / Sales", pageWidth / 2, signBoxY, { align: 'center' });
+        doc.text("Petugas Gudang", pageWidth - 35, signBoxY, { align: 'center' });
+      } else if (isTransfer) {
+        doc.text("Penerima Cabang", 35, signBoxY, { align: 'center' });
+        doc.text("Ekspedisi / Pengirim", pageWidth / 2, signBoxY, { align: 'center' });
+        doc.text("Petugas Gudang Asal", pageWidth - 35, signBoxY, { align: 'center' });
+      } else {
+        doc.text("Pengirim / Pemasok", 35, signBoxY, { align: 'center' });
+        doc.text("Pemeriksa Kualitas", pageWidth / 2, signBoxY, { align: 'center' });
+        doc.text("Petugas Penerima", pageWidth - 35, signBoxY, { align: 'center' });
+      }
+
+      doc.setLineWidth(0.2);
+      doc.line(14, signBoxY + 22, 56, signBoxY + 22);
+      doc.line(pageWidth / 2 - 21, signBoxY + 22, pageWidth / 2 + 21, signBoxY + 22);
+      doc.line(pageWidth - 56, signBoxY + 22, pageWidth - 14, signBoxY + 22);
+
+      // --- SAVE FILE (Format: YYYY-MM-DD_[NOMOR_DOKUMEN].pdf) ---
+      let txDateObj = new Date();
+      if (transaction.timestamp) {
+        txDateObj = transaction.timestamp.toDate ? transaction.timestamp.toDate() : new Date(transaction.timestamp);
+      } else if (transaction.createdAt) {
+        txDateObj = transaction.createdAt.toDate ? transaction.createdAt.toDate() : new Date(transaction.createdAt);
+      }
+      const year = txDateObj.getFullYear();
+      const month = String(txDateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(txDateObj.getDate()).padStart(2, '0');
+      const fileDateStr = `${year}-${month}-${day}`;
+      const cleanInvoice = String(invoiceNo || 'TRX').replace(/[/\\?%*:|"<>]/g, '-').trim();
+      doc.save(`${fileDateStr}_${cleanInvoice}.pdf`);
+    } catch (err) {
+      console.error("Gagal membuat PDF dokumen:", err);
+      alert("Gagal mengunduh PDF: " + err.message);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
+      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden border border-slate-200 flex flex-col max-h-[90vh] my-auto animate-in zoom-in-95 duration-150">
+        
+        {/* MODAL HEADER */}
+        <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold flex-shrink-0 shadow-xs ${
+              isRejectedReturn
+                ? 'bg-amber-100 text-amber-800'
+                : isOutboundRejected
+                  ? 'bg-rose-100 text-rose-800'
+                  : isInbound 
+                    ? 'bg-emerald-100 text-emerald-700' 
+                    : isTransfer
+                      ? 'bg-sky-100 text-sky-700'
+                      : 'bg-rose-100 text-rose-700'
+            }`}>
+              {isRejectedReturn ? <span className="text-lg">↩️</span> : isInbound ? <ArrowDownLeft className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-slate-900 text-base">
+                  {isRejectedReturn 
+                    ? 'Bukti Retur Kiriman (Ditolak Cabang)' 
+                    : isOutboundRejected
+                      ? 'Surat Jalan Kiriman Cabang (DITOLAK)'
+                      : isTransfer 
+                        ? 'Surat Jalan Kiriman Cabang' 
+                        : isSale 
+                          ? 'Rincian Nota Penjualan' 
+                          : 'Bukti Penerimaan Barang'}
+                </h3>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                  isRejectedReturn
+                    ? 'bg-amber-100 text-amber-950 border border-amber-300'
+                    : isOutboundRejected
+                      ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                      : isInbound 
+                        ? 'bg-emerald-100 text-emerald-800' 
+                        : isTransfer 
+                          ? 'bg-sky-100 text-sky-800' 
+                          : 'bg-rose-100 text-rose-800'
+                }`}>
+                  {isRejectedReturn ? '↩️ Retur' : isOutboundRejected ? '⚠️ Ditolak' : isInbound ? 'Masuk' : isTransfer ? 'Transfer' : 'Keluar'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {dateFormatted} • Oleh: <strong className="text-slate-700">{transaction.user || 'Staff'}</strong>
+              </p>
+            </div>
+          </div>
+
+          <button 
+            onClick={onClose} 
+            className="w-8 h-8 rounded-xl hover:bg-slate-200 flex items-center justify-center text-slate-500 transition cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* MODAL BODY (SCROLLABLE) */}
+        <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4 bg-slate-50/40">
+          
+          {/* REJECTION / RETURN BANNER */}
+          {isRejected && (
+            <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl text-xs space-y-1.5 shadow-2xs">
+              <div className="flex items-center gap-2 font-extrabold text-rose-900 text-sm">
+                <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                <span>Kiriman Ditolak oleh Cabang (Paket Diretur)</span>
+              </div>
+              {transaction.rejectionReason && (
+                <p className="text-rose-800 leading-relaxed font-semibold">
+                  Alasan Penolakan: <span className="bg-white px-2 py-0.5 rounded border border-rose-200 font-bold text-rose-900">"{transaction.rejectionReason}"</span>
+                </p>
+              )}
+              <div className="text-[11px] text-rose-700 font-medium flex items-center gap-1.5 pt-1 border-t border-rose-100">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                <span>Kuantitas fisik barang otomatis dikembalikan ke inventaris master Gudang Pusat.</span>
+              </div>
+            </div>
+          )}
+
+          {/* INVOICE & DESTINATION CARD */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-100 text-xs">
+              <span className="text-slate-500 font-medium">No. Dokumen / Nota:</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md text-xs">
+                  {invoiceNo}
+                </span>
+                <button
+                  onClick={handleCopyInvoice}
+                  className="p-1 hover:bg-slate-200 rounded text-slate-500 transition cursor-pointer"
+                  title="Salin No. Nota"
+                >
+                  {copiedInvoice ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-semibold block">
+                  {isInbound ? 'Asal Barang' : isSale ? 'Pembeli / Pelanggan' : 'Gudang Tujuan'}
+                </span>
+                <span className="font-bold text-slate-800 mt-0.5 block truncate">
+                  {transaction.customerName || transaction.targetBranchName || transaction.source || transaction.branchName || 'Kantor Pusat'}
+                </span>
+              </div>
+
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-semibold block">
+                  {isSale ? 'Platform / Jalur' : 'Lokasi Gudang'}
+                </span>
+                <span className="font-bold text-slate-800 mt-0.5 block truncate">
+                  {transaction.platformName || transaction.salesPlatform || transaction.branchName || 'Cabang'}
+                </span>
+              </div>
+            </div>
+
+            {transaction.notes && (
+              <div className="p-2.5 bg-slate-50 rounded-lg text-xs text-slate-600 flex items-start gap-1.5 border border-slate-100">
+                <FileText className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
+                <span className="break-words">Catatan: {transaction.notes}</span>
+              </div>
+            )}
+          </div>
+
+          {/* ITEM LIST BREAKDOWN */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between text-xs pb-2 border-b border-slate-100">
+              <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                <Boxes className="w-4 h-4 text-sky-600" />
+                <span>Rincian Barang ({normalizedItems.length} Item)</span>
+              </span>
+              <span className="text-slate-500 font-semibold">
+                Total: <strong className="text-slate-900">{totalCalculatedQty} Pcs</strong>
+              </span>
+            </div>
+
+            <div className="divide-y divide-slate-100 space-y-2">
+              {normalizedItems.map((item, idx) => (
+                <div key={idx} className="pt-2 first:pt-0 flex items-center justify-between text-xs gap-3">
+                  <div className="space-y-0.5 flex-1 min-w-0">
+                    <div className="font-bold text-slate-800 truncate">{item.productName}</div>
+                    <div className="text-[11px] text-slate-400 font-mono">
+                      SKU: {item.sku} {item.price > 0 ? `• @ Rp ${item.price.toLocaleString('id-ID')}` : ''}
+                    </div>
+                    {item.notes && item.notes !== '-' && (
+                      <p className="text-[10px] text-purple-700 font-medium">
+                        Komponen: {item.notes}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="text-right flex-shrink-0">
+                    <span className="font-extrabold text-slate-900 bg-slate-100 px-2 py-0.5 rounded text-xs">
+                      {item.qty} {item.unit}
+                    </span>
+                    {item.price > 0 && (
+                      <div className="text-[11px] font-bold text-emerald-700 mt-0.5">
+                        Rp {(item.price * item.qty).toLocaleString('id-ID')}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* TOTAL PAYMENT (IF SALE) */}
+          {isSale && displayTotalAmount > 0 && (
+            <div className="bg-emerald-50/80 p-4 rounded-xl border border-emerald-200 flex items-center justify-between text-emerald-950 shadow-2xs">
+              <div>
+                <span className="text-[11px] font-semibold text-emerald-700 uppercase block">Total Nilai Transaksi</span>
+                <span className="text-xs text-emerald-600">Lunas / Terbayar</span>
+              </div>
+              <span className="text-lg sm:text-xl font-extrabold text-emerald-700">
+                Rp {displayTotalAmount.toLocaleString('id-ID')}
+              </span>
+            </div>
+          )}
+
+        </div>
+
+        {/* MODAL FOOTER WITH ACTIONS */}
+        <div className="p-4 sm:p-5 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center gap-2.5">
+          <button
+            onClick={handleDownloadPDF}
+            className="w-full sm:flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 transition active:scale-98 cursor-pointer shadow-md shadow-emerald-600/20"
+            title="Unduh Dokumen PDF Resmi"
+          >
+            <Download className="w-4 h-4" />
+            <span>Download Dokumen ({isTransfer ? 'Surat Jalan PDF' : isSale ? 'Nota Penjualan PDF' : 'Bukti Terima PDF'})</span>
+          </button>
+
+          <button
+            onClick={onClose}
+            className="w-full sm:w-auto px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs sm:text-sm transition cursor-pointer"
+          >
+            Tutup
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}

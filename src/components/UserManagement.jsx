@@ -471,18 +471,24 @@ export default function UserManagement({
                     <span>Ubah User</span>
                   </button>
 
-                  <button
-                    onClick={() => setDeleteConfirmUser(user)}
-                    disabled={isCurrent}
-                    className={`p-2 rounded-xl text-xs transition ${
-                      isCurrent 
-                        ? 'bg-slate-100 text-slate-300 cursor-not-allowed' 
-                        : 'bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer'
-                    }`}
-                    title={isCurrent ? "Tidak dapat menghapus akun aktif" : "Hapus Pengguna"}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {user.email === 'admin@perusahaan.com' ? (
+                    <span className="px-2.5 py-1.5 bg-slate-100 text-slate-400 rounded-xl text-[10px] font-bold border border-slate-200">
+                      Root Admin
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => setDeleteConfirmUser(user)}
+                      disabled={isCurrent}
+                      className={`p-2 rounded-xl text-xs transition ${
+                        isCurrent 
+                          ? 'bg-slate-100 text-slate-300 cursor-not-allowed' 
+                          : 'bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer'
+                      }`}
+                      title={isCurrent ? "Tidak dapat menghapus akun aktif" : "Hapus Pengguna"}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
 
               </div>
@@ -623,18 +629,24 @@ export default function UserManagement({
                             <Edit3 className="w-4 h-4" />
                           </button>
                           
-                          <button
-                            onClick={() => setDeleteConfirmUser(user)}
-                            disabled={isCurrent}
-                            className={`p-1.5 rounded-lg transition ${
-                              isCurrent 
-                                ? 'text-slate-300 cursor-not-allowed' 
-                                : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50 cursor-pointer'
-                            }`}
-                            title={isCurrent ? 'Tidak dapat menghapus akun sendiri' : 'Hapus Pengguna'}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {user.email === 'admin@perusahaan.com' ? (
+                            <span className="px-2 py-1 bg-slate-100 text-slate-400 rounded-lg text-[10px] font-bold border border-slate-200">
+                              Root Admin
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => setDeleteConfirmUser(user)}
+                              disabled={isCurrent}
+                              className={`p-1.5 rounded-lg transition ${
+                                isCurrent 
+                                  ? 'text-slate-300 cursor-not-allowed' 
+                                  : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50 cursor-pointer'
+                              }`}
+                              title={isCurrent ? 'Tidak dapat menghapus akun sendiri' : 'Hapus Pengguna'}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

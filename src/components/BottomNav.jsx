@@ -79,25 +79,27 @@ export default function BottomNav({
                 </div>
               </button>
 
-              {(isAdmin || currentUser?.role === 'STAFF_PUSAT' || currentUser?.role === 'PUSAT') && (
-                <button
-                  onClick={() => {
-                    setActiveTab('monitoring');
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-medium text-sm transition ${
-                    activeTab === 'monitoring' ? 'bg-amber-50 text-amber-700 font-semibold' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
-                    <Eye className="w-5 h-5" />
-                  </div>
-                  <div className="text-left flex-1">
-                    <p className="font-semibold text-sm">Monitoring Cabang</p>
-                    <p className="text-xs text-slate-400">Transparansi inventaris tiap cabang & staff</p>
-                  </div>
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  setActiveTab('monitoring');
+                  setIsMoreMenuOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-medium text-sm transition ${
+                  activeTab === 'monitoring' ? 'bg-amber-50 text-amber-700 font-semibold' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
+                  <Eye className="w-5 h-5" />
+                </div>
+                <div className="text-left flex-1">
+                  <p className="font-semibold text-sm">
+                    {currentUser?.role === 'STAFF_BRANCH' ? 'Monitoring Toko' : 'Monitoring Cabang'}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {currentUser?.role === 'STAFF_BRANCH' ? 'Transparansi stok & estimasi profit toko' : 'Transparansi stok & estimasi profit cabang'}
+                  </p>
+                </div>
+              </button>
 
               {isAdmin && (
                 <>

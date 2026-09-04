@@ -157,14 +157,52 @@ export const loginUser = async (email, password) => {
       console.warn('Gagal memuat detail profil tambahan dari Firestore:', err);
     }
 
-    // 3. Check if user is marked INACTIVE in Firestore profile
+    // 3. Verify user profile exists in Firestore (unless root admin initial setup)
+    if (!profileData.id) {
+      if (cleanEmail === 'admin@perusahaan.com') {
+        // Root admin fallback profile
+        profileData = {
+          name: 'Administrator (Pusat)',
+          email: 'admin@perusahaan.com',
+          role: 'ADMIN',
+          branchId: 'ALL',
+          branchName: 'Semua Cabang (Pusat)',
+          status: 'ACTIVE'
+        };
+      } else {
+        if (auth) await signOut(auth);
+        localStorage.removeItem(STORAGE_KEY);
+        throw new Error('Akun Anda tidak terdaftar atau telah dihapus oleh Administrator. Silakan hubungi admin sistem.');
+      }
+    }
+
+    // 4. Check if user is marked INACTIVE in Firestore profile
     if (profileData.status === 'INACTIVE') {
       if (auth) await signOut(auth);
       localStorage.removeItem(STORAGE_KEY);
-      throw new Error('Akun Anda dinonaktifkan oleh Administrator. Silakan hubungi admin sistem.');
+      throw new Error('Akun Anda telah dinonaktifkan oleh Administrator. Silakan hubungi admin sistem.');
     }
 
-    // 4. Construct secure session compatible with App.jsx
+    // 5. If branch staff, verify branch existence & active status in Firestore
+    if (profileData.role === 'STAFF_BRANCH' && profileData.branchId && profileData.branchId !== 'ALL') {
+      try {
+        const branchDocRef = doc(db, 'branches', profileData.branchId);
+        const branchDocSnap = await getDoc(branchDocRef);
+        if (!branchDocSnap.exists() || branchDocSnap.data()?.status === 'INACTIVE') {
+          if (auth) await signOut(auth);
+          localStorage.removeItem(STORAGE_KEY);
+          throw new Error('Cabang untuk akun ini telah dihapus atau tidak aktif. Silakan hubungi Administrator.');
+        }
+        if (branchDocSnap.data()?.name) {
+          profileData.branchName = branchDocSnap.data().name;
+        }
+      } catch (brErr) {
+        if (brErr.message.includes('telah dihapus')) throw brErr;
+        console.warn('Gagal memverifikasi status cabang:', brErr);
+      }
+    }
+
+    // 6. Construct secure session compatible with App.jsx
     const claims = idTokenResult?.claims || {};
     const userSession = {
       uid: firebaseUser.uid,
@@ -172,7 +210,7 @@ export const loginUser = async (email, password) => {
       name: profileData.name || firebaseUser.displayName || cleanEmail.split('@')[0],
       role: profileData.role || claims.role || 'STAFF_BRANCH',
       branchId: profileData.branchId || claims.branch_id || 'ALL',
-      branchName: profileData.branchName || (claims.branch_name) || (profileData.role === 'ADMIN' ? 'Semua Cabang (Pusat)' : 'Gudang Cabang'),
+      branchName: profileData.branchName || (claims.branch_name) || (profileData.role === 'ADMIN' ? 'Semua Cabang (Pusat)' : 'Cabang'),
       phone: profileData.phone || '',
       status: profileData.status || 'ACTIVE'
     };

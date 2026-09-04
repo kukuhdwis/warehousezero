@@ -565,20 +565,21 @@ export default function SpreadsheetImportModal({
                     <thead className="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200 sticky top-0 z-10">
                       <tr>
                         <th className="px-3 py-3 text-center whitespace-nowrap min-w-[50px]">No</th>
+                        <th className="px-3 py-3 whitespace-nowrap min-w-[110px]">Merk</th>
                         <th className="px-3 py-3 whitespace-nowrap min-w-[130px]">SKU / Kode</th>
-                        <th className="px-3 py-3 text-center whitespace-nowrap min-w-[100px]">Mesin</th>
+                        <th className="px-3 py-3 text-center whitespace-nowrap min-w-[90px]">Mesin</th>
                         <th className="px-4 py-3 min-w-[200px]">Komponen & Nama</th>
                         <th className="px-4 py-3 min-w-[160px]">Varian Mobil</th>
-                        <th className="px-3 py-3 text-right whitespace-nowrap min-w-[120px]">Harga Reseller</th>
                         <th className="px-3 py-3 text-right whitespace-nowrap min-w-[120px]">Harga Jual</th>
-                        <th className="px-3 py-3 text-right whitespace-nowrap min-w-[120px]">Profit (%)</th>
+                        <th className="px-3 py-3 text-right whitespace-nowrap min-w-[120px]">Harga Reseller</th>
+                        <th className="px-3 py-3 text-right whitespace-nowrap min-w-[120px]">Harga Distributor</th>
                         <th className="px-4 py-3 text-center whitespace-nowrap min-w-[110px]">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {filteredPreviewItems.length === 0 ? (
                         <tr>
-                          <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                          <td colSpan={10} className="px-4 py-8 text-center text-slate-400">
                             Tidak ada baris yang sesuai dengan filter pratinjau.
                           </td>
                         </tr>
@@ -596,6 +597,12 @@ export default function SpreadsheetImportModal({
                           >
                             <td className="px-3 py-2.5 text-center font-mono text-slate-400 whitespace-nowrap">
                               {item.no}
+                            </td>
+
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 whitespace-nowrap">
+                                {item.brand || 'NDK Exhaust'}
+                              </span>
                             </td>
 
                             <td className="px-3 py-2.5 whitespace-nowrap">
@@ -630,21 +637,16 @@ export default function SpreadsheetImportModal({
                               </div>
                             </td>
 
-                            <td className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">
-                              Rp {item.reseller_price.toLocaleString('id-ID')}
-                            </td>
-
                             <td className="px-3 py-2.5 text-right font-bold text-slate-900 whitespace-nowrap">
-                              Rp {item.selling_price.toLocaleString('id-ID')}
+                              Rp {(item.selling_price || 0).toLocaleString('id-ID')}
                             </td>
 
-                            <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                              <div className="font-extrabold text-emerald-600 whitespace-nowrap">
-                                +Rp {item.profit_amount.toLocaleString('id-ID')}
-                              </div>
-                              <div className="text-[10px] font-bold text-emerald-800 whitespace-nowrap">
-                                {item.profit_percentage}%
-                              </div>
+                            <td className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">
+                              Rp {(item.reseller_price || 0).toLocaleString('id-ID')}
+                            </td>
+
+                            <td className="px-3 py-2.5 text-right font-medium text-sky-700 whitespace-nowrap">
+                              Rp {(item.distributor_price || item.reseller_price || 0).toLocaleString('id-ID')}
                             </td>
 
                             <td className="px-4 py-2.5 text-center whitespace-nowrap">

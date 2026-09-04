@@ -684,12 +684,7 @@ const parseScannedSKU = (text) => {
 
             {/* CTA Button to open Request Modal */}
             <button
-              onClick={() => {
-                if (safeProducts.length > 0 && !reqProductId) {
-                  setReqProductId(safeProducts[0].id);
-                }
-                setIsRequestModalOpen(true);
-              }}
+              onClick={() => setIsRequestModalOpen(true)}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
@@ -875,12 +870,7 @@ const parseScannedSKU = (text) => {
                     Jika stok fisik di cabang mulai menipis, Anda dapat menekan tombol <strong>+ Request Stok ke Pusat</strong> untuk mengajukan pengiriman baru.
                   </p>
                   <button
-                    onClick={() => {
-                      if (safeProducts.length > 0 && !reqProductId) {
-                        setReqProductId(safeProducts[0].id);
-                      }
-                      setIsRequestModalOpen(true);
-                    }}
+                    onClick={() => setIsRequestModalOpen(true)}
                     className="mt-3 px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl active:scale-95 transition cursor-pointer"
                   >
                     + Buat Permintaan Stok Sekarang
@@ -937,12 +927,7 @@ const parseScannedSKU = (text) => {
                   <Boxes className="w-8 h-8 mx-auto text-slate-300 stroke-1" />
                   <p className="text-sm font-medium">Belum ada pengajuan permintaan stok.</p>
                   <button
-                    onClick={() => {
-                      if (safeProducts.length > 0 && !reqProductId) {
-                        setReqProductId(safeProducts[0].id);
-                      }
-                      setIsRequestModalOpen(true);
-                    }}
+                    onClick={() => setIsRequestModalOpen(true)}
                     className="mt-2 px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl active:scale-95 transition cursor-pointer"
                   >
                     + Ajukan Permintaan Stok ke Pusat

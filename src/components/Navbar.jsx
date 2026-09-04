@@ -83,6 +83,8 @@ export default function Navbar({
         onNavigate('stock-in', { type: notif.type, tab: 'REQUEST_STOCK', metaId: notif.metaId, notif });
       } else if (notif.type === 'STOCK_TRANSFER_RECEIVED') {
         onNavigate('monitoring', { type: 'STOCK_TRANSFER_RECEIVED', metaId: notif.metaId, notif });
+      } else if (notif.type === 'STOCK_TRANSFER_REJECTED') {
+        onNavigate('history', { type: 'STOCK_TRANSFER_REJECTED', metaId: notif.metaId, notif });
       } else if (notif.type === 'INVENTORY_REQUEST') {
         if (currentUser?.role === 'ADMIN' || currentUser?.role === 'STAFF_PUSAT' || currentUser?.role === 'PUSAT') {
           onNavigate('products', { tab: 'APPROVAL_REQUESTS', metaId: notif.metaId });
@@ -196,7 +198,7 @@ export default function Navbar({
                       const isStockIncoming = notif.type === 'STOCK_TRANSFER_INCOMING';
                       const isStockReceived = notif.type === 'STOCK_TRANSFER_RECEIVED';
                       const isStockApproved = notif.type === 'STOCK_REQUEST_APPROVED';
-                      const isStockRejected = notif.type === 'STOCK_REQUEST_REJECTED';
+                      const isStockRejected = notif.type === 'STOCK_REQUEST_REJECTED' || notif.type === 'STOCK_TRANSFER_REJECTED';
 
                       return (
                         <div

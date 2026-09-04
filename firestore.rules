@@ -41,6 +41,11 @@ service cloud.firestore {
       allow write: if isAdminOrPusat();
     }
 
+    match /stock_bundles/{doc} {
+      allow read: if true;
+      allow write: if isAdminOrPusat();
+    }
+
     match /brands/{doc} {
       allow read: if true;
       allow write: if isAdminOrPusat();

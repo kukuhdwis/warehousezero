@@ -120,6 +120,41 @@ export default function Sidebar({
           </div>
         )}
 
+        {/* Staff Cabang Monitoring Section */}
+        {!isAdmin && !isStaffPusat && (
+          <div>
+            {!isCollapsed ? (
+              <div className="px-3 flex items-center justify-between mb-2">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 truncate">
+                  Monitoring Toko
+                </p>
+                <span className="text-[9px] px-1.5 py-0.2 bg-emerald-100 text-emerald-800 font-bold rounded flex-shrink-0 ml-1">
+                  TOKO
+                </span>
+              </div>
+            ) : (
+              <div className="flex justify-center mb-2">
+                <span className="text-[8px] px-1 py-0.2 bg-emerald-100 text-emerald-800 font-bold rounded">TOKO</span>
+              </div>
+            )}
+            <nav className="space-y-1">
+              <button
+                onClick={() => setActiveTab('monitoring')}
+                title={isCollapsed ? "Monitoring Toko" : undefined}
+                className={`
+                  w-full flex items-center ${isCollapsed ? 'justify-center p-2.5' : 'gap-3 px-3 py-2.5'} rounded-xl font-medium text-sm transition cursor-pointer
+                  ${activeTab === 'monitoring' 
+                    ? 'bg-emerald-50 text-emerald-800 font-semibold shadow-2xs' 
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}
+                `}
+              >
+                <Eye className={`w-5 h-5 flex-shrink-0 ${activeTab === 'monitoring' ? 'text-emerald-600' : 'text-emerald-500'}`} />
+                {!isCollapsed && <span className="truncate">Monitoring Toko</span>}
+              </button>
+            </nav>
+          </div>
+        )}
+
         {/* Admin Management Section */}
         {isAdmin && (
           <div>

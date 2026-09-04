@@ -38,7 +38,7 @@ export const cleanCurrency = (val) => {
  */
 export const getCategoryAbbreviation = (categoryName = '', productName = '') => {
   const text = `${categoryName} ${productName}`.toLowerCase();
-  
+
   if (text.includes('downpipe') || text.includes('down pipe')) return 'DP';
   if (text.includes('frontpipe') || text.includes('front pipe')) return 'FP';
   if (text.includes('centerpipe') || text.includes('center pipe') || text.includes('midpipe')) return 'CP';
@@ -77,10 +77,10 @@ export const cleanEngineForSKU = (engineType = '') => {
 export const generateSmartSKU = (engineType, categoryName, productName, existingSKUsSet, startCounter = 1) => {
   const engineCode = cleanEngineForSKU(engineType);
   const catCode = getCategoryAbbreviation(categoryName, productName);
-  
+
   let counter = startCounter;
   let skuCandidate = '';
-  
+
   while (true) {
     const formattedNum = String(counter).padStart(3, '0');
     skuCandidate = `WZ-${engineCode}-${catCode}-${formattedNum}`;
@@ -98,77 +98,77 @@ export const generateSmartSKU = (engineType, categoryName, productName, existing
 export const downloadExhaustTemplate = () => {
   const headers = [
     'No',
+    'Merk',
     'Kode',
     'Mesin',
     'Nama',
     'Varian Mobil',
-    'Harga Reseller',
     'Harga Jual',
-    'Profit',
-    'ket',
-    '%'
+    'Harga Reseller',
+    'Harga Distributor',
+    'ket'
   ];
 
   const sampleRows = [
     [
       1,
+      'NDK Exhaust',
       'WZ-2KD-DP-001',
       '2KD',
       'Downpipe',
       'Innova 2.5 / Fortuner 2.5',
-      950000,
       1250000,
-      300000,
-      'Street Bass SS Polos',
-      '31.58%'
+      950000,
+      850000,
+      'Street Bass SS Polos'
     ],
     [
       2,
+      'RGN Performance',
       'WZ-2GD-BO-002',
       '2GD/1GD',
       'Bolt-on Muffler',
       'Innova Reborn / Fortuner VRZ',
-      1200000,
       1600000,
-      400000,
-      'Finishing Burntip Blue',
-      '33.33%'
+      1200000,
+      1050000,
+      'Finishing Burntip Blue'
     ],
     [
       3,
+      'NDK Exhaust',
       'WZ-2KD-CP-003',
       '2KD',
       'Centerpipe Non-Resonator',
       'Innova / Fortuner / Hilux SC',
-      850000,
       1150000,
-      300000,
-      'Drag Kering Full Stainless',
-      '35.29%'
+      850000,
+      750000,
+      'Drag Kering Full Stainless'
     ],
     [
       4,
+      'NDK Exhaust',
       'WZ-4N15-FP-004',
       '4N15',
       'Frontpipe Racing',
       'Pajero Sport Dakar',
-      1100000,
       1500000,
-      400000,
-      'Drag Sound SS Polos',
-      '36.36%'
+      1100000,
+      980000,
+      'Drag Sound SS Polos'
     ],
     [
       5,
+      'NDK Exhaust',
       '', // Kosong untuk mendemonstrasikan Auto-Generate SKU
       '2GD/1GD',
       'Downpipe + Frontpipe Kit',
       'Hilux Double Cabin / Single Cabin',
-      1400000,
       1900000,
-      500000,
-      'Contoh baris tanpa kode (Otomatis dibuatkan SKU)',
-      '35.71%'
+      1400000,
+      1250000,
+      'Contoh baris tanpa kode (Otomatis dibuatkan SKU)'
     ]
   ];
 
@@ -178,15 +178,15 @@ export const downloadExhaustTemplate = () => {
   // Styling / Lebar Kolom
   worksheet['!cols'] = [
     { wch: 6 },  // No
+    { wch: 18 }, // Merk
     { wch: 18 }, // Kode
     { wch: 14 }, // Mesin
     { wch: 28 }, // Nama
     { wch: 34 }, // Varian Mobil
-    { wch: 16 }, // Harga Reseller
     { wch: 16 }, // Harga Jual
-    { wch: 14 }, // Profit
-    { wch: 32 }, // ket
-    { wch: 10 }  // %
+    { wch: 16 }, // Harga Reseller
+    { wch: 18 }, // Harga Distributor
+    { wch: 36 }  // ket
   ];
 
   const workbook = XLSX.utils.book_new();
@@ -208,7 +208,7 @@ export const readSpreadsheetFile = async (file) => {
       try {
         const data = new Uint8Array(e.target.result);
         const workbook = XLSX.read(data, { type: 'array' });
-        
+
         const sheetNames = workbook.SheetNames || [];
         if (sheetNames.length === 0) {
           throw new Error("File spreadsheet tidak memiliki lembar kerja (worksheet).");
@@ -222,7 +222,7 @@ export const readSpreadsheetFile = async (file) => {
 
         const activeSheetName = sheetNames[0];
         const rawAoa = sheetsData[activeSheetName] || [];
-        
+
         if (!rawAoa || rawAoa.length < 1) {
           throw new Error("Spreadsheet kosong atau tidak memiliki data baris.");
         }
@@ -325,15 +325,17 @@ export const processSpreadsheetData = (rawAoa, existingProducts = [], duplicateM
   }
 
   const headerRow = (rawAoa[headerRowIndex] || []).map(h => String(h || '').trim());
-  
+
   // Mapping indeks kolom
   const idxNo = findColumnIndex(headerRow, ['no', 'nomor', 'num', '#']);
+  const idxMerk = findColumnIndex(headerRow, ['merk', 'brand', 'merek']);
   const idxKode = findColumnIndex(headerRow, ['kode', 'sku', 'code', 'kode produk', 'product code']);
   const idxMesin = findColumnIndex(headerRow, ['mesin', 'engine', 'tipe mesin', 'engine type', 'tipe_mesin']);
   const idxNama = findColumnIndex(headerRow, ['nama', 'name', 'nama produk', 'product name', 'komponen', 'kategori']);
   const idxVarian = findColumnIndex(headerRow, ['varian mobil', 'varian', 'mobil', 'car variant', 'kendaraan', 'kompatibilitas', 'tipe mobil']);
-  const idxReseller = findColumnIndex(headerRow, ['harga reseller', 'reseller', 'harga agen', 'harga b2b', 'reseller price', 'hpp']);
   const idxJual = findColumnIndex(headerRow, ['harga jual', 'harga', 'jual', 'retail', 'selling price', 'harga retail', 'price']);
+  const idxReseller = findColumnIndex(headerRow, ['harga reseller', 'reseller', 'harga agen', 'harga b2b', 'reseller price', 'hpp']);
+  const idxDistributor = findColumnIndex(headerRow, ['harga distributor', 'distributor', 'distributor price', 'harga grosir', 'grosir']);
   const idxProfit = findColumnIndex(headerRow, ['profit', 'laba', 'margin', 'keuntungan']);
   const idxKet = findColumnIndex(headerRow, ['ket', 'keterangan', 'notes', 'catatan', 'deskripsi', 'description']);
   const idxPercent = findColumnIndex(headerRow, ['%', 'persen', 'persentase', 'margin %', 'profit %', 'percentage']);
@@ -370,12 +372,14 @@ export const processSpreadsheetData = (rawAoa, existingProducts = [], duplicateM
 
     const rowNumber = r + 1;
     const rawNo = idxNo >= 0 ? row[idxNo] : (r - headerRowIndex);
+    const rawMerk = idxMerk >= 0 ? String(row[idxMerk] || '').trim() : '';
     const rawKode = idxKode >= 0 ? String(row[idxKode] || '').trim() : '';
     let rawMesin = idxMesin >= 0 ? String(row[idxMesin] || '').trim() : '';
     const rawNama = idxNama >= 0 ? String(row[idxNama] || '').trim() : '';
     const rawVarian = idxVarian >= 0 ? String(row[idxVarian] || '').trim() : '';
-    const rawReseller = idxReseller >= 0 ? row[idxReseller] : '';
     const rawJual = idxJual >= 0 ? row[idxJual] : '';
+    const rawReseller = idxReseller >= 0 ? row[idxReseller] : '';
+    const rawDistributor = idxDistributor >= 0 ? row[idxDistributor] : '';
     const rawKet = idxKet >= 0 ? String(row[idxKet] || '').trim() : '';
 
     // Normalisasi Tipe Mesin jika kosong tetapi terdeteksi di teks nama/varian
@@ -388,9 +392,10 @@ export const processSpreadsheetData = (rawAoa, existingProducts = [], duplicateM
       else rawMesin = 'ALL';
     }
 
-    const resellerPrice = cleanCurrency(rawReseller);
     const sellingPrice = cleanCurrency(rawJual);
-    
+    const resellerPrice = cleanCurrency(rawReseller);
+    const distributorPrice = cleanCurrency(rawDistributor) || (resellerPrice > 0 ? resellerPrice : sellingPrice);
+
     // Kalkulasi Profit & Persentase Keuntungan
     let profitAmount = sellingPrice - resellerPrice;
     let profitPercentage = resellerPrice > 0 ? ((profitAmount / resellerPrice) * 100) : 0;
@@ -430,9 +435,9 @@ export const processSpreadsheetData = (rawAoa, existingProducts = [], duplicateM
     }
 
     // Duplicate Checking
-    const existingMatch = existingProductMapBySKU.get(finalSKU.toLowerCase()) || 
+    const existingMatch = existingProductMapBySKU.get(finalSKU.toLowerCase()) ||
       existingProductMapByNameEngine.get(`${rawNama.toLowerCase()}__${rawMesin.toLowerCase()}`);
-    
+
     const isDuplicate = Boolean(existingMatch);
     if (isDuplicate) {
       duplicateCount++;
@@ -481,6 +486,7 @@ export const processSpreadsheetData = (rawAoa, existingProducts = [], duplicateM
       material_finish: specs.material_finish,
       reseller_price: resellerPrice,
       selling_price: sellingPrice,
+      distributor_price: distributorPrice,
       price: sellingPrice, // Backward compatibility
       profit_amount: profitAmount,
       profit_percentage: profitPercentage,
@@ -489,7 +495,7 @@ export const processSpreadsheetData = (rawAoa, existingProducts = [], duplicateM
       currentStock: 0,
       unit: 'Pcs',
       status: 'ACTIVE',
-      brand: 'NDK Exhaust',
+      brand: rawMerk || 'NDK Exhaust',
       machineCategory: rawMesin || 'ALL',
       isDuplicate,
       existingId: existingMatch?.id || null,
@@ -507,5 +513,357 @@ export const processSpreadsheetData = (rawAoa, existingProducts = [], duplicateM
     autoSkuCount,
     duplicateMode,
     items: parsedItems
+  };
+};
+
+/**
+ * Membuat dan mengunduh Template Excel (.xlsx) resmi Paket Bundling dari format 16 kolom klien.
+ */
+export const downloadBundleTemplate = () => {
+  const headers = [
+    'No',
+    'Merk',
+    'Kode',
+    'Mesin',
+    'Nama Bundle',
+    'Harga Jual',
+    'Harga Reseller',
+    'Harga Distributor',
+    'Mesin',
+    'Isi',
+    'Varian Mobil',
+    'Profit Reseller',
+    '%',
+    'Profit Distributor',
+    '%',
+    'ket'
+  ];
+
+  const sampleRows = [
+    [
+      1,
+      'NDK Exhaust',
+      'WZ-BNDL-2KD-001',
+      '2KD',
+      'Paket Full System 2KD',
+      3500000,
+      2700000,
+      2400000,
+      '2KD',
+      'Downpipe + Frontpipe + Centerpipe',
+      'Innova 2.5 / Fortuner 2.5',
+      800000,
+      '29.63%',
+      1100000,
+      '45.83%',
+      'Street Bass SS Polos'
+    ],
+    [
+      2,
+      'RGN Performance',
+      'WZ-BNDL-2GD-002',
+      '2GD/1GD',
+      'Paket Stage 1 2GD',
+      2800000,
+      2200000,
+      1950000,
+      '2GD/1GD',
+      'Downpipe + Bolt-on Muffler',
+      'Innova Reborn / Fortuner VRZ',
+      600000,
+      '27.27%',
+      850000,
+      '43.59%',
+      'Finishing Burntip Blue'
+    ],
+    [
+      3,
+      'NDK Exhaust',
+      'WZ-BNDL-4D56-003',
+      '4D56',
+      'Paket Racing Drag 4D56',
+      3100000,
+      2400000,
+      2100000,
+      '4D56',
+      'Downpipe + Frontpipe Racing',
+      'Pajero Sport / Strada Triton',
+      700000,
+      '29.17%',
+      1000000,
+      '47.62%',
+      'Drag Sound Kering Stainless'
+    ]
+  ];
+
+  const worksheetData = [headers, ...sampleRows];
+  const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+
+  worksheet['!cols'] = [
+    { wch: 6 },  // No
+    { wch: 18 }, // Merk
+    { wch: 18 }, // Kode
+    { wch: 14 }, // Mesin
+    { wch: 28 }, // Nama Bundle
+    { wch: 16 }, // Harga Jual
+    { wch: 16 }, // Harga Reseller
+    { wch: 18 }, // Harga Distributor
+    { wch: 12 }, // Mesin (dup)
+    { wch: 38 }, // Isi
+    { wch: 32 }, // Varian Mobil
+    { wch: 16 }, // Profit Reseller
+    { wch: 10 }, // %
+    { wch: 18 }, // Profit Distributor
+    { wch: 10 }, // %
+    { wch: 30 }  // ket
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Master Bundle');
+  XLSX.writeFile(workbook, 'Template_Import_Bundle_Exhaust_WZ.xlsx');
+};
+
+/**
+ * Parser file Spreadsheet Paket Bundling format resmi 16 kolom klien.
+ * Melakukan smart parsing pada kolom 'Isi' untuk mendeteksi komponen produk & kuantitas.
+ */
+export const processBundleSpreadsheetData = (rawAoa = [], existingProducts = []) => {
+  if (!rawAoa || rawAoa.length < 2) {
+    throw new Error("File spreadsheet bundling kosong atau tidak memiliki data.");
+  }
+
+  // Cari index header row
+  let headerRowIndex = 0;
+  let maxMatchedCols = 0;
+  const keywords = ['nama bundle', 'bundle', 'paket', 'isi', 'harga', 'kode', 'mesin'];
+
+  for (let r = 0; r < Math.min(10, rawAoa.length); r++) {
+    const strRow = (rawAoa[r] || []).map(cell => String(cell || '').trim());
+    const matched = keywords.filter(k => strRow.some(cell => cell.toLowerCase().includes(k))).length;
+    if (matched > maxMatchedCols) {
+      maxMatchedCols = matched;
+      headerRowIndex = r;
+    }
+  }
+
+  const headerRow = (rawAoa[headerRowIndex] || []).map(h => String(h || '').trim());
+
+  const idxNo = findColumnIndex(headerRow, ['no', '#', 'nomor']);
+  const idxMerk = findColumnIndex(headerRow, ['merk', 'brand', 'merek']);
+  const idxKode = findColumnIndex(headerRow, ['kode', 'sku', 'code', 'kode bundle', 'kode paket']);
+  const idxMesin = findColumnIndex(headerRow, ['mesin', 'engine', 'tipe mesin']);
+  const idxNama = findColumnIndex(headerRow, ['nama bundle', 'nama paket', 'nama', 'bundle name', 'paket']);
+  const idxJual = findColumnIndex(headerRow, ['harga jual', 'jual', 'retail', 'selling price', 'harga']);
+  const idxReseller = findColumnIndex(headerRow, ['harga reseller', 'reseller', 'harga b2b']);
+  const idxDistributor = findColumnIndex(headerRow, ['harga distributor', 'distributor', 'harga grosir']);
+  const idxIsi = findColumnIndex(headerRow, ['isi', 'komponen', 'isi paket', 'items', 'komponen bundle']);
+  const idxVarian = findColumnIndex(headerRow, ['varian mobil', 'varian', 'mobil', 'car variant']);
+  const idxKet = findColumnIndex(headerRow, ['ket', 'keterangan', 'notes', 'catatan']);
+
+  // Pre-build index pencarian produk
+  const productBySku = new Map();
+  const productsList = existingProducts || [];
+  productsList.forEach(p => {
+    if (p.sku) productBySku.set(p.sku.trim().toLowerCase(), p);
+    if (p.code) productBySku.set(p.code.trim().toLowerCase(), p);
+  });
+
+  // Step 1: Kelompokkan baris-baris Excel berdasarkan paket bundling.
+  // Seringkali pada spreadsheet klien, 1 paket bundling memiliki komponen di beberapa baris ke bawah
+  // (baris pertama berisi Nama & Harga Paket, baris-baris berikutnya hanya berisi kolom 'Isi').
+  const bundleGroups = [];
+  let currentGroup = null;
+
+  for (let r = headerRowIndex + 1; r < rawAoa.length; r++) {
+    const row = rawAoa[r];
+    if (!row || row.every(cell => String(cell || '').trim() === '')) continue;
+
+    const rawNo = idxNo >= 0 ? row[idxNo] : '';
+    const rawMerk = idxMerk >= 0 ? String(row[idxMerk] || '').trim() : '';
+    const rawKode = idxKode >= 0 ? String(row[idxKode] || '').trim() : '';
+    const rawMesin = idxMesin >= 0 ? String(row[idxMesin] || '').trim() : '';
+    const rawNama = idxNama >= 0 ? String(row[idxNama] || '').trim() : '';
+    const rawJual = idxJual >= 0 ? row[idxJual] : '';
+    const rawReseller = idxReseller >= 0 ? row[idxReseller] : '';
+    const rawDistributor = idxDistributor >= 0 ? row[idxDistributor] : '';
+    const rawIsi = idxIsi >= 0 ? String(row[idxIsi] || '').trim() : '';
+    const rawVarian = idxVarian >= 0 ? String(row[idxVarian] || '').trim() : '';
+    const rawKet = idxKet >= 0 ? String(row[idxKet] || '').trim() : '';
+
+    // Deteksi awal bundle baru: memiliki Nama Bundle ATAU (memiliki Kode & Harga Jual)
+    const isNewBundle = Boolean(rawNama || (rawKode && (rawJual !== '' && rawJual !== null && rawJual !== undefined)));
+
+    if (isNewBundle) {
+      if (currentGroup) {
+        bundleGroups.push(currentGroup);
+      }
+      currentGroup = {
+        rowNumber: r + 1,
+        no: rawNo,
+        brand: rawMerk,
+        code: rawKode,
+        engine_type: rawMesin,
+        name: rawNama,
+        rawJual,
+        rawReseller,
+        rawDistributor,
+        rawVarian,
+        rawKet,
+        itemsRaw: rawIsi ? [rawIsi] : []
+      };
+    } else if (currentGroup && rawIsi) {
+      // Sub-baris komponen milik paket yang sedang aktif
+      currentGroup.itemsRaw.push(rawIsi);
+      if (!currentGroup.rawVarian && rawVarian) currentGroup.rawVarian = rawVarian;
+      if (!currentGroup.rawKet && rawKet) currentGroup.rawKet = rawKet;
+      if (!currentGroup.brand && rawMerk) currentGroup.brand = rawMerk;
+      if (!currentGroup.engine_type && rawMesin) currentGroup.engine_type = rawMesin;
+    }
+  }
+
+  if (currentGroup) {
+    bundleGroups.push(currentGroup);
+  }
+
+  // Step 2: Proses setiap grup bundle dan komponen-komponen isinya
+  const parsedBundles = [];
+  let validCount = 0;
+  let errorCount = 0;
+
+  bundleGroups.forEach((bg, bIdx) => {
+    const sellingPrice = cleanCurrency(bg.rawJual);
+    const resellerPrice = cleanCurrency(bg.rawReseller);
+    const distributorPrice = cleanCurrency(bg.rawDistributor) || (resellerPrice > 0 ? resellerPrice : sellingPrice);
+
+    const rowErrors = [];
+    const rowWarnings = [];
+
+    if (!bg.name && !bg.code) {
+      return;
+    }
+    if (!bg.name) {
+      rowErrors.push("Nama Bundle tidak boleh kosong.");
+    }
+
+    // Gabungkan seluruh item dari baris utama dan sub-baris ke bawah
+    const componentStrings = [];
+    bg.itemsRaw.forEach(rawIsiStr => {
+      const parts = rawIsiStr
+        ? rawIsiStr.split(/[\+,\;\n]+/).map(s => s.trim()).filter(Boolean)
+        : [];
+      componentStrings.push(...parts);
+    });
+
+    const parsedComponents = componentStrings.map(compStr => {
+      let qty = 1;
+      let cleanComp = compStr;
+
+      const qtyMatchPrefix = cleanComp.match(/^(\d+)\s*[xX*]\s*(.+)$/);
+      if (qtyMatchPrefix) {
+        qty = Number(qtyMatchPrefix[1]) || 1;
+        cleanComp = qtyMatchPrefix[2].trim();
+      } else {
+        const qtyMatchSuffix = cleanComp.match(/^(.+?)\s*\((\d+)\s*(?:pcs|pc|set)?\)$/i);
+        if (qtyMatchSuffix) {
+          qty = Number(qtyMatchSuffix[2]) || 1;
+          cleanComp = qtyMatchSuffix[1].trim();
+        }
+      }
+
+      // 1. Cocokkan SKU persis
+      let matchedProd = productBySku.get(cleanComp.toLowerCase());
+
+      // 2. Cocokkan Nama & Mesin
+      if (!matchedProd) {
+        const lowerComp = cleanComp.toLowerCase();
+        const lowerEngine = (bg.engine_type || '').toLowerCase();
+        matchedProd = productsList.find(p => {
+          const pName = (p.name || '').toLowerCase();
+          const pEngine = (p.engine_type || p.machineCategory || '').toLowerCase();
+          const matchesName = pName.includes(lowerComp) || lowerComp.includes(pName);
+          const matchesEngine = !lowerEngine || lowerEngine === 'all' || pEngine.includes(lowerEngine) || lowerEngine.includes(pEngine);
+          return matchesName && matchesEngine;
+        });
+      }
+
+      // 3. Cocokkan Kategori Knalpot & Mesin
+      if (!matchedProd) {
+        const lowerComp = cleanComp.toLowerCase();
+        const lowerEngine = (bg.engine_type || '').toLowerCase();
+        const categoryKeyword = ['downpipe', 'frontpipe', 'centerpipe', 'bolt-on', 'muffler', 'resonator', 'header']
+          .find(k => lowerComp.includes(k));
+
+        if (categoryKeyword) {
+          matchedProd = productsList.find(p => {
+            const pCat = (p.category_name || p.name || '').toLowerCase();
+            const pEngine = (p.engine_type || p.machineCategory || '').toLowerCase();
+            const matchesCat = pCat.includes(categoryKeyword);
+            const matchesEngine = !lowerEngine || lowerEngine === 'all' || pEngine.includes(lowerEngine);
+            return matchesCat && matchesEngine;
+          });
+        }
+      }
+
+      return {
+        rawName: compStr,
+        cleanName: cleanComp,
+        qty,
+        productId: matchedProd ? matchedProd.id : null,
+        productName: matchedProd ? matchedProd.name : cleanComp,
+        sku: matchedProd ? matchedProd.sku : '',
+        unit: matchedProd?.unit || 'Pcs',
+        isMatched: Boolean(matchedProd)
+      };
+    });
+
+    if (parsedComponents.length === 0) {
+      rowWarnings.push("Kolom 'Isi' belum memiliki rincian komponen.");
+    } else {
+      const unmatched = parsedComponents.filter(c => !c.isMatched);
+      if (unmatched.length > 0) {
+        rowWarnings.push(`${unmatched.length} komponen akan disimpan sebagai item paket.`);
+      }
+    }
+
+    const isValid = rowErrors.length === 0;
+    if (isValid) validCount++;
+    else errorCount++;
+
+    // Generate smart bundle code if empty
+    let finalCode = bg.code;
+    if (!finalCode) {
+      const engTag = (bg.engine_type || 'EXH').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6) || 'BDL';
+      const padNum = String(parsedBundles.length + 1).padStart(3, '0');
+      finalCode = `BDL-${engTag}-${padNum}`;
+    }
+
+    parsedBundles.push({
+      rowNumber: bg.rowNumber,
+      no: bg.no || (parsedBundles.length + 1),
+      brand: bg.brand || 'RGN Performance',
+      code: finalCode,
+      engine_type: bg.engine_type || 'Universal',
+      name: bg.name,
+      selling_price: sellingPrice,
+      reseller_price: resellerPrice,
+      distributor_price: distributorPrice,
+      rawIsi: componentStrings.join(' + '),
+      car_variant: bg.rawVarian || '-',
+      description: bg.rawKet || '',
+      admin_note: '',
+      notes: '',
+      status: 'ACTIVE',
+      items: parsedComponents,
+      isValid,
+      errors: rowErrors,
+      warnings: rowWarnings
+    });
+  });
+
+  return {
+    totalRows: parsedBundles.length,
+    validCount,
+    errorCount,
+    bundles: parsedBundles
   };
 };

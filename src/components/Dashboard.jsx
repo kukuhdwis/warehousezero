@@ -12,8 +12,17 @@ import {
   MapPin,
   ChevronRight,
   Eye,
-  History
+  History,
+  Coins,
+  Trophy,
+  Flame
 } from 'lucide-react';
+import { 
+  calculateTxProfit, 
+  getCurrentMonthKey, 
+  formatMonthLabel, 
+  isTxInSelectedMonth 
+} from './BranchMonitoring';
 
 export default function Dashboard({ 
   currentUser, 
@@ -32,7 +41,18 @@ export default function Dashboard({
 
   // Pending branch inventory requests waiting for HQ approval
   const pendingBranchRequests = isBranchStaff
-    ? branchInventories.filter(bi => bi.branchId === currentUser?.branchId && bi.status === 'PENDING_APPROVAL')
+    ? branchInventories.filter(bi => {
+        const userBranchId = (currentUser?.branchId || '').toLowerCase();
+        const userBranchName = (currentUser?.branchName || '').toLowerCase();
+        const itemBranchId = (bi.branchId || '').toLowerCase();
+        const itemBranchName = (bi.branchName || '').toLowerCase();
+
+        const matchesBranch = (
+          (userBranchId && (itemBranchId === userBranchId || itemBranchName === userBranchId)) ||
+          (userBranchName && (itemBranchName === userBranchName || itemBranchId === userBranchName))
+        );
+        return matchesBranch && bi.status === 'PENDING_APPROVAL';
+      })
     : [];
 
   // Metric Calculations
@@ -40,6 +60,109 @@ export default function Dashboard({
   const totalStockQuantity = products.reduce((acc, p) => acc + (Number(p.currentStock) || 0), 0);
   const lowStockProducts = products.filter(p => (Number(p.currentStock) || 0) <= (Number(p.minStock) || 0));
   const totalValuation = products.reduce((acc, p) => acc + ((Number(p.currentStock) || 0) * (Number(p.price) || 0)), 0);
+
+  // Current Month Key (e.g. '2026-09')
+  const currentMonthKey = React.useMemo(() => getCurrentMonthKey(), []);
+
+  // Scoped transactions for monthly profit calculation
+  const scopedProfitTransactions = React.useMemo(() => {
+    return transactions.filter(t => {
+      // Must be in current month
+      if (!isTxInSelectedMonth(t, currentMonthKey)) return false;
+      
+      // Branch scoping for branch staff
+      if (isBranchStaff) {
+        return (
+          t.branchId === currentUser?.branchId || 
+          (currentUser?.branchName && t.branchName && t.branchName.trim().toLowerCase() === currentUser?.branchName.trim().toLowerCase()) ||
+          t.user === currentUser?.name
+        );
+      }
+      return true;
+    });
+  }, [isBranchStaff, transactions, currentUser, currentMonthKey]);
+
+  const totalEstimatedProfit = React.useMemo(() => {
+    return scopedProfitTransactions.reduce((acc, tx) => {
+      if (tx.type === 'OUT') {
+        const { txProfit } = calculateTxProfit(tx, products, branchInventories);
+        return acc + txProfit;
+      }
+      return acc;
+    }, 0);
+  }, [scopedProfitTransactions, products, branchInventories]);
+
+  // Top Selling Products Calculation for Dashboard
+  const topSellingProducts = React.useMemo(() => {
+    const salesMap = new Map();
+
+    scopedProfitTransactions.forEach(tx => {
+      if (tx.type !== 'OUT') return;
+      const { profitItems } = calculateTxProfit(tx, products, branchInventories);
+
+      if (profitItems && profitItems.length > 0) {
+        profitItems.forEach(pi => {
+          const qty = Number(pi.qty || 1);
+          const price = Number(pi.price || 0);
+          const name = pi.productName || tx.productName || 'Barang';
+          const sku = pi.sku || tx.sku || '-';
+          const key = sku !== '-' ? sku : name;
+
+          const currentStockItem = products.find(p => p.sku === sku || p.name === name) ||
+            branchInventories.find(bi => bi.sku === sku || bi.productName === name);
+
+          if (!salesMap.has(key)) {
+            salesMap.set(key, {
+              key,
+              sku,
+              productName: name,
+              brand: currentStockItem?.brand || pi.brand || 'Generic',
+              totalQty: 0,
+              totalRevenue: 0,
+              currentStock: Number(currentStockItem?.stockQuantity ?? currentStockItem?.currentStock ?? 0),
+              minStock: Number(currentStockItem?.minStock ?? 5),
+              unit: pi.unit || currentStockItem?.unit || 'Pcs'
+            });
+          }
+
+          const record = salesMap.get(key);
+          record.totalQty += qty;
+          record.totalRevenue += price * qty;
+        });
+      } else {
+        const qty = Number(tx.qty || 1);
+        const price = Number(tx.price || (tx.totalPrice ? (tx.totalPrice / qty) : 0));
+        const name = tx.productName || 'Barang';
+        const sku = tx.sku || '-';
+        const key = sku !== '-' ? sku : name;
+
+        const currentStockItem = products.find(p => p.sku === sku || p.name === name) ||
+          branchInventories.find(bi => bi.sku === sku || bi.productName === name);
+
+        if (!salesMap.has(key)) {
+          salesMap.set(key, {
+            key,
+            sku,
+            productName: name,
+            brand: currentStockItem?.brand || 'Generic',
+            totalQty: 0,
+            totalRevenue: 0,
+            currentStock: Number(currentStockItem?.stockQuantity ?? currentStockItem?.currentStock ?? 0),
+            minStock: Number(currentStockItem?.minStock ?? 5),
+            unit: tx.unit || currentStockItem?.unit || 'Pcs'
+          });
+        }
+
+        const record = salesMap.get(key);
+        record.totalQty += qty;
+        record.totalRevenue += tx.totalPrice ? Number(tx.totalPrice) : (price * qty);
+      }
+    });
+
+    const list = Array.from(salesMap.values());
+    list.sort((a, b) => b.totalQty - a.totalQty);
+    return list;
+  }, [scopedProfitTransactions, products, branchInventories]);
 
   const recentTransactions = transactions.slice(0, 5);
 
@@ -104,28 +227,18 @@ export default function Dashboard({
             </button>
           )}
 
-          {isAdmin || isStaffPusat ? (
-            <button
-              onClick={() => onNavigate('monitoring')}
-              className="flex items-center justify-center gap-2 py-3 px-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-98 cursor-pointer"
-            >
-              <Eye className="w-4 h-4" />
-              <span>Monitoring Cabang</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => onNavigate('history')}
-              className="flex items-center justify-center gap-2 py-3 px-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-98 cursor-pointer"
-            >
-              <History className="w-4 h-4" />
-              <span>Riwayat Transaksi</span>
-            </button>
-          )}
+          <button
+            onClick={() => onNavigate('monitoring')}
+            className="flex items-center justify-center gap-2 py-3 px-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-98 cursor-pointer"
+          >
+            <Eye className="w-4 h-4" />
+            <span>{currentUser?.role === 'STAFF_BRANCH' ? 'Monitoring Toko' : 'Monitoring Cabang'}</span>
+          </button>
         </div>
       </div>
 
-      {/* Metrics Cards Grid (2 cols on mobile, 4 cols on desktop) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+      {/* Metrics Cards Grid (2 cols on mobile, 5 cols on desktop) */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-4">
         
         {/* Card 1: Total SKU */}
         <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
@@ -172,6 +285,25 @@ export default function Dashboard({
             <TrendingUp className="w-4 h-4 sm:w-6 sm:h-6" />
           </div>
         </div>
+
+        {/* Card 5: Estimasi Profit */}
+        <div 
+          onClick={() => onNavigate('monitoring')}
+          className="bg-emerald-50/70 p-3.5 sm:p-5 rounded-2xl border border-emerald-200 shadow-xs flex items-center justify-between cursor-pointer hover:bg-emerald-100/70 transition group"
+          title="Klik untuk membuka rincian monitoring profit cabang"
+        >
+          <div>
+            <p className="text-[10px] sm:text-xs font-semibold text-emerald-700 uppercase tracking-wider flex items-center gap-1">
+              Profit Bulan Ini <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition" />
+            </p>
+            <h3 className="text-sm sm:text-xl font-bold text-emerald-800 mt-0.5 sm:mt-1 truncate max-w-[130px] sm:max-w-none">
+              Rp {totalEstimatedProfit.toLocaleString('id-ID')}
+            </h3>
+          </div>
+          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs group-hover:scale-105 transition">
+            <Coins className="w-4 h-4 sm:w-6 sm:h-6" />
+          </div>
+        </div>
       </div>
 
       {/* Branch Staff Empty Inventory Alert Banner */}
@@ -203,6 +335,77 @@ export default function Dashboard({
               <span>+ Ajukan Inventaris Produk ke Pusat</span>
             </button>
           )}
+        </div>
+      )}
+
+      {/* TOP SELLING PRODUCTS WIDGET FOR DASHBOARD */}
+      {topSellingProducts.length > 0 && (
+        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm sm:text-base flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-amber-500" />
+                <span>
+                  {isBranchStaff ? `Produk Terlaris di ${currentUser?.branchName || 'Cabang'}` : 'Top Produk Terlaris Bulan Ini'}
+                </span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Produk dengan pergerakan transaksi keluar tercepat pada periode <strong className="text-slate-700">{formatMonthLabel(currentMonthKey)}</strong>.
+              </p>
+            </div>
+
+            <button
+              onClick={() => onNavigate('monitoring')}
+              className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer self-start sm:self-auto shadow-2xs"
+            >
+              <Flame className="w-3.5 h-3.5 text-amber-600" />
+              <span>{topSellingProducts.reduce((sum, p) => sum + p.totalQty, 0)} Pcs Terjual • Lihat Detail</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            {topSellingProducts.slice(0, 5).map((item, idx) => {
+              const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
+              const isTop1 = idx === 0;
+              const isLow = item.currentStock <= item.minStock;
+
+              return (
+                <div 
+                  key={item.key} 
+                  className={`p-3.5 rounded-xl border transition flex flex-col justify-between gap-2.5 ${
+                    isTop1 
+                      ? 'bg-gradient-to-br from-amber-50/80 via-white to-amber-50/20 border-amber-300 shadow-2xs' 
+                      : 'bg-slate-50/60 hover:bg-slate-50 border-slate-200'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1 mb-1.5">
+                      <span className="text-sm font-black">{medal}</span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                        {item.brand}
+                      </span>
+                    </div>
+                    <h4 className="font-bold text-slate-900 text-xs line-clamp-1" title={item.productName}>
+                      {item.productName}
+                    </h4>
+                    <span className="text-[10px] font-mono text-slate-400 block">{item.sku}</span>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                    <span className="font-black text-slate-900 flex items-center gap-1">
+                      <Flame className="w-3.5 h-3.5 text-rose-500" />
+                      <span>{item.totalQty} {item.unit}</span>
+                    </span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                      isLow ? 'bg-rose-100 text-rose-700' : 'text-emerald-700'
+                    }`}>
+                      {isLow ? `Sisa ${item.currentStock}` : `Rp ${item.totalRevenue >= 1000000 ? `${(item.totalRevenue / 1000000).toFixed(1)}M` : item.totalRevenue.toLocaleString('id-ID')}`}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

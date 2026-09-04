@@ -23,13 +23,15 @@ import {
   Check,
   Send,
   Sparkles,
-  Tag
+  Tag,
+  PackageCheck
 } from 'lucide-react';
 
 import ScannerModal from './ScannerModal';
 import TransactionSuccessModal from './TransactionSuccessModal';
 import GlobalSuccessModal from './GlobalSuccessModal';
 import ProductSearchPicker from './ProductSearchPicker';
+import BundleSearchPicker from './BundleSearchPicker';
 import CustomAlertModal from './CustomAlertModal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -41,6 +43,7 @@ export default function StockOut({
   currentUser, 
   products = [], 
   branches = [], 
+  bundles = [],
   stockRequests = [],
   initialRequestData = null,
   onClearInitialRequest,
@@ -92,12 +95,21 @@ export default function StockOut({
   const [rejectionReason, setRejectionReason] = useState('');
   const [isSubmittingReject, setIsSubmittingReject] = useState(false);
 
-  // Bundling State (For Custom Bundling)
+  // Bundling Dual-Mode State (Preset vs Custom) & Multi-Bundle Cart
+  const [bundleMode, setBundleMode] = useState('PRESET'); // 'PRESET' | 'CUSTOM'
+  const [selectedBundlePresetId, setSelectedBundlePresetId] = useState('');
   const [bundleName, setBundleName] = useState('');
   const [bundleCustomPrice, setBundleCustomPrice] = useState('');
+  const [bundleQty, setBundleQty] = useState(1);
+  const [bundleCart, setBundleCart] = useState([]);
   const [bundleItems, setBundleItems] = useState([
     { productId: products[0]?.id || '', qty: 1 }
   ]);
+
+  // Stock Transfer with Bundling Preset Modal States
+  const [isTransferBundleModalOpen, setIsTransferBundleModalOpen] = useState(false);
+  const [selectedTransferBundleId, setSelectedTransferBundleId] = useState('');
+  const [transferBundleQty, setTransferBundleQty] = useState(1);
 
   // Handle incoming initialRequestData (e.g. from notification click)
   useEffect(() => {
@@ -292,7 +304,7 @@ export default function StockOut({
           productName: product.name,
           brand: product.brand || 'Generic',
           price: Number(product.price) || 0,
-          costPrice: Number(product.costPrice) || 0,
+          costPrice: Number(product.costPrice ?? product.reseller_price ?? product.resellerPrice ?? product.cost_price ?? 0),
           currentStock: maxStock,
           qty: 1
         }
@@ -430,17 +442,183 @@ const parseScannedSKU = (text) => {
     setBundleItems(bundleItems.filter((_, i) => i !== index));
   };
 
+  // Helper: Find product matching item by productId or SKU
+  const getProductFromItem = (item) => {
+    if (!item) return null;
+    return products.find(p => p.id === item.productId || (item.sku && p.sku && p.sku.toLowerCase() === item.sku.toLowerCase()));
+  };
+
+  // Helper: Select Bundle Preset
+  const handleSelectBundlePreset = (bundleId) => {
+    setSelectedBundlePresetId(bundleId);
+    if (!bundleId) {
+      setBundleName('');
+      setBundleCustomPrice('');
+      setBundleItems([{ productId: products[0]?.id || '', qty: 1 }]);
+      return;
+    }
+    const b = bundles.find(item => item.id === bundleId);
+    if (!b) return;
+
+    setBundleName(b.name || '');
+
+    // Suggested price based on branch type:
+    // If branch staff and branchType === 'DISTRIBUTOR', use distributor_price
+    // If branch staff and branchType === 'RESELLER', use reseller_price
+    // Otherwise use selling_price
+    const branchType = currentUser?.branchType;
+    let suggestedPrice = Number(b.selling_price) || 0;
+    if (branchType === 'DISTRIBUTOR' && b.distributor_price) {
+      suggestedPrice = Number(b.distributor_price);
+    } else if (branchType === 'RESELLER' && b.reseller_price) {
+      suggestedPrice = Number(b.reseller_price);
+    }
+    setBundleCustomPrice(suggestedPrice ? String(suggestedPrice) : '');
+
+    if (Array.isArray(b.items) && b.items.length > 0) {
+      const mapped = b.items.map(comp => {
+        const found = products.find(p => p.id === comp.productId || (comp.sku && p.sku && p.sku.toLowerCase() === comp.sku.toLowerCase()));
+        return {
+          productId: found?.id || comp.productId || '',
+          sku: comp.sku || found?.sku || '-',
+          productName: comp.productName || found?.name || 'Komponen',
+          qty: Number(comp.qty) || 1,
+          unit: comp.unit || found?.unit || 'Pcs'
+        };
+      });
+      setBundleItems(mapped);
+    }
+  };
+
+  // Helper: Add Bundle Components to Transfer Cart
+  const handleAddBundleToTransferCart = () => {
+    const b = bundles.find(item => item.id === selectedTransferBundleId);
+    if (!b || !b.items || b.items.length === 0) {
+      showAlert("Pilih Paket 📦", "Silakan pilih paket bundling yang valid!", "WARNING");
+      return;
+    }
+    const multiplier = Math.max(1, Number(transferBundleQty) || 1);
+    const updated = [...transferCart];
+    let addedCount = 0;
+
+    b.items.forEach(comp => {
+      const p = products.find(prod => prod.id === comp.productId || (comp.sku && prod.sku && prod.sku.toLowerCase() === comp.sku.toLowerCase()));
+      if (p) {
+        const addQty = (Number(comp.qty) || 1) * multiplier;
+        const maxStock = Number(p.currentStock) || 0;
+        const existingIdx = updated.findIndex(i => i.productId === p.id);
+        if (existingIdx !== -1) {
+          updated[existingIdx].qty = Math.min(maxStock, updated[existingIdx].qty + addQty);
+        } else {
+          updated.push({
+            productId: p.id,
+            sku: p.sku,
+            productName: p.name,
+            brand: p.brand || 'Generic',
+            price: p.price || 0,
+            currentStock: maxStock,
+            qty: Math.min(maxStock, addQty)
+          });
+        }
+        addedCount++;
+      }
+    });
+
+    setTransferCart(updated);
+    setIsTransferBundleModalOpen(false);
+    setSelectedTransferBundleId('');
+    setTransferBundleQty(1);
+    showAlert("Berhasil Ditambahkan ✅", `${addedCount} komponen dari paket "${b.name}" (${multiplier} set) berhasil dimasukkan ke list transfer cabang.`, "SUCCESS");
+  };
+
   // Calculate total regular price of bundling components
   const bundleRegularTotal = bundleItems.reduce((sum, item) => {
-    const p = products.find(prod => prod.id === item.productId);
+    const p = getProductFromItem(item);
     return sum + (Number(p?.price) || 0) * (Number(item.qty) || 1);
   }, 0);
 
-  // Check if any component in bundling exceeds stock
+  // Check if any component in bundling exceeds stock for current bundle selection
   const isBundleStockInsufficient = bundleItems.some(item => {
-    const p = products.find(prod => prod.id === item.productId);
-    return (Number(item.qty) || 0) > (Number(p?.currentStock) || 0);
+    const p = getProductFromItem(item);
+    const needed = (Number(item.qty) || 0) * (Math.max(1, Number(bundleQty) || 1));
+    return needed > (Number(p?.currentStock) || 0);
   });
+
+  // Handler: Add currently configured bundle to bundleCart
+  const handleAddBundleToCart = () => {
+    if (!bundleName.trim()) {
+      showAlert("Nama Paket Wajib Diisi", "Masukkan nama paket bundling terlebih dahulu!", "WARNING");
+      return;
+    }
+    if (bundleItems.length === 0) {
+      showAlert("Komponen Paket Kosong", "Paket bundling harus memiliki minimal 1 komponen produk.", "WARNING");
+      return;
+    }
+    const curQty = Math.max(1, Number(bundleQty) || 1);
+    const chosenPreset = selectedBundlePresetId ? bundles.find(b => b.id === selectedBundlePresetId) : null;
+    const unitPrice = bundleCustomPrice ? Number(bundleCustomPrice) : bundleRegularTotal;
+
+    // Check stock for this bundle with its quantity
+    const insufficientComp = bundleItems.find(item => {
+      const p = getProductFromItem(item);
+      const neededQty = (Number(item.qty) || 1) * curQty;
+      return neededQty > (Number(p?.currentStock) || 0);
+    });
+
+    if (insufficientComp) {
+      const p = getProductFromItem(insufficientComp);
+      showAlert("Stok Komponen Tidak Mencukupi 📦", `Stok komponen "${p?.name || insufficientComp.productName}" tidak mencukupi untuk ${curQty} paket! Tersedia: ${p?.currentStock || 0} Pcs, Diperlukan: ${(Number(insufficientComp.qty) || 1) * curQty} Pcs.`, "WARNING");
+      return;
+    }
+
+    const newBundle = {
+      id: `BC-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      bundleId: selectedBundlePresetId || null,
+      code: chosenPreset?.code || 'PAKET-BUNDLE',
+      name: bundleName,
+      qty: curQty,
+      unitPrice: unitPrice,
+      subtotal: unitPrice * curQty,
+      items: bundleItems.map(bi => {
+        const p = getProductFromItem(bi);
+        return {
+          productId: bi.productId || p?.id,
+          productName: p?.name || bi.productName || 'Komponen',
+          sku: p?.sku || bi.sku || '-',
+          qty: Number(bi.qty) || 1,
+          unit: bi.unit || p?.unit || 'Pcs',
+          price: Number(p?.price) || 0,
+          costPrice: Number(p?.costPrice ?? p?.reseller_price ?? p?.resellerPrice ?? p?.cost_price ?? 0)
+        };
+      }),
+      bundleMode: bundleMode
+    };
+
+    setBundleCart(prev => [...prev, newBundle]);
+    showAlert("Paket Ditambahkan ✅", `Paket "${bundleName}" (${curQty} set) berhasil dimasukkan ke daftar nota penjualan bundling.`, "SUCCESS");
+  };
+
+  const handleUpdateBundleCartQty = (index, newQty) => {
+    if (newQty <= 0) {
+      handleRemoveBundleFromCart(index);
+      return;
+    }
+    setBundleCart(prev => {
+      const updated = [...prev];
+      if (updated[index]) {
+        updated[index] = {
+          ...updated[index],
+          qty: newQty,
+          subtotal: updated[index].unitPrice * newQty
+        };
+      }
+      return updated;
+    });
+  };
+
+  const handleRemoveBundleFromCart = (index) => {
+    setBundleCart(prev => prev.filter((_, i) => i !== index));
+  };
 
   const getPlatformLabel = (platformCode) => {
     switch (platformCode) {
@@ -517,7 +695,7 @@ const parseScannedSKU = (text) => {
           productName: selectedProduct.name,
           brand: selectedProduct.brand || 'Generic',
           price: Number(selectedProduct.price) || 0,
-          costPrice: Number(selectedProduct.costPrice) || 0,
+          costPrice: Number(selectedProduct.costPrice ?? selectedProduct.reseller_price ?? selectedProduct.resellerPrice ?? selectedProduct.cost_price ?? 0),
           currentStock: currentAvailable,
           qty: Number(qty)
         };
@@ -581,7 +759,7 @@ const parseScannedSKU = (text) => {
         sku: item.sku,
         brand: item.brand,
         price: Number(item.price) || 0,
-        costPrice: Number(item.costPrice) || 0,
+        costPrice: Number(item.costPrice ?? item.reseller_price ?? item.resellerPrice ?? item.cost_price ?? 0),
         qty: Number(item.qty) || 1
       }))
     };
@@ -638,6 +816,7 @@ const parseScannedSKU = (text) => {
         await createSparkPlanStockTransfer({
           items: items.map(i => ({ ...i, qty: Number(i.qty) || 1 })),
           toBranchId: pendingConfirm.targetBranchId,
+          deliveryNote: deliveryNote,
           shippingNotes: `${pendingConfirm.notes || ''} | SJ: ${deliveryNote}`
         }, currentUser?.uid || 'admin');
 
@@ -669,6 +848,8 @@ const parseScannedSKU = (text) => {
           items: pendingConfirm.bundleItems,
           skipMasterProductUpdate: isBranchStaff
         });
+        setBundleCart([]);
+        setBundleQty(1);
       } else {
         await onRecordMovement({
           ...pendingConfirm,
@@ -681,7 +862,7 @@ const parseScannedSKU = (text) => {
         ...pendingConfirm,
         items: pendingConfirm.isBatchTransfer 
           ? pendingConfirm.batchItems 
-          : (pendingConfirm.isBundling ? pendingConfirm.bundleItems : (pendingConfirm.items || [pendingConfirm]))
+          : (pendingConfirm.isBundling ? (pendingConfirm.bundles || [pendingConfirm]) : (pendingConfirm.items || [pendingConfirm]))
       });
 
       // Reset form states
@@ -691,6 +872,8 @@ const parseScannedSKU = (text) => {
       setNotes('');
       setBundleName('');
       setBundleCustomPrice('');
+      setBundleQty(1);
+      setSelectedBundlePresetId('');
       setBundleItems([{ productId: products[0]?.id || '', qty: 1 }]);
       setPendingConfirm(null);
       setActiveFulfillmentRequest(null);
@@ -706,59 +889,136 @@ const parseScannedSKU = (text) => {
   // Step 1: Open Confirmation Modal for Bundling Sale
   const handlePrepareBundlingSubmit = (e) => {
     e.preventDefault();
-    if (!bundleName.trim()) {
-      showAlert("Nama Paket Wajib Diisi", "Masukkan nama paket bundling terlebih dahulu!", "WARNING");
-      return;
-    }
-    if (bundleItems.length === 0) {
-      showAlert("Komponen Paket Kosong", "Paket bundling harus memiliki minimal 1 komponen produk.", "WARNING");
-      return;
-    }
-    if (isBundleStockInsufficient) {
-      showAlert("Stok Komponen Tidak Mencukupi 📦", "Salah satu komponen bundling melebihi stok yang tersedia!", "WARNING");
-      return;
+
+    let activeBundles = [...bundleCart];
+
+    // If bundleCart is empty, use the bundle currently configured in the form
+    if (activeBundles.length === 0) {
+      if (!bundleName.trim()) {
+        showAlert("Nama Paket Wajib Diisi", "Masukkan nama paket bundling terlebih dahulu!", "WARNING");
+        return;
+      }
+      if (bundleItems.length === 0) {
+        showAlert("Komponen Paket Kosong", "Paket bundling harus memiliki minimal 1 komponen produk.", "WARNING");
+        return;
+      }
+      const curQty = Math.max(1, Number(bundleQty) || 1);
+      const chosenPreset = selectedBundlePresetId ? bundles.find(b => b.id === selectedBundlePresetId) : null;
+      const unitPrice = bundleCustomPrice ? Number(bundleCustomPrice) : bundleRegularTotal;
+
+      activeBundles = [{
+        id: `BC-${Date.now()}`,
+        bundleId: selectedBundlePresetId || null,
+        code: chosenPreset?.code || 'PAKET-BUNDLE',
+        name: bundleName,
+        qty: curQty,
+        unitPrice: unitPrice,
+        subtotal: unitPrice * curQty,
+        items: bundleItems.map(bi => {
+          const p = getProductFromItem(bi);
+          return {
+            productId: bi.productId || p?.id,
+            productName: p?.name || bi.productName || 'Komponen',
+            sku: p?.sku || bi.sku || '-',
+            qty: Number(bi.qty) || 1,
+            unit: bi.unit || p?.unit || 'Pcs',
+            price: Number(p?.price) || 0,
+            costPrice: Number(p?.costPrice ?? p?.reseller_price ?? p?.resellerPrice ?? p?.cost_price ?? 0)
+          };
+        }),
+        bundleMode: bundleMode
+      }];
     }
 
+    // Validate combined stock requirement across all bundles in activeBundles
+    const componentRequirementMap = new Map();
+    for (const b of activeBundles) {
+      for (const comp of b.items) {
+        const p = products.find(prod => prod.id === comp.productId || (comp.sku && prod.sku && prod.sku.toLowerCase() === comp.sku.toLowerCase()));
+        const pId = p ? p.id : comp.productId;
+        const totalNeeded = (Number(comp.qty) || 1) * b.qty;
+        const prev = componentRequirementMap.get(pId) || { needed: 0, product: p, name: comp.productName };
+        componentRequirementMap.set(pId, {
+          needed: prev.needed + totalNeeded,
+          product: p || prev.product,
+          name: comp.productName || prev.name
+        });
+      }
+    }
 
-    const totalBundlePrice = bundleCustomPrice ? Number(bundleCustomPrice) : bundleRegularTotal;
+    for (const [_, info] of componentRequirementMap.entries()) {
+      const currentStock = Number(info.product?.currentStock) || 0;
+      if (info.needed > currentStock) {
+        showAlert(
+          "Stok Komponen Tidak Mencukupi 📦", 
+          `Total stok komponen "${info.name}" tidak mencukupi untuk seluruh paket dalam nota! Tersedia: ${currentStock} Pcs, Diperlukan: ${info.needed} Pcs.`, 
+          "WARNING"
+        );
+        return;
+      }
+    }
+
+    const totalBundleSets = activeBundles.reduce((acc, b) => acc + Number(b.qty), 0);
+    const grandTotal = activeBundles.reduce((acc, b) => acc + Number(b.subtotal), 0);
     const platformName = getPlatformLabel(salesPlatform);
     const defaultPrefix = salesPlatform !== 'OFFLINE' ? `${salesPlatform}-BUNDLE-` : 'NOTA-BUNDLE-';
     const notaNo = invoiceNumber || `${defaultPrefix}${Math.floor(100000 + Math.random() * 900000)}`;
     const locationLabel = isBranchStaff ? currentUser?.branchName || 'Cabang' : 'Pusat';
 
-    const itemsSummary = bundleItems.map(item => {
-      const p = products.find(prod => prod.id === item.productId);
-      return `${item.qty}x ${p?.name || 'Produk'}`;
-    }).join(' + ');
+    // Combine all components for physical stock deduction in Firestore
+    const allComponentsCombined = [];
+    activeBundles.forEach(b => {
+      b.items.forEach(comp => {
+        const totalCompQty = (Number(comp.qty) || 1) * b.qty;
+        const existing = allComponentsCombined.find(c => c.productId === comp.productId);
+        if (existing) {
+          existing.qty += totalCompQty;
+        } else {
+          allComponentsCombined.push({
+            ...comp,
+            qty: totalCompQty
+          });
+        }
+      });
+    });
+
+    const bundleSummary = activeBundles.map(b => `${b.qty}x ${b.name}`).join(' + ');
+    const finalNotes = `Penjualan Paket Bundling (${platformName} • ${locationLabel}) • [${bundleSummary}] • Total ${totalBundleSets} Paket • Pembeli: ${customerName || 'Walk-in Customer'} • Total: Rp ${grandTotal.toLocaleString('id-ID')} • No. Nota: ${notaNo}${notes ? ` • ${notes}` : ''}`;
 
     const payload = {
-      productId: 'BUNDLE-CUSTOM',
-      sku: 'PAKET-BUNDLE',
-      productName: `[BUNDLING] ${bundleName}`,
+      productId: activeBundles.length === 1 ? (activeBundles[0].bundleId ? `BUNDLE-${activeBundles[0].bundleId}` : 'BUNDLE-CUSTOM') : 'MULTI-BUNDLE-SALE',
+      sku: activeBundles.length === 1 ? (activeBundles[0].code || 'PAKET-BUNDLE') : 'MULTI-BUNDLE',
+      productName: activeBundles.length === 1 ? `[BUNDLING] ${activeBundles[0].name}` : `[BUNDLING] ${activeBundles.length} Jenis Paket (${totalBundleSets} Set)`,
+      bundleId: activeBundles.length === 1 ? activeBundles[0].bundleId : null,
+      bundleQty: totalBundleSets,
+      bundles: activeBundles.map(b => ({
+        sku: b.code,
+        code: b.code,
+        productName: `[BUNDLING] ${b.name}`,
+        name: b.name,
+        qty: b.qty,
+        unit: 'Paket',
+        price: b.unitPrice,
+        totalPrice: b.subtotal,
+        subtotal: b.subtotal,
+        notes: b.items ? b.items.map(c => `${c.qty * b.qty}x ${c.productName}`).join(', ') : '',
+        items: b.items
+      })),
+      bundleItems: allComponentsCombined,
       type: 'OUT',
       branchId: isBranchStaff ? currentUser?.branchId : undefined,
-      qty: bundleItems.reduce((acc, i) => acc + Number(i.qty), 0),
+      qty: totalBundleSets,
       unit: 'Paket',
-      notes: `Penjualan Paket Bundling (${platformName} • ${locationLabel}) • "${bundleName}" [${itemsSummary}] • Pembeli: ${customerName || 'Walk-in Customer'} • Total: Rp ${totalBundlePrice.toLocaleString('id-ID')} • No. Nota/Pesanan: ${notaNo}`,
+      notes: finalNotes,
       user: user || currentUser?.name || 'Staff',
       transactionType: 'CUSTOM_BUNDLING',
+      isBundling: true,
       salesPlatform: salesPlatform,
       platformName: platformName,
       customerName: customerName || 'Walk-in Customer',
       invoiceNumber: notaNo,
       paymentMethod: paymentMethod,
-      totalPrice: totalBundlePrice,
-      bundleItems: bundleItems.map(bi => {
-        const p = products.find(prod => prod.id === bi.productId);
-        return {
-          productId: bi.productId,
-          productName: p?.name,
-          sku: p?.sku,
-          qty: Number(bi.qty),
-          price: Number(p?.price) || 0,
-          costPrice: Number(p?.costPrice) || 0
-        };
-      })
+      totalPrice: grandTotal
     };
 
     setPendingConfirm(payload);
@@ -986,14 +1246,24 @@ const parseScannedSKU = (text) => {
                   <span className="block text-xs font-bold uppercase tracking-wider text-slate-700">
                     1. Pilih / Cari Produk ke Dalam List Transfer Cabang
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setIsScannerOpen(true)}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer shadow-xs"
-                  >
-                    <Camera className="w-4 h-4" />
-                    <span>Scan Barcode</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsTransferBundleModalOpen(true)}
+                      className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer shadow-xs"
+                    >
+                      <Boxes className="w-4 h-4" />
+                      <span>+ Paket Bundling</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsScannerOpen(true)}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer shadow-xs"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span>Scan Barcode</span>
+                    </button>
+                  </div>
                 </div>
 
                 <ProductSearchPicker
@@ -1596,100 +1866,436 @@ const parseScannedSKU = (text) => {
               /* PAKET BUNDLING (COMBO) FORM */
               <form onSubmit={handlePrepareBundlingSubmit} className="space-y-4">
                 
-                {/* Bundle Name & Price */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                      Nama Paket Bundling *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Contoh: Paket Combo 3 Botol + Tutup"
-                      value={bundleName}
-                      onChange={(e) => setBundleName(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                    />
+                {/* Sub-Mode Switcher: Preset Bundling vs Custom Ad-hoc */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-purple-50/80 border border-purple-200 rounded-2xl gap-2">
+                  <div className="flex items-center gap-2">
+                    <Boxes className="w-4 h-4 text-purple-700" />
+                    <span className="text-xs font-bold text-purple-950 uppercase tracking-wider">Mode Bundling</span>
                   </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                      Harga Jual Paket (Rp) (Opsional)
-                    </label>
-                    <input
-                      type="number"
-                      placeholder={`Default: Rp ${bundleRegularTotal.toLocaleString('id-ID')}`}
-                      value={bundleCustomPrice}
-                      onChange={(e) => setBundleCustomPrice(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-purple-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                    />
+                  <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-purple-200 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBundleMode('PRESET');
+                        if (bundles.length > 0 && !selectedBundlePresetId) {
+                          handleSelectBundlePreset(bundles[0].id);
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                        bundleMode === 'PRESET'
+                          ? 'bg-purple-600 text-white shadow-xs'
+                          : 'text-purple-800 hover:bg-purple-50'
+                      }`}
+                    >
+                      <Boxes className="w-3.5 h-3.5" />
+                      <span>📦 Pilih Paket Preset ({bundles.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBundleMode('CUSTOM');
+                        setSelectedBundlePresetId('');
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                        bundleMode === 'CUSTOM'
+                          ? 'bg-purple-600 text-white shadow-xs'
+                          : 'text-purple-800 hover:bg-purple-50'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>✏️ Susun Custom (Ad-hoc)</span>
+                    </button>
                   </div>
                 </div>
 
-                {/* Bundle Component Items */}
-                <div className="space-y-2.5 pt-1">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                      Komponen Isi Paket ({bundleItems.length} Produk)
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handleAddBundleComponent}
-                      className="flex items-center gap-1 px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-lg text-xs font-bold active:scale-95 transition cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>+ Tambah Komponen</span>
-                    </button>
-                  </div>
+                {/* MODE A: PRESET BUNDLING */}
+                {bundleMode === 'PRESET' ? (
+                  <div className="space-y-4">
+                    {/* Select Preset Search Picker */}
+                    <div>
+                      {bundles.length === 0 ? (
+                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                          Belum ada data paket bundling preset. Silakan buat master bundle di menu <strong>Katalog Produk &gt; Paket Bundling</strong> atau gunakan mode <strong>Susun Custom</strong> di atas.
+                        </div>
+                      ) : (
+                        <BundleSearchPicker
+                          bundles={bundles}
+                          selectedBundleId={selectedBundlePresetId}
+                          onSelectBundle={(b) => handleSelectBundlePreset(b.id)}
+                          label="Pilih Master Paket Bundling *"
+                          placeholder="🔍 Cari Paket Bundling (Ketik Kode, Nama Paket, Merk, atau Mesin)..."
+                          showPrice={true}
+                          showComponentsCount={true}
+                        />
+                      )}
+                    </div>
 
-                  <div className="space-y-2">
-                    {bundleItems.map((item, idx) => {
-                      const compProd = products.find(p => p.id === item.productId);
-                      const isCompInsufficient = (Number(item.qty) || 0) > (Number(compProd?.currentStock) || 0);
+                    {/* Preset Details & Price Card if selected */}
+                    {selectedBundlePresetId && (() => {
+                      const curPreset = bundles.find(b => b.id === selectedBundlePresetId);
+                      if (!curPreset) return null;
 
                       return (
-                        <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                          <div className="flex-1">
-                            <ProductSearchPicker
-                              products={products}
-                              selectedProductId={item.productId}
-                              onSelectProduct={(p) => handleUpdateBundleComponent(idx, 'productId', p.id)}
-                              placeholder="🔍 Cari Komponen Produk (Nama, SKU, Merk)..."
-                              label=""
-                              showStockInfo={true}
-                            />
+                        <div className="p-3.5 bg-purple-50/50 border border-purple-200 rounded-2xl space-y-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {curPreset.brand && (
+                              <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded-md text-[10px] font-bold">
+                                Merk: {curPreset.brand}
+                              </span>
+                            )}
+                            {curPreset.engine && (
+                              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-md text-[10px] font-bold">
+                                Mesin: {curPreset.engine}
+                              </span>
+                            )}
+                            {curPreset.car_variant && (
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md text-[10px] font-bold">
+                                Varian: {curPreset.car_variant}
+                              </span>
+                            )}
+                            <div className="ml-auto text-[11px] text-slate-500 flex items-center gap-2">
+                              <span>Harga Jual: <strong>Rp {(curPreset.selling_price || 0).toLocaleString('id-ID')}</strong></span>
+                              <span>• Reseller: <strong>Rp {(curPreset.reseller_price || 0).toLocaleString('id-ID')}</strong></span>
+                              <span>• Distributor: <strong>Rp {(curPreset.distributor_price || 0).toLocaleString('id-ID')}</strong></span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Bundle Name & Price (Always Editable for Negotiation) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                          Nama Paket Bundling *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Nama paket bundling"
+                          value={bundleName}
+                          onChange={(e) => setBundleName(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                          <span>Harga Jual Paket (Rp) *</span>
+                          <span className="text-[10px] font-bold text-emerald-600">Bisa diubah/nego</span>
+                        </label>
+                        <input
+                          type="number"
+                          required
+                          placeholder="Masukkan harga kesepakatan"
+                          value={bundleCustomPrice}
+                          onChange={(e) => setBundleCustomPrice(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-white border border-purple-300 rounded-xl text-sm font-bold text-purple-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          * Harga default terisi otomatis dari master, tetapi dapat diedit jika terjadi proses tawar-menawar.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Preset Components List (Read-only Recipe + Stock Check) */}
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                        Rincian Komponen Paket ({bundleItems.length} Komponen Produk)
+                      </label>
+                      <div className="divide-y divide-slate-100 border border-slate-200 rounded-2xl overflow-hidden bg-white">
+                        {bundleItems.map((item, idx) => {
+                          const compProd = getProductFromItem(item);
+                          const currentStock = Number(compProd?.currentStock) || 0;
+                          const reqQty = Number(item.qty) || 1;
+                          const totalNeeded = reqQty * Math.max(1, Number(bundleQty) || 1);
+                          const isInsufficient = totalNeeded > currentStock;
+
+                          return (
+                            <div key={idx} className="p-3 flex items-center justify-between hover:bg-slate-50/80 gap-3">
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-slate-900 truncate">
+                                  {compProd?.name || item.productName || 'Komponen Produk'}
+                                </p>
+                                <p className="text-[11px] text-slate-500">
+                                  SKU: <span className="font-mono text-purple-700">{compProd?.sku || item.sku || '-'}</span>
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-3 flex-shrink-0">
+                                <span className="text-xs font-bold px-2 py-1 bg-slate-100 text-slate-800 rounded-lg">
+                                  {reqQty} Pcs/Paket ({totalNeeded} Pcs Total)
+                                </span>
+                                <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
+                                  isInsufficient 
+                                    ? 'bg-rose-100 text-rose-700' 
+                                    : 'bg-emerald-100 text-emerald-800'
+                                }`}>
+                                  {isInsufficient ? `Stok Kurang (${currentStock} Pcs)` : `Stok Cukup (${currentStock} Pcs)`}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Quantity & Add to Cart Controls */}
+                    <div className="p-4 bg-purple-50/70 border border-purple-200 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-purple-900">Jumlah Paket:</span>
+                        <div className="flex items-center border border-purple-300 rounded-xl bg-white overflow-hidden shadow-xs">
+                          <button
+                            type="button"
+                            onClick={() => setBundleQty(prev => Math.max(1, Number(prev || 1) - 1))}
+                            className="px-3 py-1.5 text-purple-700 hover:bg-purple-100 font-bold text-sm cursor-pointer"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            min="1"
+                            value={bundleQty}
+                            onChange={(e) => setBundleQty(Math.max(1, Number(e.target.value)))}
+                            className="w-16 px-2 py-1.5 text-center text-xs font-bold text-purple-900 focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setBundleQty(prev => Number(prev || 1) + 1)}
+                            className="px-3 py-1.5 text-purple-700 hover:bg-purple-100 font-bold text-sm cursor-pointer"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <span className="text-xs text-purple-700 font-semibold">Paket</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleAddBundleToCart}
+                        disabled={isBundleStockInsufficient}
+                        className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl text-xs font-bold shadow-sm flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>+ Masukkan Paket ke Daftar Nota</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* MODE B: CUSTOM AD-HOC BUNDLING */
+                  <div className="space-y-4">
+                    {/* Bundle Name & Price */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                          Nama Paket Bundling Custom *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Contoh: Paket Combo 3 Botol + Tutup"
+                          value={bundleName}
+                          onChange={(e) => setBundleName(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                          Harga Jual Paket (Rp) (Opsional)
+                        </label>
+                        <input
+                          type="number"
+                          placeholder={`Default: Rp ${bundleRegularTotal.toLocaleString('id-ID')}`}
+                          value={bundleCustomPrice}
+                          onChange={(e) => setBundleCustomPrice(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-purple-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Bundle Component Items */}
+                    <div className="space-y-2.5 pt-1">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                          Komponen Isi Paket ({bundleItems.length} Produk)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleAddBundleComponent}
+                          className="flex items-center gap-1 px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-lg text-xs font-bold active:scale-95 transition cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>+ Tambah Komponen</span>
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {bundleItems.map((item, idx) => {
+                          const compProd = getProductFromItem(item);
+                          const totalNeeded = (Number(item.qty) || 0) * (Math.max(1, Number(bundleQty) || 1));
+                          const isCompInsufficient = totalNeeded > (Number(compProd?.currentStock) || 0);
+
+                          return (
+                            <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                              <div className="flex-1">
+                                <ProductSearchPicker
+                                  products={products}
+                                  selectedProductId={item.productId}
+                                  onSelectProduct={(p) => handleUpdateBundleComponent(idx, 'productId', p.id)}
+                                  placeholder="🔍 Cari Komponen Produk (Nama, SKU, Merk)..."
+                                  label=""
+                                  showStockInfo={true}
+                                />
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-500">Qty:</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={item.qty}
+                                  onChange={(e) => handleUpdateBundleComponent(idx, 'qty', Math.max(1, Number(e.target.value)))}
+                                  className="w-20 px-2.5 py-1.5 text-center bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                                />
+                                <span className="text-xs text-slate-500 font-semibold">Pcs</span>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveBundleComponent(idx)}
+                                  className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition active:scale-95 cursor-pointer ml-auto sm:ml-0"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+
+                              {isCompInsufficient && (
+                                <span className="text-[10px] font-bold text-rose-600 block sm:hidden">
+                                  Stok tidak mencukupi (Tersisa {compProd?.currentStock} Pcs, Diperlukan {totalNeeded} Pcs)
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Quantity & Add to Cart Controls */}
+                    <div className="p-4 bg-purple-50/70 border border-purple-200 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-purple-900">Jumlah Paket:</span>
+                        <div className="flex items-center border border-purple-300 rounded-xl bg-white overflow-hidden shadow-xs">
+                          <button
+                            type="button"
+                            onClick={() => setBundleQty(prev => Math.max(1, Number(prev || 1) - 1))}
+                            className="px-3 py-1.5 text-purple-700 hover:bg-purple-100 font-bold text-sm cursor-pointer"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            min="1"
+                            value={bundleQty}
+                            onChange={(e) => setBundleQty(Math.max(1, Number(e.target.value)))}
+                            className="w-16 px-2 py-1.5 text-center text-xs font-bold text-purple-900 focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setBundleQty(prev => Number(prev || 1) + 1)}
+                            className="px-3 py-1.5 text-purple-700 hover:bg-purple-100 font-bold text-sm cursor-pointer"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <span className="text-xs text-purple-700 font-semibold">Paket</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleAddBundleToCart}
+                        disabled={isBundleStockInsufficient}
+                        className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl text-xs font-bold shadow-sm flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>+ Masukkan Paket ke Daftar Nota</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Bundling Multi-Item Cart */}
+                {bundleCart.length > 0 && (
+                  <div className="space-y-3 p-4 bg-purple-50/80 border border-purple-200 rounded-2xl">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5">
+                        <PackageCheck className="w-4 h-4 text-purple-600" />
+                        Daftar Paket Bundling dalam Nota ({bundleCart.length} Jenis Paket)
+                      </h4>
+                      <span className="text-xs font-bold text-purple-700 bg-purple-100 px-2.5 py-0.5 rounded-full">
+                        Total: {bundleCart.reduce((sum, b) => sum + b.qty, 0)} Paket
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {bundleCart.map((cartItem, idx) => (
+                        <div key={cartItem.id || idx} className="p-3 bg-white border border-purple-100 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold px-2 py-0.5 bg-purple-100 text-purple-800 rounded">
+                                {cartItem.code || 'PAKET'}
+                              </span>
+                              <p className="text-sm font-bold text-slate-900 truncate">{cartItem.name}</p>
+                            </div>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              @ Rp {cartItem.unitPrice.toLocaleString('id-ID')} • Subtotal: <strong className="text-purple-700">Rp {cartItem.subtotal.toLocaleString('id-ID')}</strong>
+                            </p>
+                            <p className="text-[10px] text-slate-400 mt-0.5 truncate">
+                              Komponen: {cartItem.items?.map(c => `${c.qty * cartItem.qty}x ${c.productName}`).join(', ')}
+                            </p>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-slate-500">Qty:</span>
-                            <input
-                              type="number"
-                              min="1"
-                              value={item.qty}
-                              onChange={(e) => handleUpdateBundleComponent(idx, 'qty', Math.max(1, Number(e.target.value)))}
-                              className="w-20 px-2.5 py-1.5 text-center bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                            />
-                            <span className="text-xs text-slate-500 font-semibold">Pcs</span>
+                          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                            <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50 overflow-hidden">
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateBundleCartQty(idx, cartItem.qty - 1)}
+                                className="px-2.5 py-1 text-slate-600 hover:bg-slate-200 font-bold text-sm cursor-pointer"
+                              >
+                                -
+                              </button>
+                              <span className="px-3 py-1 text-xs font-bold text-slate-800 bg-white min-w-[32px] text-center">
+                                {cartItem.qty}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateBundleCartQty(idx, cartItem.qty + 1)}
+                                className="px-2.5 py-1 text-slate-600 hover:bg-slate-200 font-bold text-sm cursor-pointer"
+                              >
+                                +
+                              </button>
+                            </div>
 
                             <button
                               type="button"
-                              onClick={() => handleRemoveBundleComponent(idx)}
-                              className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition active:scale-95 cursor-pointer ml-auto sm:ml-0"
+                              onClick={() => handleRemoveBundleFromCart(idx)}
+                              className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                              title="Hapus paket"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
-
-                          {isCompInsufficient && (
-                            <span className="text-[10px] font-bold text-rose-600 block sm:hidden">
-                              Stok tidak mencukupi (Tersisa {compProd?.currentStock} Pcs)
-                            </span>
-                          )}
                         </div>
-                      );
-                    })}
+                      ))}
+                    </div>
+
+                    <div className="pt-2 flex justify-between items-center text-xs font-bold text-slate-700 border-t border-purple-200/60">
+                      <span>Grand Total Penjualan Bundling:</span>
+                      <span className="text-sm font-black text-purple-700">
+                        Rp {bundleCart.reduce((sum, b) => sum + b.subtotal, 0).toLocaleString('id-ID')}
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Notes */}
                 <div>
@@ -1707,10 +2313,13 @@ const parseScannedSKU = (text) => {
 
                 <button
                   type="submit"
-                  disabled={isBundleStockInsufficient}
+                  disabled={bundleCart.length === 0 && isBundleStockInsufficient}
                   className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-xl text-sm shadow-md shadow-purple-600/20 transition active:scale-98 cursor-pointer mt-2"
                 >
-                  Proses Penjualan Paket Bundling [{getPlatformLabel(salesPlatform)}]
+                  {bundleCart.length > 0
+                    ? `Proses Penjualan ${bundleCart.reduce((sum, b) => sum + b.qty, 0)} Paket Bundling (Rp ${bundleCart.reduce((sum, b) => sum + b.subtotal, 0).toLocaleString('id-ID')}) [${getPlatformLabel(salesPlatform)}]`
+                    : `Proses Penjualan Paket Bundling (${bundleQty} Set) [${getPlatformLabel(salesPlatform)}]`
+                  }
                 </button>
 
               </form>
@@ -1907,6 +2516,153 @@ const parseScannedSKU = (text) => {
                   </button>
                 </div>
               </form>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: ADD BUNDLE TO TRANSFER CART MODAL */}
+      {isTransferBundleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-150">
+            <div className="p-6 space-y-4">
+              
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
+                    <Boxes className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-base">Tambah dari Paket Bundling</h3>
+                    <p className="text-xs text-slate-500">Pecah resep paket bundling menjadi komponen kirim ke cabang.</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => {
+                    setIsTransferBundleModalOpen(false);
+                    setSelectedTransferBundleId('');
+                    setTransferBundleQty(1);
+                  }}
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Bundle Selector */}
+              <div className="space-y-3">
+                <div>
+                  {bundles.length === 0 ? (
+                    <div className="p-3 bg-amber-50 text-amber-800 rounded-xl text-xs border border-amber-200">
+                      Belum ada paket bundling yang tersimpan. Silakan tambahkan paket bundling di menu <strong>Katalog Produk</strong> terlebih dahulu.
+                    </div>
+                  ) : (
+                    <BundleSearchPicker
+                      bundles={bundles}
+                      selectedBundleId={selectedTransferBundleId}
+                      onSelectBundle={(b) => setSelectedTransferBundleId(b.id)}
+                      label="Pilih Paket Bundling"
+                      placeholder="🔍 Cari Paket Bundling (Ketik Kode, Nama Paket, Merk, Mesin)..."
+                      showPrice={false}
+                      showComponentsCount={true}
+                    />
+                  )}
+                </div>
+
+                {/* Bundle Set Qty */}
+                {selectedTransferBundleId && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                      Jumlah Paket yang Dikirim (Set)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setTransferBundleQty(Math.max(1, transferBundleQty - 1))}
+                        className="w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-700 flex items-center justify-center cursor-pointer transition active:scale-95"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <input
+                        type="number"
+                        min="1"
+                        value={transferBundleQty}
+                        onChange={(e) => setTransferBundleQty(Math.max(1, Number(e.target.value) || 1))}
+                        className="flex-1 px-3.5 py-2 text-center bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setTransferBundleQty(transferBundleQty + 1)}
+                        className="w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-700 flex items-center justify-center cursor-pointer transition active:scale-95"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Preview Components */}
+                {selectedTransferBundleId && (() => {
+                  const b = bundles.find(item => item.id === selectedTransferBundleId);
+                  if (!b || !b.items || b.items.length === 0) return null;
+
+                  return (
+                    <div className="space-y-2 pt-1">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                        Pratinjau Komponen yang Akan Dimasukkan ({b.items.length} Jenis Produk):
+                      </label>
+                      <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100 max-h-48 overflow-y-auto">
+                        {b.items.map((comp, idx) => {
+                          const p = getProductFromItem(comp);
+                          const totalAdd = (Number(comp.qty) || 1) * transferBundleQty;
+                          const currentStock = Number(p?.currentStock) || 0;
+                          const isLack = totalAdd > currentStock;
+
+                          return (
+                            <div key={idx} className="p-2.5 bg-slate-50/50 flex items-center justify-between text-xs">
+                              <div>
+                                <p className="font-bold text-slate-900">{p?.name || comp.productName || 'Komponen'}</p>
+                                <p className="text-[11px] text-slate-500 font-mono">SKU: {p?.sku || comp.sku || '-'}</p>
+                              </div>
+                              <div className="text-right">
+                                <span className="font-black text-purple-700">{totalAdd} Pcs</span>
+                                <span className={`block text-[10px] font-bold ${isLack ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                  Stok Pusat: {currentStock} Pcs
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTransferBundleModalOpen(false);
+                    setSelectedTransferBundleId('');
+                    setTransferBundleQty(1);
+                  }}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={!selectedTransferBundleId}
+                  onClick={handleAddBundleToTransferCart}
+                  className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-xl text-xs shadow-md shadow-purple-600/20 transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Tambahkan ke List Transfer</span>
+                </button>
+              </div>
 
             </div>
           </div>

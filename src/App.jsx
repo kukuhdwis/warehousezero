@@ -53,6 +53,7 @@ import {
   rejectBranchInventory,
   rejectBatchBranchInventory,
   updateBranchInventory,
+  deleteBranchInventory,
 
   fetchNotifications,
   subscribeNotifications,
@@ -69,15 +70,39 @@ import {
   createStockRequest,
   rejectStockRequest,
   fulfillStockRequest,
-  playNotificationSound
+  playNotificationSound,
+
+  fetchBundles,
+  subscribeBundles,
+  createBundle,
+  updateBundle,
+  deleteBundle,
+  deleteBundlesBatch,
+  importBundlesBatch
 } from './services/dataService';
 
 import BottomNav from './components/BottomNav';
 import GlobalSuccessModal from './components/GlobalSuccessModal';
 import LogoutConfirmModal from './components/LogoutConfirmModal';
+import CustomAlertModal from './components/CustomAlertModal';
+import { db } from './services/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(getStoredUser());
+  const [forceLogoutAlert, setForceLogoutAlert] = useState(null);
+
+  const handleForceLogout = async (reason) => {
+    try {
+      await logoutUser();
+    } catch (e) {
+      console.warn('Logout error:', e);
+    }
+    setCurrentUser(null);
+    setForceLogoutAlert(reason);
+    window.history.pushState({}, '', '/login');
+    setCurrentRoute('login');
+  };
   
   const internalTabs = ['dashboard', 'products', 'stock-in', 'stock-out', 'history', 'monitoring', 'users', 'branches'];
 
@@ -161,9 +186,11 @@ export default function App() {
   const [outboundInitialRequestData, setOutboundInitialRequestData] = useState(null);
   const [productsInitialTab, setProductsInitialTab] = useState(null);
   const [transactions, setTransactions] = useState([]);
+  const [historyInitialSearch, setHistoryInitialSearch] = useState('');
   const [branches, setBranches] = useState([]);
   const [brands, setBrands] = useState([]);
   const [machineCategories, setMachineCategories] = useState([]);
+  const [bundles, setBundles] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [barcodeProduct, setBarcodeProduct] = useState(null);
@@ -179,6 +206,15 @@ export default function App() {
     (p.sku || '').toLowerCase() === (detectedQrSku || '').toLowerCase() ||
     (p.code || '').toLowerCase() === (detectedQrSku || '').toLowerCase()
   );
+
+  const loadBundles = async () => {
+    try {
+      const bList = await fetchBundles();
+      setBundles(bList);
+    } catch (e) {
+      console.warn("Gagal memuat bundles:", e);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -196,6 +232,7 @@ export default function App() {
   useEffect(() => {
     if (currentUser) {
       loadData();
+      loadBundles();
     }
   }, [currentUser]);
 
@@ -253,6 +290,36 @@ export default function App() {
   // Initial Data Load (Safe Realtime Subscriptions)
   useEffect(() => {
     if (!currentUser) return;
+
+    // 0. Live Session Guard: Auto-logout immediately if User Doc or Branch Doc is deleted/deactivated by Admin
+    let unsubUserDoc = () => {};
+    let unsubBranchDoc = () => {};
+
+    if (currentUser?.uid && currentUser?.email !== 'admin@perusahaan.com') {
+      try {
+        const userRef = doc(db, 'users', currentUser.uid);
+        unsubUserDoc = onSnapshot(userRef, (snap) => {
+          if (!snap.exists() || snap.data()?.status === 'INACTIVE' || snap.data()?.status === 'DELETED') {
+            handleForceLogout('Sesi Anda telah berakhir. Akun Anda telah dinonaktifkan atau dihapus oleh Administrator.');
+          }
+        }, (err) => {
+          console.warn('User status guard listener warning:', err);
+        });
+
+        if (currentUser?.role === 'STAFF_BRANCH' && currentUser?.branchId && currentUser?.branchId !== 'ALL') {
+          const branchRef = doc(db, 'branches', currentUser.branchId);
+          unsubBranchDoc = onSnapshot(branchRef, (snap) => {
+            if (!snap.exists() || snap.data()?.status === 'INACTIVE' || snap.data()?.status === 'DELETED') {
+              handleForceLogout('Sesi Anda telah berakhir. Data cabang ini telah dinonaktifkan atau dihapus oleh Administrator.');
+            }
+          }, (err) => {
+            console.warn('Branch status guard listener warning:', err);
+          });
+        }
+      } catch (guardErr) {
+        console.warn('Failed to attach session guard listener:', guardErr);
+      }
+    }
 
     // 1. Live Notifications with Sound & Toast Detection
     const unsubNotifs = subscribeNotifications(currentUser, (liveNotifs) => {
@@ -317,6 +384,8 @@ export default function App() {
     });
 
     return () => {
+      unsubUserDoc();
+      unsubBranchDoc();
       unsubNotifs();
       unsubProducts();
       unsubMovements();
@@ -339,24 +408,31 @@ export default function App() {
   };
 
 
-  // Unauthenticated real-time stream for public catalog (72 Master Products)
-  // Only subscribe if the user is explicitly on the catalog page to avoid Firestore errors during logout
+  // Unauthenticated real-time stream for public catalog & landing page (Master Products & Master Bundles)
   useEffect(() => {
-    if (!currentUser && currentRoute === 'catalog') {
+    if (!currentUser && (currentRoute === 'catalog' || currentRoute === 'landing')) {
       const unsubProds = subscribeProducts((liveProds) => setProducts(liveProds));
       const unsubBrands = subscribeBrands((liveBrands) => setBrands(liveBrands));
       const unsubCats = subscribeMachineCategories((liveCats) => setMachineCategories(liveCats));
+      const unsubBundles = subscribeBundles((liveBundles) => setBundles(liveBundles));
       return () => {
         unsubProds();
         unsubBrands();
         unsubCats();
+        unsubBundles();
       };
     }
   }, [currentUser, currentRoute]);
 
   // Tampilkan Landing Page (Public)
   if (currentRoute === 'landing') {
-    return <LandingPage currentUser={currentUser} />;
+    return (
+      <LandingPage 
+        currentUser={currentUser} 
+        products={products}
+        bundles={bundles}
+      />
+    );
   }
 
   // Tampilkan Public E-Catalog
@@ -364,9 +440,14 @@ export default function App() {
     return (
       <PublicCatalog 
         products={products}
+        bundles={bundles}
         brands={brands}
         machineCategories={machineCategories}
         initialSku={initialUrlSku}
+        onGoToLanding={() => {
+          window.history.pushState({}, '', '/');
+          setCurrentRoute('landing');
+        }}
         onGoToLogin={() => {
           window.history.pushState({}, '', '/login');
           setCurrentRoute('login');
@@ -378,19 +459,35 @@ export default function App() {
   // Jika belum login -> Tampilkan Halaman Login (untuk route /login atau route internal jika belum login)
   if (!currentUser) {
     return (
-      <LoginView 
-        onLoginSuccess={(user) => {
-          setCurrentUser(user);
-          setActiveTab('dashboard');
-          // Update URL back to /dashboard after successful login
-          window.history.pushState({}, '', '/dashboard');
-          setCurrentRoute('app');
-        }} 
-        onOpenCatalog={() => {
-          window.history.pushState({}, '', '/catalog');
-          setCurrentRoute('catalog');
-        }}
-      />
+      <>
+        <LoginView 
+          onLoginSuccess={(user) => {
+            setCurrentUser(user);
+            setActiveTab('dashboard');
+            // Update URL back to /dashboard after successful login
+            window.history.pushState({}, '', '/dashboard');
+            setCurrentRoute('app');
+          }} 
+          onOpenCatalog={() => {
+            window.history.pushState({}, '', '/catalog');
+            setCurrentRoute('catalog');
+          }}
+          onGoToLanding={() => {
+            window.history.pushState({}, '', '/');
+            setCurrentRoute('landing');
+          }}
+        />
+        {forceLogoutAlert && (
+          <CustomAlertModal
+            isOpen={Boolean(forceLogoutAlert)}
+            onClose={() => setForceLogoutAlert(null)}
+            title="Sesi Berakhir"
+            message={forceLogoutAlert}
+            type="WARNING"
+            buttonText="Mengerti & Masuk Kembali"
+          />
+        )}
+      </>
     );
   }
 
@@ -499,6 +596,48 @@ export default function App() {
     });
   };
 
+  const handleDeleteBranchInventory = async (id) => {
+    await deleteBranchInventory(id);
+    await loadData();
+    setGlobalSuccessPopup({
+      title: "Inventaris Cabang Dihapus!",
+      message: "Data inventaris produk cabang telah berhasil dihapus dari database.",
+      details: [
+        { label: "Status", value: "Berhasil Dihapus" }
+      ]
+    });
+  };
+
+  // Handlers for Bundles
+  const handleCreateBundle = async (bundleData) => {
+    const res = await createBundle(bundleData);
+    await loadBundles();
+    return res;
+  };
+
+  const handleUpdateBundle = async (id, bundleData) => {
+    const res = await updateBundle(id, bundleData);
+    await loadBundles();
+    return res;
+  };
+
+  const handleDeleteBundle = async (id) => {
+    const res = await deleteBundle(id);
+    await loadBundles();
+    return res;
+  };
+
+  const handleDeleteBundlesBatch = async (ids) => {
+    const res = await deleteBundlesBatch(ids);
+    await loadBundles();
+    return res;
+  };
+
+  const handleImportBundlesBatch = async (bundleList, onProgress) => {
+    const res = await importBundlesBatch(bundleList, onProgress);
+    await loadBundles();
+    return res;
+  };
 
   // Handlers for Notifications
   const handleMarkNotificationRead = async (id) => {
@@ -679,9 +818,22 @@ export default function App() {
   // If Staff Cabang: ONLY map approved branchInventories for their specific branchId!
   const effectiveOutboundProducts = (currentUser?.role === 'STAFF_BRANCH')
     ? branchInventories
-        .filter(bi => bi.branchId === currentUser?.branchId && bi.status === 'APPROVED')
+        .filter(bi => {
+          const userBranchId = (currentUser.branchId || '').toLowerCase();
+          const userBranchName = (currentUser.branchName || '').toLowerCase();
+          const itemBranchId = (bi.branchId || '').toLowerCase();
+          const itemBranchName = (bi.branchName || '').toLowerCase();
+
+          const matchesBranch = (
+            (userBranchId && (itemBranchId === userBranchId || itemBranchName === userBranchId)) ||
+            (userBranchName && (itemBranchName === userBranchName || itemBranchId === userBranchName))
+          );
+          return matchesBranch && bi.status === 'APPROVED';
+        })
         .map(bi => {
           const masterP = products.find(p => p.id === bi.productId || p.sku === bi.sku);
+          const masterCost = Number(masterP?.reseller_price ?? masterP?.resellerPrice ?? masterP?.cost_price ?? masterP?.costPrice ?? 0);
+          const branchCost = Number(bi.costPrice ?? bi.reseller_price ?? bi.resellerPrice ?? 0);
           return {
             id: bi.productId,
             branchInventoryId: bi.id,
@@ -690,16 +842,19 @@ export default function App() {
             name: bi.productName,
             brand: bi.brand || masterP?.brand || 'Generic',
             machineCategory: masterP?.machineCategory || masterP?.kategoriMesin || 'Universal',
-            price: bi.price ?? masterP?.price ?? 0,
+            price: Number(bi.price ?? masterP?.selling_price ?? masterP?.price ?? 0),
             unit: bi.unit || masterP?.unit || 'Pcs',
             currentStock: Number(bi.stockQuantity) || 0,
             minStock: Number(bi.minStock) || 5,
-            costPrice: Number(bi.price ?? masterP?.price ?? 0),
+            costPrice: masterCost > 0 ? masterCost : (branchCost > 0 ? branchCost : 0),
             branchId: bi.branchId,
             branchName: bi.branchName || currentUser?.branchName || 'Cabang'
           };
         })
-    : products;
+    : products.map(p => ({
+        ...p,
+        costPrice: Number(p.costPrice ?? p.reseller_price ?? p.resellerPrice ?? p.cost_price ?? 0)
+      }));
 
   const handleNavigate = (tab, contextData = null) => {
     if (tab === 'products') {
@@ -736,6 +891,34 @@ export default function App() {
         setInboundInitialTab(contextData.tab);
       } else {
         setInboundInitialTab('INCOMING_DELIVERIES');
+      }
+    } else if (tab === 'history' && contextData) {
+      if (contextData.type === 'STOCK_TRANSFER_REJECTED') {
+        const msg = contextData.notif?.message || '';
+        const sjMatch = msg.match(/SJ-[A-Z0-9-]+/i);
+        const deliveryNote = contextData.deliveryNote || (sjMatch ? sjMatch[0] : null);
+        
+        const reasonMatch = msg.match(/Alasan:\s*["']?([^"']+)["']?/i);
+        const reason = contextData.rejectionReason || (reasonMatch ? reasonMatch[1] : '-');
+
+        const branchName = msg.split(' MENOLAK')[0] || 'Cabang';
+
+        setGlobalSuccessPopup({
+          title: "Kiriman Ditolak oleh Cabang ⚠️",
+          message: `Cabang ${branchName} telah MENOLAK paket kiriman. Seluruh unit barang otomatis diretur dan dikembalikan ke stok fisik Gudang Pusat.`,
+          details: [
+            { label: "Status Kiriman", value: "Ditolak / Diretur", highlight: true },
+            { label: "Cabang Penolak", value: branchName },
+            ...(deliveryNote ? [{ label: "No. Surat Jalan", value: deliveryNote }] : []),
+            { label: "Alasan Penolakan", value: `"${reason}"`, highlight: true },
+            { label: "Tindakan Sistem", value: "✓ Stok Master Pusat Dikembalikan & Tercatat di Riwayat" }
+          ],
+          buttonText: "Buka Riwayat Transaksi"
+        });
+
+        if (deliveryNote) {
+          setHistoryInitialSearch(deliveryNote);
+        }
       }
     }
     setActiveTab(tab);
@@ -794,6 +977,12 @@ export default function App() {
                   branches={branches}
                   brands={brands}
                   machineCategories={machineCategories}
+                  bundles={bundles}
+                  onCreateBundle={handleCreateBundle}
+                  onUpdateBundle={handleUpdateBundle}
+                  onDeleteBundle={handleDeleteBundle}
+                  onDeleteBundlesBatch={handleDeleteBundlesBatch}
+                  onImportBundlesBatch={handleImportBundlesBatch}
                   initialTab={productsInitialTab}
                   onCreateProduct={handleCreateProduct}
                   onUpdateProduct={handleUpdateProduct}
@@ -808,6 +997,7 @@ export default function App() {
                   onApproveBranchInventory={handleApproveBranchInventory}
                   onRejectBranchInventory={handleRejectBranchInventory}
                   onUpdateBranchInventory={handleUpdateBranchInventory}
+                  onDeleteBranchInventory={handleDeleteBranchInventory}
                 />
 
               )}
@@ -830,6 +1020,7 @@ export default function App() {
                   currentUser={currentUser}
                   products={effectiveOutboundProducts}
                   branches={branches}
+                  bundles={bundles}
                   stockRequests={stockRequests}
                   initialRequestData={outboundInitialRequestData}
                   onClearInitialRequest={() => setOutboundInitialRequestData(null)}
@@ -841,9 +1032,12 @@ export default function App() {
                 <TransactionHistory 
                   currentUser={currentUser}
                   transactions={transactions}
+                  products={products}
+                  initialSearch={historyInitialSearch}
+                  onClearInitialSearch={() => setHistoryInitialSearch('')}
                 />
               )}
-              {activeTab === 'monitoring' && (currentUser?.role === 'ADMIN' || currentUser?.role === 'STAFF_PUSAT' || currentUser?.role === 'PUSAT') && (
+              {activeTab === 'monitoring' && (
                 <BranchMonitoring 
                   currentUser={currentUser}
                   branches={branches}
@@ -851,6 +1045,17 @@ export default function App() {
                   branchInventories={branchInventories}
                   transactions={transactions}
                   users={users}
+                  brands={brands}
+                  machineCategories={machineCategories}
+                  onCreateProduct={handleCreateProduct}
+                  onUpdateProduct={handleUpdateProduct}
+                  onDeleteProduct={handleDeleteProduct}
+                  onDeleteProductsBatch={handleDeleteProductsBatch}
+                  onUpdateBranchInventory={handleUpdateBranchInventory}
+                  onRequestBranchInventory={handleRequestBranchInventory}
+                  onApproveBranchInventory={handleApproveBranchInventory}
+                  onRejectBranchInventory={handleRejectBranchInventory}
+                  onShowBarcode={setBarcodeProduct}
                 />
               )}
               {activeTab === 'users' && currentUser?.role === 'ADMIN' && (
@@ -1020,8 +1225,13 @@ export default function App() {
             handleNavigate(
               liveToastNotif.type === 'STOCK_TRANSFER_INCOMING' ? 'stock-in' :
               liveToastNotif.type === 'INVENTORY_REQUEST' ? 'products' :
-              liveToastNotif.type === 'STOCK_REQUEST_SUBMITTED' ? 'stock-out' : 'dashboard',
-              { tab: liveToastNotif.type === 'INVENTORY_REQUEST' ? 'APPROVAL_REQUESTS' : undefined }
+              liveToastNotif.type === 'STOCK_REQUEST_SUBMITTED' ? 'stock-out' :
+              liveToastNotif.type === 'STOCK_TRANSFER_REJECTED' ? 'history' : 'dashboard',
+              { 
+                tab: liveToastNotif.type === 'INVENTORY_REQUEST' ? 'APPROVAL_REQUESTS' : undefined,
+                type: liveToastNotif.type,
+                notif: liveToastNotif
+              }
             );
             setLiveToastNotif(null);
           }}

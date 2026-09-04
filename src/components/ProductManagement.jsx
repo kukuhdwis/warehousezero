@@ -50,7 +50,11 @@ import {
   CheckSquare,
   Square,
   MinusSquare,
-  Trash
+  Trash,
+  Loader2,
+  FileText,
+  Lock,
+  MessageSquare
 } from 'lucide-react';
 import GlobalSuccessModal from './GlobalSuccessModal';
 import CustomAlertModal from './CustomAlertModal';
@@ -58,7 +62,13 @@ import ConfirmationModal from './ConfirmationModal';
 import SpreadsheetImportModal from './SpreadsheetImportModal';
 import { db } from '../services/firebase';
 import { matchesSearch } from '../utils/searchUtils';
-import { downloadExhaustTemplate, generateSmartSKU } from '../services/spreadsheetService';
+import { 
+  downloadExhaustTemplate, 
+  downloadBundleTemplate, 
+  generateSmartSKU, 
+  readSpreadsheetFile, 
+  processBundleSpreadsheetData 
+} from '../services/spreadsheetService';
 import { compressImage } from '../services/dataService';
 
 // Unified Pagination Bar Component
@@ -191,6 +201,12 @@ export default function ProductManagement({
   branches = [],
   brands = [],
   machineCategories = [],
+  bundles = [],
+  onCreateBundle,
+  onUpdateBundle,
+  onDeleteBundle,
+  onDeleteBundlesBatch,
+  onImportBundlesBatch,
   initialTab,
   onCreateProduct, 
   onUpdateProduct, 
@@ -206,6 +222,7 @@ export default function ProductManagement({
   onApproveBranchRequest,
   onRejectBranchRequest,
   onUpdateBranchInventory,
+  onDeleteBranchInventory,
   onRequestBranchInventory
 }) {
 
@@ -300,6 +317,35 @@ export default function ProductManagement({
     setRecapPage(1);
   }, [searchTerm, statusFilter, selectedBranchFilter]);
 
+  // State for minimizable / collapsible branch groups in Recap Seluruh Cabang
+  const [collapsedBranches, setCollapsedBranches] = useState({});
+
+  const toggleBranchCollapse = (branchName) => {
+    setCollapsedBranches(prev => ({
+      ...prev,
+      [branchName]: !prev[branchName]
+    }));
+  };
+
+  const collapseAllBranches = (branchNames = []) => {
+    const updated = {};
+    branchNames.forEach(name => {
+      updated[name] = true;
+    });
+    setCollapsedBranches(updated);
+  };
+
+  const expandAllBranches = () => {
+    setCollapsedBranches({});
+  };
+
+  // Auto-expand all when a specific branch filter is selected
+  React.useEffect(() => {
+    if (selectedBranchFilter !== 'ALL') {
+      setCollapsedBranches({});
+    }
+  }, [selectedBranchFilter]);
+
   // Modals & Confirmation States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportSpreadsheetOpen, setIsImportSpreadsheetOpen] = useState(false);
@@ -339,6 +385,7 @@ export default function ProductManagement({
     material_finish: 'SS Polos',
     reseller_price: 0,
     selling_price: 0,
+    distributor_price: 0,
     profit_amount: 0,
     profit_percentage: 0,
     imageUrl: '',
@@ -351,6 +398,70 @@ export default function ProductManagement({
     status: 'ACTIVE',
     machineCategory: '2KD'
   });
+
+  // Bundling Management States
+  const [bundleSearchTerm, setBundleSearchTerm] = useState('');
+  const [bundleEngineFilter, setBundleEngineFilter] = useState('ALL');
+  const [bundleBrandFilter, setBundleBrandFilter] = useState('ALL');
+  const [bundleCurrentPage, setBundleCurrentPage] = useState(1);
+  const [bundlePageSize, setBundlePageSize] = useState(10);
+  const [isBundleModalOpen, setIsBundleModalOpen] = useState(false);
+  const [editingBundle, setEditingBundle] = useState(null);
+  const [bundleFormError, setBundleFormError] = useState('');
+  const [isSubmittingBundle, setIsSubmittingBundle] = useState(false);
+  const [deleteConfirmBundle, setDeleteConfirmBundle] = useState(null);
+
+  const [selectedBundleIds, setSelectedBundleIds] = useState(new Set());
+  const [isDeletingBundlesBatch, setIsDeletingBundlesBatch] = useState(false);
+  const [deleteBatchBundlesConfirm, setDeleteBatchBundlesConfirm] = useState(false);
+  const [bundlePhotoInputType, setBundlePhotoInputType] = useState('FILE');
+  const [isCompressingBundlePhoto, setIsCompressingBundlePhoto] = useState(false);
+
+  const [bundleFormData, setBundleFormData] = useState({
+    code: '',
+    name: '',
+    brand: 'NDK Exhaust',
+    engine_type: '2KD',
+    car_variant: '',
+    selling_price: 0,
+    reseller_price: 0,
+    distributor_price: 0,
+    description: '',
+    admin_note: '',
+    notes: '',
+    status: 'ACTIVE',
+    imageUrl: '',
+    items: []
+  });
+
+  const handleBundlePhotoUploadChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsCompressingBundlePhoto(true);
+      const compressed = await compressImage(file, 1200, 1200, 0.82);
+      setBundleFormData(prev => ({ ...prev, imageUrl: compressed }));
+    } catch (err) {
+      showAlert("Gagal Memproses Foto", err.message || "Pastikan file gambar valid (JPG, PNG, WebP).", "ERROR");
+    } finally {
+      setIsCompressingBundlePhoto(false);
+    }
+  };
+
+  // Bundle Import Excel States
+  const [isBundleImportModalOpen, setIsBundleImportModalOpen] = useState(false);
+  const [bundleImportFile, setBundleImportFile] = useState(null);
+  const [isProcessingBundleFile, setIsProcessingBundleFile] = useState(false);
+  const [parsedBundleData, setParsedBundleData] = useState(null);
+  const [isImportingBundles, setIsImportingBundles] = useState(false);
+  const [bundleImportProgress, setBundleImportProgress] = useState(0);
+  const [bundleSheetNames, setBundleSheetNames] = useState([]);
+  const [bundleSheetsData, setBundleSheetsData] = useState({});
+  const [selectedBundleSheet, setSelectedBundleSheet] = useState('');
+
+  // Branch Inventory Deletion States
+  const [deleteConfirmBranchInv, setDeleteConfirmBranchInv] = useState(null);
+  const [deleteGroupBranchConfirm, setDeleteGroupBranchConfirm] = useState(null);
 
   const [isCompressingPhoto, setIsCompressingPhoto] = useState(false);
   const [photoInputType, setPhotoInputType] = useState('FILE'); // 'FILE' | 'URL'
@@ -519,9 +630,21 @@ export default function ProductManagement({
 
   // Filtered Branch Inventories
   const myBranchInventories = branchInventories.filter(bi => {
+    const userBranchId = (currentUser?.branchId || '').toLowerCase();
+    const userBranchName = (currentUser?.branchName || '').toLowerCase();
+    const itemBranchId = (bi.branchId || '').toLowerCase();
+    const itemBranchName = (bi.branchName || '').toLowerCase();
+
     const matchesBranch = isBranchStaff 
-      ? bi.branchId === currentUser?.branchId 
-      : (selectedBranchFilter === 'ALL' || bi.branchId === selectedBranchFilter);
+      ? (
+          (userBranchId && (itemBranchId === userBranchId || itemBranchName === userBranchId)) ||
+          (userBranchName && (itemBranchName === userBranchName || itemBranchId === userBranchName))
+        )
+      : (
+          selectedBranchFilter === 'ALL' || 
+          bi.branchId === selectedBranchFilter ||
+          (selectedBranchObject && (bi.branchId === selectedBranchObject.id || bi.branchName === selectedBranchObject.name))
+        );
     const matchesStatus = statusFilter === 'ALL' || bi.status === statusFilter;
     const matchesSearchTerm = matchesSearch(searchTerm, bi.productName, bi.name, bi.sku, bi.brand, bi.branchName);
     return matchesBranch && matchesStatus && matchesSearchTerm;
@@ -561,7 +684,11 @@ export default function ProductManagement({
     : myBranchInventories.slice((safeRecapPage - 1) * recapPageSize, safeRecapPage * recapPageSize);
 
   const groupedPaginatedBranchInventories = paginatedMyBranchInventories.reduce((acc, inv) => {
-    const branchName = inv.branchName || 'Cabang Tidak Diketahui';
+    const matchedBranch = branches.find(b => 
+      (inv.branchId && b.id === inv.branchId) || 
+      (inv.branchName && b.name && b.name.trim().toLowerCase() === inv.branchName.trim().toLowerCase())
+    );
+    const branchName = matchedBranch ? matchedBranch.name : (inv.branchName || 'Cabang Tidak Diketahui');
     if (!acc[branchName]) acc[branchName] = [];
     acc[branchName].push(inv);
     return acc;
@@ -760,6 +887,7 @@ export default function ProductManagement({
       material_finish: 'SS Polos',
       reseller_price: 0,
       selling_price: 0,
+      distributor_price: 0,
       profit_amount: 0,
       profit_percentage: 0,
       imageUrl: '',
@@ -787,6 +915,7 @@ export default function ProductManagement({
 
     const sellingPrice = Number(product.selling_price ?? product.sellingPrice ?? product.price) || 0;
     const resellerPrice = Number(product.reseller_price ?? product.resellerPrice) || 0;
+    const distributorPrice = Number(product.distributor_price ?? product.distributorPrice) || (resellerPrice > 0 ? resellerPrice : sellingPrice);
     const profitAmount = product.profit_amount !== undefined ? Number(product.profit_amount) : (sellingPrice - resellerPrice);
     const profitPercentage = product.profit_percentage !== undefined ? Number(product.profit_percentage) : (resellerPrice > 0 ? ((profitAmount / resellerPrice) * 100) : 0);
     const engineType = product.engine_type || product.engineType || product.machineCategory || product.kategoriMesin || 'Universal / Semua Mesin';
@@ -804,6 +933,7 @@ export default function ProductManagement({
       material_finish: product.material_finish || product.materialFinish || 'SS Polos',
       reseller_price: resellerPrice,
       selling_price: sellingPrice,
+      distributor_price: distributorPrice,
       price: sellingPrice,
       profit_amount: profitAmount,
       profit_percentage: Math.round(profitPercentage * 100) / 100,
@@ -852,6 +982,7 @@ export default function ProductManagement({
 
     const sellingPrice = Number(formData.selling_price) || Number(formData.price) || 0;
     const resellerPrice = Number(formData.reseller_price) || 0;
+    const distributorPrice = Number(formData.distributor_price) || (resellerPrice > 0 ? resellerPrice : sellingPrice);
     const profitAmount = sellingPrice - resellerPrice;
     const profitPercentage = resellerPrice > 0 ? ((profitAmount / resellerPrice) * 100) : 0;
 
@@ -881,6 +1012,7 @@ export default function ProductManagement({
         material_finish: formData.material_finish || 'SS Polos',
         reseller_price: resellerPrice,
         selling_price: sellingPrice,
+        distributor_price: distributorPrice,
         price: sellingPrice, // Backward compatibility
         profit_amount: profitAmount,
         profit_percentage: Math.round(profitPercentage * 100) / 100,
@@ -937,6 +1069,347 @@ export default function ProductManagement({
       });
     } catch (err) {
       showAlert("Gagal Mengubah Status", err.message, "ERROR");
+    }
+  };
+
+  // ==========================================
+  // BUNDLE PRESET MANAGEMENT HANDLERS
+  // ==========================================
+
+  const handleToggleSelectBundle = (bundleId) => {
+    setSelectedBundleIds(prev => {
+      const next = new Set(prev);
+      if (next.has(bundleId)) next.delete(bundleId);
+      else next.add(bundleId);
+      return next;
+    });
+  };
+
+  const handleSelectAllBundlesOnPage = (pageBundles) => {
+    setSelectedBundleIds(prev => {
+      const allSelected = pageBundles.length > 0 && pageBundles.every(b => prev.has(b.id));
+      const next = new Set(prev);
+      if (allSelected) {
+        pageBundles.forEach(b => next.delete(b.id));
+      } else {
+        pageBundles.forEach(b => next.add(b.id));
+      }
+      return next;
+    });
+  };
+
+  const handleBatchDeleteBundles = async () => {
+    if (selectedBundleIds.size === 0) return;
+    try {
+      setIsDeletingBundlesBatch(true);
+      const idsToDelete = Array.from(selectedBundleIds);
+      if (onDeleteBundlesBatch) {
+        await onDeleteBundlesBatch(idsToDelete);
+      } else if (onDeleteBundle) {
+        for (const id of idsToDelete) {
+          await onDeleteBundle(id);
+        }
+      }
+      setSelectedBundleIds(new Set());
+      setDeleteBatchBundlesConfirm(false);
+      setSuccessModal({
+        title: "Paket Bundling Dihapus 🗑️",
+        message: `Sebanyak ${idsToDelete.length} paket bundling berhasil dibersihkan dari database.`
+      });
+    } catch (err) {
+      showAlert("Gagal Menghapus Paket", err.message || "Terjadi kesalahan saat menghapus paket.", "ERROR");
+    } finally {
+      setIsDeletingBundlesBatch(false);
+    }
+  };
+
+  const handleToggleBundleStatus = async (bundle) => {
+    if (!onUpdateBundle) return;
+    try {
+      const newStatus = bundle.status === 'INACTIVE' ? 'ACTIVE' : 'INACTIVE';
+      await onUpdateBundle(bundle.id, {
+        ...bundle,
+        status: newStatus
+      });
+      showAlert(
+        newStatus === 'ACTIVE' ? "Paket Bundling Diaktifkan" : "Paket Bundling Dinonaktifkan",
+        `Paket "${bundle.name}" sekarang berstatus ${newStatus === 'ACTIVE' ? 'Aktif' : 'Non-Aktif'}.`,
+        "SUCCESS"
+      );
+    } catch (err) {
+      showAlert("Gagal Mengubah Status", err.message, "ERROR");
+    }
+  };
+
+  const handleAutoGenerateBundleCode = () => {
+    const eng = (bundleFormData.engine_type || 'EXH').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6) || 'BDL';
+    const rand = Math.floor(100 + Math.random() * 900);
+    setBundleFormData(prev => ({
+      ...prev,
+      code: `BDL-${eng}-${rand}`
+    }));
+  };
+
+  const handleOpenCreateBundleModal = () => {
+    setEditingBundle(null);
+    setBundleFormError('');
+    setBundlePhotoInputType('FILE');
+    const defaultProd = products[0] || {};
+    const defaultEng = (machineCategories[0]?.name || '2KD');
+    setBundleFormData({
+      code: `BDL-${defaultEng.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5)}-${Math.floor(100 + Math.random() * 900)}`,
+      name: '',
+      brand: brands[0]?.name || 'NDK Exhaust',
+      engine_type: defaultEng,
+      car_variant: '',
+      selling_price: 0,
+      reseller_price: 0,
+      distributor_price: 0,
+      description: '',
+      admin_note: '',
+      notes: '',
+      status: 'ACTIVE',
+      imageUrl: '',
+      items: defaultProd.id ? [
+        {
+          productId: defaultProd.id,
+          productName: defaultProd.name,
+          sku: defaultProd.sku || '',
+          unit: defaultProd.unit || 'Pcs',
+          qty: 1
+        }
+      ] : []
+    });
+    setIsBundleModalOpen(true);
+  };
+
+  const handleOpenEditBundleModal = (bundle) => {
+    setEditingBundle(bundle);
+    setBundleFormError('');
+    setBundlePhotoInputType(bundle.imageUrl ? 'URL' : 'FILE');
+    const defaultProd = products[0] || {};
+    setBundleFormData({
+      code: bundle.code || '',
+      name: bundle.name || '',
+      brand: bundle.brand || brands[0]?.name || 'NDK Exhaust',
+      engine_type: bundle.engine_type || 'Universal',
+      car_variant: bundle.car_variant || '',
+      selling_price: Number(bundle.selling_price ?? bundle.price) || 0,
+      reseller_price: Number(bundle.reseller_price) || 0,
+      distributor_price: Number(bundle.distributor_price) || Number(bundle.reseller_price) || 0,
+      description: bundle.description || bundle.keterangan || '',
+      admin_note: bundle.admin_note || bundle.adminNotes || bundle.notes || '',
+      notes: bundle.admin_note || bundle.notes || '',
+      status: bundle.status || 'ACTIVE',
+      imageUrl: bundle.imageUrl || '',
+      items: Array.isArray(bundle.items) && bundle.items.length > 0
+        ? bundle.items.map(item => ({
+            productId: item.productId || '',
+            productName: item.productName || item.cleanName || item.name || '',
+            sku: item.sku || '',
+            unit: item.unit || 'Pcs',
+            qty: Number(item.qty) || 1
+          }))
+        : (defaultProd.id ? [{
+            productId: defaultProd.id,
+            productName: defaultProd.name,
+            sku: defaultProd.sku || '',
+            unit: defaultProd.unit || 'Pcs',
+            qty: 1
+          }] : [])
+    });
+    setIsBundleModalOpen(true);
+  };
+
+  const handleAddBundleItem = () => {
+    const defaultProd = products[0] || {};
+    setBundleFormData(prev => ({
+      ...prev,
+      items: [
+        ...prev.items,
+        {
+          productId: defaultProd.id || '',
+          productName: defaultProd.name || '',
+          sku: defaultProd.sku || '',
+          unit: defaultProd.unit || 'Pcs',
+          qty: 1
+        }
+      ]
+    }));
+  };
+
+  const handleRemoveBundleItem = (index) => {
+    setBundleFormData(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleBundleItemProductChange = (index, prodId) => {
+    const selected = products.find(p => p.id === prodId);
+    if (!selected) return;
+    setBundleFormData(prev => {
+      const updated = [...prev.items];
+      updated[index] = {
+        ...updated[index],
+        productId: selected.id,
+        productName: selected.name,
+        sku: selected.sku || selected.code || '',
+        unit: selected.unit || 'Pcs'
+      };
+      return { ...prev, items: updated };
+    });
+  };
+
+  const handleBundleItemQtyChange = (index, deltaOrVal) => {
+    setBundleFormData(prev => {
+      const updated = [...prev.items];
+      let newQty = typeof deltaOrVal === 'number' && Math.abs(deltaOrVal) === 1
+        ? (Number(updated[index].qty) || 1) + deltaOrVal
+        : Number(deltaOrVal) || 1;
+      if (newQty < 1) newQty = 1;
+      updated[index] = { ...updated[index], qty: newQty };
+      return { ...prev, items: updated };
+    });
+  };
+
+  const handleSubmitBundleForm = async (e) => {
+    e.preventDefault();
+    setBundleFormError('');
+
+    if (!bundleFormData.name.trim()) {
+      setBundleFormError("Nama Paket Bundling wajib diisi.");
+      return;
+    }
+    if (!bundleFormData.items || bundleFormData.items.length === 0) {
+      setBundleFormError("Paket Bundling minimal harus memiliki 1 komponen produk.");
+      return;
+    }
+
+    try {
+      setIsSubmittingBundle(true);
+      if (editingBundle && onUpdateBundle) {
+        await onUpdateBundle(editingBundle.id, bundleFormData);
+        setSuccessModal({
+          title: "Paket Bundling Diperbarui! 📦",
+          message: `Paket bundling "${bundleFormData.name}" berhasil diperbarui di database.`
+        });
+      } else if (onCreateBundle) {
+        await onCreateBundle(bundleFormData);
+        setSuccessModal({
+          title: "Paket Bundling Dibuat! 📦",
+          message: `Paket bundling "${bundleFormData.name}" berhasil didaftarkan di katalog bundling.`
+        });
+      }
+      setIsBundleModalOpen(false);
+    } catch (err) {
+      setBundleFormError(err.message || "Gagal menyimpan paket bundling.");
+    } finally {
+      setIsSubmittingBundle(false);
+    }
+  };
+
+  const handleConfirmDeleteBundle = async () => {
+    if (!deleteConfirmBundle || !onDeleteBundle) return;
+    try {
+      await onDeleteBundle(deleteConfirmBundle.id);
+      setSuccessModal({
+        title: "Paket Bundling Dihapus",
+        message: `Paket bundling "${deleteConfirmBundle.name}" berhasil dihapus dari sistem.`
+      });
+      setDeleteConfirmBundle(null);
+    } catch (err) {
+      showAlert("Gagal Menghapus Bundle", err.message, "ERROR");
+    }
+  };
+
+  // Bundle Spreadsheet Import Handlers
+  const handleProcessBundleSpreadsheet = async (selectedFile) => {
+    if (!selectedFile) return;
+    setBundleImportFile(selectedFile);
+    setIsProcessingBundleFile(true);
+    try {
+      const parsedWorkbook = await readSpreadsheetFile(selectedFile);
+      const sNames = parsedWorkbook.sheetNames || [];
+      const sData = parsedWorkbook.sheetsData || {};
+      const activeSheet = parsedWorkbook.activeSheetName || (sNames[0] || '');
+      const activeAoa = (sData[activeSheet] && sData[activeSheet].length > 0) ? sData[activeSheet] : (parsedWorkbook.rawAoa || []);
+
+      setBundleSheetNames(sNames);
+      setBundleSheetsData(sData);
+      setSelectedBundleSheet(activeSheet);
+
+      const result = processBundleSpreadsheetData(activeAoa, products);
+      setParsedBundleData(result);
+    } catch (err) {
+      showAlert("Gagal Membaca File Bundling", err.message, "ERROR");
+      setBundleImportFile(null);
+      setParsedBundleData(null);
+      setBundleSheetNames([]);
+      setBundleSheetsData({});
+      setSelectedBundleSheet('');
+    } finally {
+      setIsProcessingBundleFile(false);
+    }
+  };
+
+  const handleSelectBundleSheet = (sheetName) => {
+    setSelectedBundleSheet(sheetName);
+    const aoa = bundleSheetsData[sheetName] || [];
+    const result = processBundleSpreadsheetData(aoa, products);
+    setParsedBundleData(result);
+  };
+
+  // Branch Inventory Deletion Handlers
+  const handleConfirmDeleteBranchInventory = async () => {
+    if (!deleteConfirmBranchInv || !onDeleteBranchInventory) return;
+    try {
+      await onDeleteBranchInventory(deleteConfirmBranchInv.id);
+      setDeleteConfirmBranchInv(null);
+    } catch (err) {
+      showAlert("Gagal Menghapus Inventaris", err.message, "ERROR");
+    }
+  };
+
+  const handleConfirmDeleteWholeBranchGroup = async () => {
+    if (!deleteGroupBranchConfirm || !onDeleteBranchInventory) return;
+    try {
+      const { items, branchName } = deleteGroupBranchConfirm;
+      for (const item of items) {
+        await onDeleteBranchInventory(item.id);
+      }
+      setSuccessModal({
+        title: "Seluruh Stok Cabang Dihapus",
+        message: `Sebanyak ${items.length} item inventaris untuk "${branchName}" berhasil dibersihkan dari sistem.`
+      });
+      setDeleteGroupBranchConfirm(null);
+    } catch (err) {
+      showAlert("Gagal Menghapus Inventaris", err.message, "ERROR");
+    }
+  };
+
+  const handleExecuteImportBundles = async () => {
+    if (!parsedBundleData || !parsedBundleData.bundles || !onImportBundlesBatch) return;
+    setIsImportingBundles(true);
+    setBundleImportProgress(0);
+    try {
+      const validBundles = parsedBundleData.bundles.filter(b => b.isValid);
+      const res = await onImportBundlesBatch(validBundles, (pct) => setBundleImportProgress(pct));
+      setIsBundleImportModalOpen(false);
+      setBundleImportFile(null);
+      setParsedBundleData(null);
+      setSuccessModal({
+        title: "Import Paket Bundling Berhasil! 📦",
+        message: `Sebanyak ${res.createdCount} paket bundling berhasil disimpan ke master.`,
+        details: [
+          { label: "Total Baris", value: res.total },
+          { label: "Berhasil Diimpor", value: `${res.createdCount} Paket` }
+        ]
+      });
+    } catch (err) {
+      showAlert("Gagal Impor Bundling", err.message, "ERROR");
+    } finally {
+      setIsImportingBundles(false);
     }
   };
 
@@ -1353,6 +1826,18 @@ export default function ProductManagement({
                 <Building2 className="w-3.5 h-3.5" />
                 <span>Rekap Seluruh Cabang ({branchInventories.filter(bi => bi.status === 'APPROVED').length})</span>
               </button>
+
+              <button
+                onClick={() => setActiveSubTab('BUNDLES')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+                  activeSubTab === 'BUNDLES'
+                    ? 'bg-purple-700 text-white shadow-2xs'
+                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <Boxes className="w-3.5 h-3.5" />
+                <span>Paket Bundling ({bundles.length})</span>
+              </button>
             </>
           )}
 
@@ -1381,6 +1866,18 @@ export default function ProductManagement({
               >
                 <Package className="w-3.5 h-3.5" />
                 <span>Referensi Master Produk Pusat ({products.length})</span>
+              </button>
+
+              <button
+                onClick={() => setActiveSubTab('BUNDLES')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+                  activeSubTab === 'BUNDLES'
+                    ? 'bg-purple-700 text-white shadow-2xs'
+                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <Boxes className="w-3.5 h-3.5" />
+                <span>Katalog Bundling ({bundles.length})</span>
               </button>
             </>
           )}
@@ -2020,6 +2517,16 @@ export default function ProductManagement({
                                       Setujui
                                     </button>
                                   )}
+                                  {canManageProducts && (
+                                    <button 
+                                      type="button"
+                                      onClick={() => setDeleteConfirmBranchInv(inv)} 
+                                      className="p-1.5 text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 rounded-xl transition cursor-pointer" 
+                                      title="Hapus Dari Inventaris Cabang Ini"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             );
@@ -2112,12 +2619,22 @@ export default function ProductManagement({
                                             <span>Edit Stok</span>
                                           </button>
                                         )}
-                                        {isPending && (
+                                        {!isBranchStaff && isPending && (
                                           <button
                                             onClick={() => handleOpenApproveModal(inv)}
                                             className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition cursor-pointer whitespace-nowrap shadow-2xs"
                                           >
                                             Setujui
+                                          </button>
+                                        )}
+                                        {canManageProducts && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setDeleteConfirmBranchInv(inv)}
+                                            className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                            title="Hapus Dari Inventaris Cabang Ini"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
                                           </button>
                                         )}
                                       </div>
@@ -3038,20 +3555,45 @@ export default function ProductManagement({
                 </div>
               ) : (
                 <>
-                  {/* Mobile Card Feed for Branch Inventories (Smartphone Friendly) */}
-                  <div className="block md:hidden divide-y divide-slate-100 p-2.5 sm:p-3 space-y-3 bg-slate-50/50">
-                    {Object.entries(groupedPaginatedBranchInventories).map(([branchName, items]) => (
-                      <div key={branchName} className="space-y-3">
-                        {!isBranchStaff && (
-                          <div className="bg-sky-50 px-3 py-2 rounded-xl border border-sky-100 mb-2">
-                            <h3 className="font-bold text-sm text-sky-800">
-                              🏢 {branchName}
-                            </h3>
-                          </div>
-                        )}
-                        {items.map((inv, idx) => {
-                          const originalIndex = paginatedMyBranchInventories.findIndex(i => i.id === inv.id);
-                          const rowNumber = (safeRecapPage - 1) * (recapPageSize === 0 ? 0 : recapPageSize) + originalIndex + 1;
+                  {/* Quick Actions Toolbar: Collapse All / Expand All for Branches */}
+                  {!isBranchStaff && Object.keys(groupedPaginatedBranchInventories).length > 0 && (
+                    <div className="bg-slate-50 p-3 sm:px-4 sm:py-2.5 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2.5 text-xs">
+                      <div className="flex items-center gap-2 text-slate-700 font-semibold">
+                        <Building2 className="w-4 h-4 text-sky-600" />
+                        <span>
+                          Total: <strong className="text-slate-900">{Object.keys(groupedPaginatedBranchInventories).length} Cabang</strong>
+                        </span>
+                        <span className="hidden sm:inline text-slate-300">•</span>
+                        <span className="hidden sm:inline text-slate-500 font-normal">Klik nama cabang untuk buka/minimise tabel</span>
+                      </div>
+                      <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                        <button
+                          type="button"
+                          onClick={() => collapseAllBranches(Object.keys(groupedPaginatedBranchInventories))}
+                          className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-200 shadow-2xs transition cursor-pointer inline-flex items-center gap-1.5 text-xs active:scale-95"
+                          title="Tutup/minimise semua tabel cabang agar tampilan rapi dan ringkas"
+                        >
+                          <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Tutup Semua Cabang</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={expandAllBranches}
+                          className="px-3 py-1.5 bg-white hover:bg-sky-50 text-sky-700 font-bold rounded-lg border border-sky-200 shadow-2xs transition cursor-pointer inline-flex items-center gap-1.5 text-xs active:scale-95"
+                          title="Buka seluruh tabel cabang"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5 text-sky-600" />
+                          <span>Buka Semua Cabang</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Helper renderer for branch inventory card (Mobile) */}
+                  {(() => {
+                    const renderBranchInventoryMobileCard = (inv) => {
+                      const originalIndex = paginatedMyBranchInventories.findIndex(i => i.id === inv.id);
+                      const rowNumber = (safeRecapPage - 1) * (recapPageSize === 0 ? 0 : recapPageSize) + (originalIndex >= 0 ? originalIndex : 0) + 1;
                       const isApproved = inv.status === 'APPROVED';
                       const isPending = inv.status === 'PENDING_APPROVAL';
                       const isRejected = inv.status === 'REJECTED';
@@ -3139,126 +3681,266 @@ export default function ProductManagement({
                                 Setujui
                               </button>
                             )}
+                            {canManageProducts && (
+                              <button
+                                type="button"
+                                onClick={() => setDeleteConfirmBranchInv(inv)}
+                                className="p-1.5 text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 rounded-xl transition cursor-pointer"
+                                title="Hapus Dari Inventaris Cabang Ini"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
-                    })}
-                    </div>
-                  ))}
-                  </div>
+                    };
 
-                  {/* Desktop Table View (Screens >= md) */}
-                  <div className="hidden md:block overflow-x-auto space-y-6">
-                    {Object.entries(groupedPaginatedBranchInventories).map(([branchName, items]) => (
-                      <div key={branchName} className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
-                        {!isBranchStaff && (
-                          <div className="bg-sky-50 px-4 py-3 border-b border-sky-100 flex items-center justify-between">
-                            <h3 className="font-bold text-sm text-sky-800">
-                              🏢 {branchName}
-                            </h3>
-                            <span className="text-xs font-semibold text-sky-600 bg-sky-100 px-2 py-0.5 rounded-md">
-                              {items.length} Item
+                    const renderBranchInventoryTableRow = (inv) => {
+                      const originalIndex = paginatedMyBranchInventories.findIndex(i => i.id === inv.id);
+                      const rowNumber = (safeRecapPage - 1) * (recapPageSize === 0 ? 0 : recapPageSize) + (originalIndex >= 0 ? originalIndex : 0) + 1;
+                      const isApproved = inv.status === 'APPROVED';
+                      const isPending = inv.status === 'PENDING_APPROVAL';
+                      const isRejected = inv.status === 'REJECTED';
+
+                      return (
+                        <tr key={inv.id} className="hover:bg-slate-50/70 transition">
+                          <td className="px-3.5 py-3.5 text-center font-bold text-slate-400 text-xs whitespace-nowrap">
+                            {rowNumber}
+                          </td>
+
+                          <td className="px-5 py-3.5 font-medium text-slate-900 min-w-[200px]">
+                            <div className="font-bold text-slate-900 leading-snug">{inv.productName}</div>
+                            <div className="text-xs text-slate-400 font-mono flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              <span className="whitespace-nowrap font-bold text-slate-600">SKU: {inv.sku}</span>
+                              <span>•</span>
+                              <span className="text-indigo-600 font-semibold whitespace-nowrap">{inv.brand}</span>
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
+                              isApproved ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
+                            }`}>
+                              {inv.stockQuantity} Pcs
                             </span>
-                          </div>
-                        )}
-                        <table className="w-full text-left text-sm border-collapse">
-                          <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase border-b border-slate-200">
-                            <tr>
-                              <th className="px-3.5 py-3.5 text-center font-bold text-slate-500 text-xs w-12 whitespace-nowrap">No.</th>
-                              <th className="px-5 py-3.5 min-w-[200px]">Produk & Merk</th>
-                              <th className="px-4 py-3.5 text-center whitespace-nowrap min-w-[130px]">Stok Fisik di Cabang</th>
-                              <th className="px-4 py-3.5 text-right whitespace-nowrap min-w-[110px]">Harga Jual</th>
-                              <th className="px-4 py-3.5 text-center whitespace-nowrap min-w-[150px]">Status Verifikasi Pusat</th>
-                              <th className="px-5 py-3.5 text-right whitespace-nowrap min-w-[130px]">Aksi</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {items.map((inv, idx) => {
-                              const originalIndex = paginatedMyBranchInventories.findIndex(i => i.id === inv.id);
-                              const rowNumber = (safeRecapPage - 1) * (recapPageSize === 0 ? 0 : recapPageSize) + originalIndex + 1;
-                              const isApproved = inv.status === 'APPROVED';
-                              const isPending = inv.status === 'PENDING_APPROVAL';
-                              const isRejected = inv.status === 'REJECTED';
+                          </td>
+
+                          <td className="px-4 py-3.5 text-right font-bold text-slate-800 text-xs whitespace-nowrap">
+                            Rp {(Number(inv.price) || 0).toLocaleString('id-ID')}
+                          </td>
+
+                          <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                            {isApproved && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
+                                <Check className="w-3.5 h-3.5" />
+                                ✓ Terverifikasi & Aktif
+                              </span>
+                            )}
+                            {isPending && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse whitespace-nowrap">
+                                <Clock className="w-3.5 h-3.5" />
+                                ⏳ Menunggu Verifikasi Pusat
+                              </span>
+                            )}
+                            {isRejected && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap" title={inv.rejectionReason || 'Ditolak'}>
+                                <Ban className="w-3.5 h-3.5" />
+                                ⚠️ Ditolak Pusat
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1.5 flex-nowrap">
+                              {isApproved && (
+                                <button
+                                  onClick={() => handleOpenStockAdjustModal(inv, 'BRANCH')}
+                                  className="px-2.5 py-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition cursor-pointer inline-flex items-center gap-1 font-bold text-xs whitespace-nowrap"
+                                  title="Edit / Opname Stok Cabang Direct"
+                                >
+                                  <Sliders className="w-3.5 h-3.5" />
+                                  <span>Edit Stok</span>
+                                </button>
+                              )}
+                              {!isBranchStaff && isPending && (
+                                <button
+                                  onClick={() => handleApprove(inv.id)}
+                                  className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition cursor-pointer whitespace-nowrap shadow-2xs"
+                                >
+                                  Setujui
+                                </button>
+                              )}
+                              {canManageProducts && (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteConfirmBranchInv(inv)}
+                                  className="p-1.5 text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 rounded-lg transition cursor-pointer whitespace-nowrap"
+                                  title="Hapus Dari Inventaris Cabang Ini"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    };
+
+                    return (
+                      <>
+                        {/* Mobile Card Feed for Branch Inventories (Smartphone Friendly) */}
+                        <div className="block md:hidden divide-y divide-slate-100 p-2.5 sm:p-3 space-y-3 bg-slate-50/50">
+                          {isBranchStaff ? (
+                            paginatedMyBranchInventories.map(inv => renderBranchInventoryMobileCard(inv))
+                          ) : (
+                            Object.entries(groupedPaginatedBranchInventories).map(([branchName, items]) => {
+                              const isCollapsed = Boolean(collapsedBranches[branchName]);
+                              const totalStock = items.reduce((sum, i) => sum + (Number(i.stockQuantity) || 0), 0);
 
                               return (
-                                <tr key={inv.id} className="hover:bg-slate-50/70 transition">
-                                  <td className="px-3.5 py-3.5 text-center font-bold text-slate-400 text-xs whitespace-nowrap">
-                                    {rowNumber}
-                                  </td>
-
-                                  <td className="px-5 py-3.5 font-medium text-slate-900 min-w-[200px]">
-                                    <div className="font-bold text-slate-900 leading-snug">{inv.productName}</div>
-                                    <div className="text-xs text-slate-400 font-mono flex items-center gap-1.5 mt-0.5 flex-wrap">
-                                      <span className="whitespace-nowrap font-bold text-slate-600">SKU: {inv.sku}</span>
-                                      <span>•</span>
-                                      <span className="text-indigo-600 font-semibold whitespace-nowrap">{inv.brand}</span>
+                                <div key={branchName} className="space-y-3">
+                                  <div 
+                                    onClick={() => toggleBranchCollapse(branchName)}
+                                    className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer select-none transition ${
+                                      isCollapsed 
+                                        ? 'bg-sky-50/60 hover:bg-sky-100/70 border-sky-200/80 text-sky-900' 
+                                        : 'bg-sky-50 hover:bg-sky-100 border-sky-200 text-sky-900 shadow-2xs'
+                                    }`}
+                                    title={isCollapsed ? `Klik untuk membuka ${branchName}` : `Klik untuk menutup ${branchName}`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-base">🏢</span>
+                                      <div>
+                                        <h3 className="font-bold text-sm text-sky-950 leading-tight">
+                                          {branchName}
+                                        </h3>
+                                        <p className="text-[11px] text-sky-700 font-medium mt-0.5">
+                                          {items.length} Item • Total Stok: {totalStock} Pcs
+                                        </p>
+                                      </div>
                                     </div>
-                                  </td>
-
-                                  <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
-                                      isApproved ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
-                                    }`}>
-                                      {inv.stockQuantity} Pcs
-                                    </span>
-                                  </td>
-
-                                  <td className="px-4 py-3.5 text-right font-bold text-slate-800 text-xs whitespace-nowrap">
-                                    Rp {(Number(inv.price) || 0).toLocaleString('id-ID')}
-                                  </td>
-
-                                  <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                                    {isApproved && (
-                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
-                                        <Check className="w-3.5 h-3.5" />
-                                        ✓ Terverifikasi & Aktif
-                                      </span>
-                                    )}
-                                    {isPending && (
-                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse whitespace-nowrap">
-                                        <Clock className="w-3.5 h-3.5" />
-                                        ⏳ Menunggu Verifikasi Pusat
-                                      </span>
-                                    )}
-                                    {isRejected && (
-                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap" title={inv.rejectionReason || 'Ditolak'}>
-                                        <Ban className="w-3.5 h-3.5" />
-                                        ⚠️ Ditolak Pusat
-                                      </span>
-                                    )}
-                                  </td>
-
-                                  <td className="px-5 py-3.5 text-right whitespace-nowrap">
-                                    <div className="flex items-center justify-end gap-1.5 flex-nowrap">
-                                      {isApproved && (
-                                        <button
-                                          onClick={() => handleOpenStockAdjustModal(inv, 'BRANCH')}
-                                          className="px-2.5 py-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition cursor-pointer inline-flex items-center gap-1 font-bold text-xs whitespace-nowrap"
-                                          title="Edit / Opname Stok Cabang Direct"
-                                        >
-                                          <Sliders className="w-3.5 h-3.5" />
-                                          <span>Edit Stok</span>
-                                        </button>
-                                      )}
-                                      {!isBranchStaff && isPending && (
-                                        <button
-                                          onClick={() => handleApprove(inv.id)}
-                                          className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition cursor-pointer whitespace-nowrap shadow-2xs"
-                                        >
-                                          Setujui
-                                        </button>
+                                    <div className="flex items-center gap-1 text-xs font-bold text-sky-700 bg-white px-2.5 py-1 rounded-lg border border-sky-200 shadow-2xs">
+                                      <span>{isCollapsed ? 'Buka' : 'Tutup'}</span>
+                                      {isCollapsed ? (
+                                        <ChevronDown className="w-3.5 h-3.5 text-sky-600" />
+                                      ) : (
+                                        <ChevronUp className="w-3.5 h-3.5 text-sky-600" />
                                       )}
                                     </div>
-                                  </td>
+                                  </div>
 
-                                </tr>
+                                  {!isCollapsed && items.map(inv => renderBranchInventoryMobileCard(inv))}
+                                </div>
                               );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    ))}
-                  </div>
+                            })
+                          )}
+                        </div>
+
+                        {/* Desktop Table View (Screens >= md) */}
+                        <div className="hidden md:block overflow-x-auto space-y-4">
+                          {isBranchStaff ? (
+                            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs transition duration-150">
+                              <table className="w-full text-left text-sm border-collapse">
+                                <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase border-b border-slate-200">
+                                  <tr>
+                                    <th className="px-3.5 py-3.5 text-center font-bold text-slate-500 text-xs w-12 whitespace-nowrap">No.</th>
+                                    <th className="px-5 py-3.5 min-w-[200px]">Produk & Merk</th>
+                                    <th className="px-4 py-3.5 text-center whitespace-nowrap min-w-[130px]">Stok Fisik di Cabang</th>
+                                    <th className="px-4 py-3.5 text-right whitespace-nowrap min-w-[110px]">Harga Jual</th>
+                                    <th className="px-4 py-3.5 text-center whitespace-nowrap min-w-[150px]">Status Verifikasi Pusat</th>
+                                    <th className="px-5 py-3.5 text-right whitespace-nowrap min-w-[130px]">Aksi</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {paginatedMyBranchInventories.map(inv => renderBranchInventoryTableRow(inv))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            Object.entries(groupedPaginatedBranchInventories).map(([branchName, items]) => {
+                              const isCollapsed = Boolean(collapsedBranches[branchName]);
+                              const totalStock = items.reduce((sum, i) => sum + (Number(i.stockQuantity) || 0), 0);
+
+                              return (
+                                <div key={branchName} className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs transition duration-150">
+                                  <div 
+                                    onClick={() => toggleBranchCollapse(branchName)}
+                                    className={`px-4 py-3 flex items-center justify-between cursor-pointer select-none transition ${
+                                      isCollapsed 
+                                        ? 'bg-sky-50/50 hover:bg-sky-100/70 border-b-0' 
+                                        : 'bg-sky-50 hover:bg-sky-100/80 border-b border-sky-100'
+                                    }`}
+                                    title={isCollapsed ? `Klik untuk membuka tabel produk ${branchName}` : `Klik untuk menutup/minimise tabel ${branchName}`}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div className={`p-1.5 rounded-lg transition ${isCollapsed ? 'bg-sky-100 text-sky-700' : 'bg-sky-600 text-white shadow-2xs'}`}>
+                                        <Building2 className="w-4 h-4" />
+                                      </div>
+                                      <div className="flex items-center gap-2.5">
+                                        <h3 className="font-bold text-sm text-sky-950 flex items-center gap-1.5">
+                                          {branchName}
+                                        </h3>
+                                        <span className="text-xs font-bold text-sky-700 bg-sky-100/90 px-2.5 py-0.5 rounded-md border border-sky-200/60">
+                                          {items.length} Item
+                                        </span>
+                                        <span className="text-[11px] font-semibold text-slate-500 bg-white/90 px-2.5 py-0.5 rounded-md border border-slate-200">
+                                          Total Stok: {totalStock} Pcs
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                      {canManageProducts && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setDeleteGroupBranchConfirm({ items, branchName });
+                                          }}
+                                          className="text-[11px] font-bold text-rose-600 hover:text-rose-800 hover:underline cursor-pointer bg-white px-2.5 py-1 rounded-md border border-rose-200 shadow-2xs transition"
+                                          title="Hapus seluruh inventaris pada cabang ini"
+                                        >
+                                          Hapus Semua Item Cabang Ini
+                                        </button>
+                                      )}
+
+                                      <div className="flex items-center gap-1 text-xs font-bold text-sky-700 bg-white hover:bg-sky-50 px-2.5 py-1 rounded-lg border border-sky-200 shadow-2xs transition cursor-pointer">
+                                        <span>{isCollapsed ? 'Buka' : 'Tutup'}</span>
+                                        {isCollapsed ? (
+                                          <ChevronDown className="w-3.5 h-3.5 text-sky-600" />
+                                        ) : (
+                                          <ChevronUp className="w-3.5 h-3.5 text-sky-600" />
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {!isCollapsed && (
+                                    <table className="w-full text-left text-sm border-collapse">
+                                      <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase border-b border-slate-200">
+                                        <tr>
+                                          <th className="px-3.5 py-3.5 text-center font-bold text-slate-500 text-xs w-12 whitespace-nowrap">No.</th>
+                                          <th className="px-5 py-3.5 min-w-[200px]">Produk & Merk</th>
+                                          <th className="px-4 py-3.5 text-center whitespace-nowrap min-w-[130px]">Stok Fisik di Cabang</th>
+                                          <th className="px-4 py-3.5 text-right whitespace-nowrap min-w-[110px]">Harga Jual</th>
+                                          <th className="px-4 py-3.5 text-center whitespace-nowrap min-w-[150px]">Status Verifikasi Pusat</th>
+                                          <th className="px-5 py-3.5 text-right whitespace-nowrap min-w-[130px]">Aksi</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-100">
+                                        {items.map(inv => renderBranchInventoryTableRow(inv))}
+                                      </tbody>
+                                    </table>
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </>
               )}
             </div>
@@ -3273,6 +3955,376 @@ export default function ProductManagement({
               itemName="inventaris cabang"
             />
           </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB: PAKET BUNDLING VIEW & MANAGEMENT                                     */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'BUNDLES' && (
+        <div className="space-y-4">
+          {/* Header Actions & Quick Metrics Bar */}
+          <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 rounded-3xl p-5 sm:p-6 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-500/20 text-purple-200 border border-purple-400/30 rounded-full text-xs font-extrabold">
+                <Boxes className="w-3.5 h-3.5" />
+                <span>Katalog Paket Bundling Dual-Mode</span>
+              </div>
+              <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                Paket Bundling Knalpot & Exhaust System
+              </h3>
+              <p className="text-xs text-purple-200/80 max-w-xl">
+                Daftar paket resep knalpot resmi (Full System, Stage Kit). Mendukung multi-tier pricing (Jual, Reseller, Distributor) serta impor spreadsheet klien.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={downloadBundleTemplate}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition border border-white/20 cursor-pointer"
+                title="Unduh format template spreadsheet 16 kolom resmi klien"
+              >
+                <Download className="w-4 h-4" />
+                <span>Unduh Template</span>
+              </button>
+
+              {canManageProducts && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setParsedBundleData(null);
+                      setBundleImportFile(null);
+                      setIsBundleImportModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition shadow-sm border border-purple-400/40 cursor-pointer"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    <span>Import Excel Bundling</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenCreateBundleModal}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-extrabold transition shadow-md active:scale-95 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Buat Paket Baru</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Search & Filter Bar */}
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative flex-1 w-full">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Cari nama paket, kode bundle, merk, mesin, atau varian mobil..."
+                value={bundleSearchTerm}
+                onChange={(e) => {
+                  setBundleSearchTerm(e.target.value);
+                  setBundleCurrentPage(1);
+                }}
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-purple-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <select
+                value={bundleEngineFilter}
+                onChange={(e) => {
+                  setBundleEngineFilter(e.target.value);
+                  setBundleCurrentPage(1);
+                }}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
+              >
+                <option value="ALL">Semua Mesin</option>
+                {DEFAULT_ENGINE_TYPES.filter(t => t !== 'ALL').map(eng => (
+                  <option key={eng} value={eng}>{eng}</option>
+                ))}
+              </select>
+
+              <select
+                value={bundleBrandFilter}
+                onChange={(e) => {
+                  setBundleBrandFilter(e.target.value);
+                  setBundleCurrentPage(1);
+                }}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
+              >
+                <option value="ALL">Semua Merk</option>
+                {allBrandNames.map(b => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Bundles Table */}
+          {(() => {
+            const filteredBundles = bundles.filter(b => {
+              const matchesQuery = matchesSearch(bundleSearchTerm, b.name, b.code, b.brand, b.engine_type, b.car_variant, b.rawIsi);
+              const matchesEng = bundleEngineFilter === 'ALL' || (b.engine_type || '').toUpperCase().includes(bundleEngineFilter.toUpperCase());
+              const matchesBr = bundleBrandFilter === 'ALL' || (b.brand || '').toLowerCase() === bundleBrandFilter.toLowerCase();
+              return matchesQuery && matchesEng && matchesBr;
+            });
+
+            const totalBundles = filteredBundles.length;
+            const totalBundlePages = bundlePageSize === 0 ? 1 : Math.max(1, Math.ceil(totalBundles / bundlePageSize));
+            const safeBundlePage = Math.min(Math.max(1, bundleCurrentPage), totalBundlePages);
+            const startIdx = bundlePageSize === 0 ? 0 : (safeBundlePage - 1) * bundlePageSize;
+            const paginatedBundles = bundlePageSize === 0 ? filteredBundles : filteredBundles.slice(startIdx, startIdx + bundlePageSize);
+
+            return (
+              <div className="space-y-3">
+                {/* Batch Delete Actions Toolbar for Bundles */}
+                {selectedBundleIds.size > 0 && canManageProducts && (
+                  <div className="flex items-center justify-between p-3 bg-rose-50 border border-rose-200 rounded-2xl animate-in slide-in-from-top-2 duration-150">
+                    <div className="flex items-center gap-2 text-xs font-bold text-rose-800">
+                      <CheckSquare className="w-4 h-4 text-rose-600" />
+                      <span>{selectedBundleIds.size} paket bundling terpilih</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBundleIds(new Set())}
+                        className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded-xl transition cursor-pointer"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteBatchBundlesConfirm(true)}
+                        className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-extrabold transition shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Hapus ({selectedBundleIds.size}) Terpilih</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs">
+                  {/* Top Horizontal Scrollbar Slider */}
+                  <div className="overflow-x-auto" style={{ transform: 'rotateX(180deg)' }}>
+                    <table className="w-full text-left text-xs border-collapse" style={{ transform: 'rotateX(180deg)' }}>
+                      <thead className="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+                        <tr>
+                          {canManageProducts && (
+                            <th className="px-3 py-3 text-center w-10 whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => handleSelectAllBundlesOnPage(paginatedBundles)}
+                                className="p-1 text-slate-400 hover:text-indigo-600 transition cursor-pointer flex items-center justify-center mx-auto"
+                                title={paginatedBundles.length > 0 && paginatedBundles.every(b => selectedBundleIds.has(b.id)) ? "Lepas pilihan halaman ini" : "Pilih semua di halaman ini"}
+                              >
+                                {paginatedBundles.length > 0 && paginatedBundles.every(b => selectedBundleIds.has(b.id)) ? (
+                                  <CheckSquare className="w-4 h-4 text-indigo-600" />
+                                ) : paginatedBundles.some(b => selectedBundleIds.has(b.id)) ? (
+                                  <MinusSquare className="w-4 h-4 text-indigo-600" />
+                                ) : (
+                                  <Square className="w-4 h-4 text-slate-300 hover:text-slate-500" />
+                                )}
+                              </button>
+                            </th>
+                          )}
+                          <th className="px-3.5 py-3 text-center w-12">No</th>
+                          <th className="px-3.5 py-3 whitespace-nowrap min-w-[120px]">Kode Bundle</th>
+                          <th className="px-3.5 py-3 whitespace-nowrap min-w-[100px]">Merk</th>
+                          <th className="px-4 py-3 min-w-[180px]">Nama Paket & Mesin</th>
+                          <th className="px-4 py-3 min-w-[240px]">Komponen Isi</th>
+                          <th className="px-3.5 py-3 text-right whitespace-nowrap min-w-[120px]">Harga Jual</th>
+                          <th className="px-3.5 py-3 text-right whitespace-nowrap min-w-[120px]">Harga Reseller</th>
+                          <th className="px-3.5 py-3 text-right whitespace-nowrap min-w-[120px]">Harga Distributor</th>
+                          <th className="px-3.5 py-3 text-center whitespace-nowrap w-20">Status</th>
+                          {canManageProducts && (
+                            <th className="px-4 py-3 text-center whitespace-nowrap w-36">Aksi</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {paginatedBundles.length === 0 ? (
+                          <tr>
+                            <td colSpan={canManageProducts ? 11 : 10} className="px-4 py-12 text-center text-slate-400">
+                              <Boxes className="w-10 h-10 mx-auto text-slate-300 mb-2 stroke-1" />
+                              <p className="font-bold text-slate-700">Belum ada paket bundling yang terdaftar.</p>
+                              <p className="text-xs text-slate-400 mt-0.5">Klik "+ Buat Paket Baru" atau "Import Excel Bundling" untuk menambahkan.</p>
+                            </td>
+                          </tr>
+                        ) : (
+                          paginatedBundles.map((b, idx) => (
+                            <tr key={b.id || idx} className={`hover:bg-slate-50/80 transition ${selectedBundleIds.has(b.id) ? 'bg-indigo-50/40' : ''}`}>
+                              {canManageProducts && (
+                                <td className="px-3 py-3 text-center whitespace-nowrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleSelectBundle(b.id)}
+                                    className="p-1 transition cursor-pointer flex items-center justify-center mx-auto"
+                                  >
+                                    {selectedBundleIds.has(b.id) ? (
+                                      <CheckSquare className="w-4 h-4 text-indigo-600" />
+                                    ) : (
+                                      <Square className="w-4 h-4 text-slate-300 hover:text-slate-500" />
+                                    )}
+                                  </button>
+                                </td>
+                              )}
+
+                              <td className="px-3.5 py-3 text-center font-mono text-slate-400">
+                                {startIdx + idx + 1}
+                              </td>
+
+                              <td className="px-3.5 py-3 whitespace-nowrap">
+                                <span className="font-mono font-extrabold text-purple-900 bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-200/80">
+                                  {b.code || '-'}
+                                </span>
+                              </td>
+
+                              <td className="px-3.5 py-3 whitespace-nowrap">
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                  {b.brand || 'NDK Exhaust'}
+                                </span>
+                              </td>
+
+                              <td className="px-4 py-3">
+                                <div className="font-extrabold text-slate-900">{b.name}</div>
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                  <span className="font-semibold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                                    {b.engine_type || 'Universal'}
+                                  </span>
+                                  {b.car_variant && b.car_variant !== '-' && (
+                                    <span>• {b.car_variant}</span>
+                                  )}
+                                  {(b.description || b.keterangan) && (
+                                    <span 
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 text-[10px] font-semibold border border-slate-200" 
+                                      title={`Keterangan Katalog:\n${b.description || b.keterangan}`}
+                                    >
+                                      <FileText className="w-2.5 h-2.5 text-slate-500" />
+                                      <span>Keterangan</span>
+                                    </span>
+                                  )}
+                                  {(b.admin_note || b.notes) && (
+                                    <span 
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 text-[10px] font-extrabold border border-amber-300" 
+                                      title={`Note Admin (Internal):\n${b.admin_note || b.notes}`}
+                                    >
+                                      <Lock className="w-2.5 h-2.5 text-amber-700" />
+                                      <span>Note Admin</span>
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              <td className="px-4 py-3 min-w-[240px]">
+                                {Array.isArray(b.items) && b.items.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {b.items.map((it, iIdx) => (
+                                      <span
+                                        key={iIdx}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[10px] font-bold border border-slate-200"
+                                        title={`SKU: ${it.sku || '-'} | Qty: ${it.qty || 1}`}
+                                      >
+                                        <span>{it.productName || it.cleanName || it.name || it.sku}</span>
+                                        <span className="px-1 py-0.1 bg-purple-100 text-purple-800 rounded font-black">
+                                          x{it.qty || 1}
+                                        </span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-400 text-xs italic">
+                                    {b.rawIsi || 'Tidak ada rincian komponen'}
+                                  </span>
+                                )}
+                              </td>
+
+                              <td className="px-3.5 py-3 text-right whitespace-nowrap font-extrabold text-slate-900">
+                                Rp {(Number(b.selling_price ?? b.price) || 0).toLocaleString('id-ID')}
+                              </td>
+
+                              <td className="px-3.5 py-3 text-right whitespace-nowrap font-semibold text-slate-600">
+                                Rp {(Number(b.reseller_price) || 0).toLocaleString('id-ID')}
+                              </td>
+
+                              <td className="px-3.5 py-3 text-right whitespace-nowrap font-semibold text-sky-700">
+                                Rp {(Number(b.distributor_price) || Number(b.reseller_price) || 0).toLocaleString('id-ID')}
+                              </td>
+
+                              {/* Minimalist Green / Red Dot Indicator for Status */}
+                              <td className="px-3.5 py-3 text-center whitespace-nowrap">
+                                <div className="flex items-center justify-center" title={b.status === 'INACTIVE' ? 'Status: Non-Aktif' : 'Status: Aktif'}>
+                                  <span className={`w-3 h-3 rounded-full shadow-2xs inline-block transition-transform duration-200 ${
+                                    b.status === 'INACTIVE'
+                                      ? 'bg-rose-500 ring-4 ring-rose-100'
+                                      : 'bg-emerald-500 ring-4 ring-emerald-100'
+                                  }`} />
+                                </div>
+                              </td>
+
+                              {canManageProducts && (
+                                <td className="px-4 py-3 text-right whitespace-nowrap min-w-[200px]">
+                                  <div className="flex items-center justify-end gap-1.5 flex-nowrap">
+                                    {/* PROMINENT BLUE EDIT BUTTON */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditBundleModal(b)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer active:scale-95 whitespace-nowrap"
+                                      title="Ubah Data Paket Bundling & Resep"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                      <span>Edit</span>
+                                    </button>
+
+                                    {/* TOGGLE STATUS BUTTON */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleBundleStatus(b)}
+                                      className={`p-1.5 rounded-lg transition cursor-pointer ${
+                                        b.status === 'INACTIVE' 
+                                          ? 'text-emerald-600 hover:bg-emerald-50' 
+                                          : 'text-amber-600 hover:bg-amber-50'
+                                      }`}
+                                      title={b.status === 'INACTIVE' ? 'Aktifkan Paket Bundling' : 'Non-aktifkan Paket Bundling (Soft Delete)'}
+                                    >
+                                      {b.status === 'INACTIVE' ? <Check className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+                                    </button>
+
+                                    {/* DELETE BUTTON */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setDeleteConfirmBundle(b)}
+                                      className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                      title="Hapus Paket Bundling"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              )}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <PaginationControl
+                  currentPage={safeBundlePage}
+                  totalItems={totalBundles}
+                  pageSize={bundlePageSize}
+                  onPageChange={setBundleCurrentPage}
+                  onPageSizeChange={setBundlePageSize}
+                  itemName="paket bundling"
+                />
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -3718,7 +4770,34 @@ export default function ProductManagement({
                   <span>Struktur Harga Bertingkat & Live Margin</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Harga Jual Retail (Rp) *
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      required
+                      placeholder="0"
+                      value={formData.selling_price}
+                      onChange={(e) => {
+                        const selling = Number(e.target.value) || 0;
+                        const reseller = Number(formData.reseller_price) || 0;
+                        const profit = selling - reseller;
+                        const pct = reseller > 0 ? ((profit / reseller) * 100) : 0;
+                        setFormData({
+                          ...formData,
+                          selling_price: selling,
+                          price: selling,
+                          profit_amount: profit,
+                          profit_percentage: Math.round(pct * 100) / 100
+                        });
+                      }}
+                      className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-sm font-extrabold text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">
                       Harga Reseller / B2B (Rp)
@@ -3745,29 +4824,21 @@ export default function ProductManagement({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Harga Jual Retail (Rp) *
+                    <label className="block text-[11px] font-bold text-sky-800 mb-1">
+                      Harga Distributor (Rp)
                     </label>
                     <input
                       type="number"
                       min="0"
-                      required
                       placeholder="0"
-                      value={formData.selling_price}
+                      value={formData.distributor_price}
                       onChange={(e) => {
-                        const selling = Number(e.target.value) || 0;
-                        const reseller = Number(formData.reseller_price) || 0;
-                        const profit = selling - reseller;
-                        const pct = reseller > 0 ? ((profit / reseller) * 100) : 0;
                         setFormData({
                           ...formData,
-                          selling_price: selling,
-                          price: selling,
-                          profit_amount: profit,
-                          profit_percentage: Math.round(pct * 100) / 100
+                          distributor_price: Number(e.target.value) || 0
                         });
                       }}
-                      className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-sm font-extrabold text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      className="w-full px-3.5 py-2 bg-white border border-sky-300 rounded-xl text-sm font-bold text-sky-900 focus:ring-2 focus:ring-sky-500 focus:outline-none"
                     />
                   </div>
 
@@ -4558,7 +5629,771 @@ export default function ProductManagement({
         buttonText={successModal?.buttonText || "✓ Selesai & Tutup"}
       />
 
-      {/* SPREADSHEET IMPORT MODAL */}
+      {/* MODAL: TAMBAH / UBAH PAKET BUNDLING */}
+      {isBundleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-150 my-auto max-h-[92vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-purple-950 to-indigo-900 text-white flex-shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-purple-500/20 border border-purple-400/30 text-purple-300 flex items-center justify-center">
+                  <Boxes className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">
+                    {editingBundle ? 'Ubah Master Paket Bundling' : 'Buat Paket Bundling Baru'}
+                  </h3>
+                  <p className="text-xs text-purple-200">Formulir spesifikasi knalpot otomotif & harga bertingkat.</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsBundleModalOpen(false)}
+                className="p-1.5 text-purple-300 hover:text-white rounded-full hover:bg-white/10 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSubmitBundleForm} className="p-6 space-y-4 text-sm overflow-y-auto flex-1">
+              {bundleFormError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-2xl flex items-center gap-2.5">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600" />
+                  <span>{bundleFormError}</span>
+                </div>
+              )}
+
+              {/* Row 1: Kode Bundle & Nama Paket */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Kode / SKU Bundle *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleAutoGenerateBundleCode}
+                      className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Auto-Gen SKU</span>
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: BDL-2KD-001"
+                    value={bundleFormData.code}
+                    onChange={(e) => setBundleFormData({ ...bundleFormData, code: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-bold text-purple-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Nama Komponen / Produk *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Full System Drag (Kering) - SS Polos"
+                    value={bundleFormData.name}
+                    onChange={(e) => setBundleFormData({ ...bundleFormData, name: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Tipe Mesin, Kompatibilitas / Varian Mobil, Merk */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Tipe Mesin Kendaraan *
+                  </label>
+                  <select
+                    value={bundleFormData.engine_type}
+                    onChange={(e) => setBundleFormData({ ...bundleFormData, engine_type: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-purple-500 focus:outline-none cursor-pointer"
+                  >
+                    {DEFAULT_ENGINE_TYPES.filter(t => t !== 'ALL').map(eng => (
+                      <option key={eng} value={eng}>{eng}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Kompatibilitas / Varian Mobil
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: Innova, Fortuner, Hilux"
+                    value={bundleFormData.car_variant}
+                    onChange={(e) => setBundleFormData({ ...bundleFormData, car_variant: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Merk / Brand *
+                  </label>
+                  <select
+                    value={bundleFormData.brand}
+                    onChange={(e) => setBundleFormData({ ...bundleFormData, brand: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-purple-500 focus:outline-none cursor-pointer"
+                  >
+                    {allBrandNames.map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 3: Struktur Harga Bertingkat & Live Margin */}
+              <div className="p-4 bg-gradient-to-r from-emerald-50/70 via-sky-50/50 to-indigo-50/50 border border-emerald-200/80 rounded-2xl space-y-3">
+                <div className="flex items-center gap-1.5 text-xs font-extrabold text-emerald-950 uppercase tracking-wider">
+                  <DollarSign className="w-4 h-4 text-emerald-700" />
+                  <span>Struktur Harga Bertingkat & Live Margin</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Harga Jual Retail (Rp) *
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      required
+                      placeholder="0"
+                      value={bundleFormData.selling_price}
+                      onChange={(e) => setBundleFormData({ ...bundleFormData, selling_price: Number(e.target.value) || 0 })}
+                      className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-sm font-extrabold text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Harga Reseller / B2B (Rp)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={bundleFormData.reseller_price}
+                      onChange={(e) => setBundleFormData({ ...bundleFormData, reseller_price: Number(e.target.value) || 0 })}
+                      className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-sky-800 mb-1">
+                      Harga Distributor (Rp)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={bundleFormData.distributor_price}
+                      onChange={(e) => setBundleFormData({ ...bundleFormData, distributor_price: Number(e.target.value) || 0 })}
+                      className="w-full px-3.5 py-2 bg-white border border-sky-300 rounded-xl text-sm font-bold text-sky-900 focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Live Profit Display Badge */}
+                  <div className="bg-white p-2.5 rounded-xl border border-emerald-200 flex flex-col justify-center text-center shadow-2xs">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Laba / Margin</span>
+                    <div className="font-black text-emerald-600 text-sm mt-0.5">
+                      +Rp {((Number(bundleFormData.selling_price) || 0) - (Number(bundleFormData.reseller_price) || 0)).toLocaleString('id-ID')}
+                    </div>
+                    <div className="text-[10px] font-extrabold text-emerald-800">
+                      {Number(bundleFormData.reseller_price) > 0 
+                        ? `${Math.round(((((Number(bundleFormData.selling_price) || 0) - (Number(bundleFormData.reseller_price) || 0)) / Number(bundleFormData.reseller_price)) * 100) * 10) / 10}% Margin` 
+                        : '0% Margin'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 4: Status Produk */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Status Produk Paket
+                </label>
+                <select
+                  value={bundleFormData.status || 'ACTIVE'}
+                  onChange={(e) => setBundleFormData({ ...bundleFormData, status: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-indigo-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="ACTIVE">🟢 Aktif</option>
+                  <option value="INACTIVE">🔴 Non-Aktif (Soft Delete)</option>
+                </select>
+              </div>
+
+              {/* Row 4b: Keterangan / Deskripsi Publik untuk E-Katalog */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-800 uppercase tracking-wider">
+                  <FileText className="w-4 h-4 text-indigo-600" />
+                  <span>Keterangan / Deskripsi Paket (Tampil di E-Katalog Publik)</span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Deskripsi informasi produk atau keunggulan spesifikasi yang akan dibaca oleh pengunjung dan konsumen di katalog online.
+                </p>
+                <textarea
+                  rows={2}
+                  placeholder="Contoh: Paket full system knalpot berbahan stainless steel tebal, karakter suara street bass bertenaga tanpa dengung, presisi Plug and Play (PNP) tanpa ubahan."
+                  value={bundleFormData.description}
+                  onChange={(e) => setBundleFormData({ ...bundleFormData, description: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Row 4c: Note / Catatan Internal Admin (Rahasia) */}
+              <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-950 uppercase tracking-wider">
+                    <Lock className="w-4 h-4 text-amber-700" />
+                    <span>Note / Catatan Internal Admin (Hanya untuk Admin)</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-200 text-amber-900">
+                    🔒 Internal Admin Saja
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-800">
+                  Catatan yang ditinggalkan untuk sesama tim admin/gudang (misal: vendor produksi, kesepakatan diskon khusus, reminder restok). <strong>Tidak ditampilkan di katalog publik.</strong>
+                </p>
+                <textarea
+                  rows={2}
+                  placeholder="Contoh: Batch produksi pipa vendor B, diskon reseller minimum order 3 paket disetujui Pak Budi..."
+                  value={bundleFormData.admin_note}
+                  onChange={(e) => setBundleFormData({ ...bundleFormData, admin_note: e.target.value, notes: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-white border border-amber-300 rounded-xl text-xs font-medium text-amber-950 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Row 5: Foto Produk (Tampil di E-Katalog Publik) */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-800 uppercase tracking-wider">
+                    <ImageIcon className="w-4 h-4 text-indigo-600" />
+                    <span>Foto Produk (Tampil di E-Katalog Publik)</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setBundlePhotoInputType('FILE')}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                        bundlePhotoInputType === 'FILE'
+                          ? 'bg-indigo-600 text-white shadow-2xs'
+                          : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                      }`}
+                    >
+                      Upload File
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBundlePhotoInputType('URL')}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                        bundlePhotoInputType === 'URL'
+                          ? 'bg-indigo-600 text-white shadow-2xs'
+                          : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                      }`}
+                    >
+                      Link URL
+                    </button>
+                  </div>
+                </div>
+
+                {bundleFormData.imageUrl ? (
+                  <div className="flex items-center gap-3.5 p-3 bg-white border border-indigo-200 rounded-xl shadow-2xs">
+                    <img 
+                      src={bundleFormData.imageUrl} 
+                      alt="Pratinjau Foto Paket" 
+                      className="w-16 h-16 rounded-xl object-cover border border-slate-200 shadow-xs flex-shrink-0 bg-slate-50"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-slate-900 truncate">Foto Produk Terpasang</span>
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800">
+                          ✓ Siap Tampil
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5 truncate">Foto akan otomatis muncul di E-Katalog Publik.</p>
+                      <button
+                        type="button"
+                        onClick={() => setBundleFormData({ ...bundleFormData, imageUrl: '' })}
+                        className="mt-1.5 text-xs font-bold text-rose-600 hover:text-rose-800 flex items-center gap-1 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Hapus Foto</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    {bundlePhotoInputType === 'FILE' ? (
+                      <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-300 hover:border-indigo-500 bg-white rounded-xl cursor-pointer transition group">
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          onChange={handleBundlePhotoUploadChange}
+                          disabled={isCompressingBundlePhoto}
+                        />
+                        <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mb-2 group-hover:scale-110 transition">
+                          {isCompressingBundlePhoto ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <Camera className="w-5 h-5" />
+                          )}
+                        </div>
+                        <span className="text-xs font-bold text-slate-700">
+                          {isCompressingBundlePhoto ? "Mengompres Gambar..." : "Klik untuk Pilih Foto Knalpot dari Galeri / Kamera"}
+                        </span>
+                        <span className="text-[10px] text-slate-400 mt-0.5">
+                          Format: JPG, PNG, WebP (Otomatis dikompresi agar ringan)
+                        </span>
+                      </label>
+                    ) : (
+                      <div className="flex gap-2">
+                        <input
+                          type="url"
+                          placeholder="https://example.com/foto-knalpot.jpg"
+                          value={bundleFormData.imageUrl}
+                          onChange={(e) => setBundleFormData({ ...bundleFormData, imageUrl: e.target.value })}
+                          className="flex-1 px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Row 6: Komponen Resep Paket */}
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Daftar Komponen Produk dalam Paket * ({bundleFormData.items.length} Komponen)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAddBundleItem}
+                    className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Tambah Komponen</span>
+                  </button>
+                </div>
+
+                <div className="border border-slate-200 rounded-2xl p-3 bg-slate-50/70 space-y-2.5 max-h-60 overflow-y-auto">
+                  {bundleFormData.items.length === 0 ? (
+                    <div className="text-center py-6 text-slate-400 text-xs">
+                      Belum ada komponen. Klik "+ Tambah Komponen" untuk memilih produk dari master catalog.
+                    </div>
+                  ) : (
+                    bundleFormData.items.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                        <span className="font-mono text-xs font-bold text-slate-400 w-5 text-center">{idx + 1}</span>
+
+                        <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <select
+                            value={item.productId || ''}
+                            onChange={(e) => handleBundleItemProductChange(idx, e.target.value)}
+                            className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 truncate cursor-pointer"
+                          >
+                            <option value="">Pilih Produk Master (Opsional)...</option>
+                            {products.filter(p => p.status !== 'INACTIVE').map(p => (
+                              <option key={p.id} value={p.id}>
+                                [{p.sku || p.code || 'NO-SKU'}] {p.name} ({p.engine_type || 'Universal'})
+                              </option>
+                            ))}
+                          </select>
+
+                          <input
+                            type="text"
+                            placeholder="Nama Komponen..."
+                            value={item.productName || item.cleanName || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setBundleFormData(prev => {
+                                const updated = [...prev.items];
+                                updated[idx] = { ...updated[idx], productName: val, cleanName: val };
+                                return { ...prev, items: updated };
+                              });
+                            }}
+                            className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
+
+                        {/* Qty Controls */}
+                        <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 border border-slate-200 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleBundleItemQtyChange(idx, -1)}
+                            className="w-6 h-6 rounded bg-white hover:bg-slate-200 flex items-center justify-center font-bold text-xs text-slate-700 transition cursor-pointer"
+                          >
+                            -
+                          </button>
+                          <span className="w-8 text-center text-xs font-black text-slate-900 font-mono">
+                            {item.qty || 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleBundleItemQtyChange(idx, 1)}
+                            className="w-6 h-6 rounded bg-white hover:bg-slate-200 flex items-center justify-center font-bold text-xs text-slate-700 transition cursor-pointer"
+                          >
+                            +
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveBundleItem(idx)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer flex-shrink-0"
+                          title="Hapus baris komponen"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsBundleModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingBundle}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-sm transition active:scale-95 cursor-pointer flex items-center gap-1.5"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>{isSubmittingBundle ? 'Menyimpan...' : (editingBundle ? 'Simpan Perubahan' : 'Buat Paket')}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: BATCH DELETE BUNDLES CONFIRMATION */}
+      {deleteBatchBundlesConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 text-center border border-slate-100 animate-in zoom-in-95 duration-150">
+            <div className="w-14 h-14 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+              <Trash2 className="w-7 h-7" />
+            </div>
+            <h3 className="text-lg font-black text-slate-900 mb-1">Hapus Massal Paket Bundling?</h3>
+            <p className="text-xs text-slate-500 mb-6">
+              Apakah Anda yakin ingin menghapus <strong className="text-rose-600">{selectedBundleIds.size} paket bundling</strong> yang dipilih? Data paket akan dihapus secara permanen dari database.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                disabled={isDeletingBundlesBatch}
+                onClick={() => setDeleteBatchBundlesConfirm(false)}
+                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingBundlesBatch}
+                onClick={handleBatchDeleteBundles}
+                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-600/20 transition cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                {isDeletingBundlesBatch ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Menghapus...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Ya, Hapus Semua</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: IMPORT SPREADSHEET PAKET BUNDLING */}
+      {isBundleImportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-150 my-auto max-h-[92vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-purple-900 to-indigo-900 text-white flex-shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-white/20 text-white flex items-center justify-center">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">Import Spreadsheet Paket Bundling</h3>
+                  <p className="text-xs text-purple-200">Mendukung format resmi 16 kolom master bundle klien.</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsBundleImportModalOpen(false)}
+                className="p-1.5 text-purple-200 hover:text-white rounded-full hover:bg-white/10 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
+              {!parsedBundleData ? (
+                /* File Dropzone */
+                <div className="space-y-4">
+                  <div className="p-8 border-2 border-dashed border-purple-200 hover:border-purple-500 rounded-3xl bg-purple-50/40 text-center transition flex flex-col items-center justify-center">
+                    <FileSpreadsheet className="w-12 h-12 text-purple-600 mb-3" />
+                    <h4 className="font-extrabold text-slate-800 text-sm">Pilih File Spreadsheet Master Bundling</h4>
+                    <p className="text-xs text-slate-500 mt-1 max-w-md">
+                      Format kolom resmi: No, Merk, Kode, Mesin, Nama Bundle, Harga Jual, Harga Reseller, Harga Distributor, Isi, Varian Mobil, dsb.
+                    </p>
+
+                    <label className="mt-4 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-extrabold rounded-xl shadow-xs transition cursor-pointer active:scale-95 inline-flex items-center gap-2">
+                      <Upload className="w-4 h-4" />
+                      <span>{isProcessingBundleFile ? 'Membaca File...' : 'Pilih Berkas (.xlsx / .csv)'}</span>
+                      <input
+                        type="file"
+                        accept=".xlsx, .xls, .csv"
+                        className="hidden"
+                        disabled={isProcessingBundleFile}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleProcessBundleSpreadsheet(file);
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600">
+                    <span>Belum memiliki berkas template?</span>
+                    <button
+                      type="button"
+                      onClick={downloadBundleTemplate}
+                      className="font-bold text-purple-700 hover:text-purple-900 underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Unduh Template 16 Kolom</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Preview Data */
+                <div className="space-y-4">
+                  {/* Summary Bar with Sheet Selector */}
+                  <div className="flex items-center justify-between bg-purple-50 p-3.5 rounded-2xl border border-purple-200 flex-wrap gap-2 text-xs">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-purple-900">{bundleImportFile?.name}</span>
+                      <span className="text-purple-700">({parsedBundleData.validCount} paket siap diimpor dari {parsedBundleData.totalRows} baris)</span>
+                      {bundleSheetNames.length > 1 && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-200 text-purple-900 border border-purple-300">
+                          Sheet: {selectedBundleSheet}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      {/* Sheet Selector */}
+                      {bundleSheetNames.length > 1 && (
+                        <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-xl border border-purple-200 text-xs shadow-2xs">
+                          <span className="font-bold text-slate-500 text-[11px]">Pilih Sheet:</span>
+                          <select
+                            value={selectedBundleSheet}
+                            onChange={(e) => handleSelectBundleSheet(e.target.value)}
+                            className="font-bold text-purple-700 bg-transparent focus:outline-none cursor-pointer"
+                          >
+                            {bundleSheetNames.map(sName => (
+                              <option key={sName} value={sName}>{sName}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setParsedBundleData(null);
+                          setBundleImportFile(null);
+                          setBundleSheetNames([]);
+                          setBundleSheetsData({});
+                          setSelectedBundleSheet('');
+                        }}
+                        className="text-xs font-bold text-slate-600 hover:text-slate-900 underline cursor-pointer"
+                      >
+                        Ganti Berkas
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Preview Table */}
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-[340px] overflow-y-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200 sticky top-0 z-10">
+                        <tr>
+                          <th className="px-3 py-2 text-center">No</th>
+                          <th className="px-3 py-2 whitespace-nowrap">Kode</th>
+                          <th className="px-3 py-2 whitespace-nowrap">Merk</th>
+                          <th className="px-3 py-2">Nama Bundle</th>
+                          <th className="px-3 py-2">Komponen (Isi)</th>
+                          <th className="px-3 py-2 text-right whitespace-nowrap">Harga Jual</th>
+                          <th className="px-3 py-2 text-right whitespace-nowrap">Distributor</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {parsedBundleData.bundles.map((b, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50">
+                            <td className="px-3 py-2 text-center font-mono text-slate-400">{idx + 1}</td>
+                            <td className="px-3 py-2 font-mono font-bold text-purple-900 whitespace-nowrap">{b.code}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{b.brand}</td>
+                            <td className="px-3 py-2 font-bold text-slate-900">{b.name}</td>
+                            <td className="px-3 py-2 min-w-[200px]">
+                              {b.items && b.items.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {b.items.map((it, iIdx) => (
+                                    <span
+                                      key={iIdx}
+                                      className={`px-1.5 py-0.2 rounded text-[10px] font-bold border ${
+                                        it.isMatched 
+                                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                                          : 'bg-amber-50 text-amber-800 border-amber-200'
+                                      }`}
+                                      title={it.isMatched ? `Cocok SKU: ${it.sku}` : 'Komponen belum ada SKU di master'}
+                                    >
+                                      {it.productName || it.cleanName} x{it.qty}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 italic text-[11px]">{b.rawIsi}</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-right font-bold text-slate-900 whitespace-nowrap">
+                              Rp {(b.selling_price || 0).toLocaleString('id-ID')}
+                            </td>
+                            <td className="px-3 py-2 text-right font-bold text-sky-700 whitespace-nowrap">
+                              Rp {(b.distributor_price || 0).toLocaleString('id-ID')}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {isImportingBundles && (
+                    <div className="space-y-1.5 pt-2">
+                      <div className="flex justify-between text-xs font-bold text-purple-900">
+                        <span>Menyimpan ke database...</span>
+                        <span>{bundleImportProgress}%</span>
+                      </div>
+                      <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                        <div
+                          className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${bundleImportProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      disabled={isImportingBundles}
+                      onClick={() => setIsBundleImportModalOpen(false)}
+                      className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isImportingBundles || parsedBundleData.validCount === 0}
+                      onClick={handleExecuteImportBundles}
+                      className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-sm transition active:scale-95 cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>{isImportingBundles ? 'Mengimpor...' : `Konfirmasi Simpan (${parsedBundleData.validCount} Paket)`}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRMATION: HAPUS PAKET BUNDLING */}
+      {deleteConfirmBundle && (
+        <ConfirmationModal
+          isOpen={Boolean(deleteConfirmBundle)}
+          onClose={() => setDeleteConfirmBundle(null)}
+          onConfirm={handleConfirmDeleteBundle}
+          title="Hapus Paket Bundling"
+          subtitle={`Apakah Anda yakin ingin menghapus paket "${deleteConfirmBundle.name}"?`}
+          type="DANGER"
+          confirmText="Ya, Hapus Paket"
+          cancelText="Batal"
+          summaryItems={[
+            { label: "Kode Bundle", value: deleteConfirmBundle.code },
+            { label: "Nama Paket", value: deleteConfirmBundle.name, highlight: true },
+            { label: "Merk", value: deleteConfirmBundle.brand || '-' },
+            { label: "Komponen", value: `${deleteConfirmBundle.items?.length || 0} Item` }
+          ]}
+          warningNote="Paket bundling yang dihapus tidak akan muncul lagi di pemilih transaksi penjualan maupun transfer cabang."
+        />
+      )}
+
+      {/* CONFIRMATION: HAPUS SATU INVENTARIS CABANG */}
+      {deleteConfirmBranchInv && (
+        <ConfirmationModal
+          isOpen={Boolean(deleteConfirmBranchInv)}
+          onClose={() => setDeleteConfirmBranchInv(null)}
+          onConfirm={handleConfirmDeleteBranchInventory}
+          title="Hapus Inventaris Cabang?"
+          subtitle={`Apakah Anda yakin ingin menghapus "${deleteConfirmBranchInv.productName || deleteConfirmBranchInv.name}" dari cabang ${deleteConfirmBranchInv.branchName || 'ini'}?`}
+          type="DANGER"
+          confirmText="Ya, Hapus Item"
+          cancelText="Batal"
+          summaryItems={[
+            { label: "Cabang", value: deleteConfirmBranchInv.branchName || '-' },
+            { label: "Produk", value: deleteConfirmBranchInv.productName || deleteConfirmBranchInv.name, highlight: true },
+            { label: "SKU", value: deleteConfirmBranchInv.sku || '-' },
+            { label: "Stok Fisik", value: `${deleteConfirmBranchInv.stockQuantity || 0} Pcs` }
+          ]}
+          warningNote="Data inventaris produk di cabang ini akan dihapus permanen dari sistem."
+        />
+      )}
+
+      {/* CONFIRMATION: HAPUS SEMUA INVENTARIS CABANG */}
+      {deleteGroupBranchConfirm && (
+        <ConfirmationModal
+          isOpen={Boolean(deleteGroupBranchConfirm)}
+          onClose={() => setDeleteGroupBranchConfirm(null)}
+          onConfirm={handleConfirmDeleteWholeBranchGroup}
+          title="Hapus Seluruh Stok Cabang?"
+          subtitle={`Apakah Anda yakin ingin menghapus semua (${deleteGroupBranchConfirm.items?.length || 0}) item inventaris pada ${deleteGroupBranchConfirm.branchName}?`}
+          type="DANGER"
+          confirmText="Ya, Hapus Seluruh Stok"
+          cancelText="Batal"
+          summaryItems={[
+            { label: "Cabang Target", value: deleteGroupBranchConfirm.branchName, highlight: true },
+            { label: "Total Item", value: `${deleteGroupBranchConfirm.items?.length || 0} Produk` }
+          ]}
+          warningNote="Seluruh catatan inventaris cabang ini akan dihapus permanen."
+        />
+      )}
       <SpreadsheetImportModal
         isOpen={isImportSpreadsheetOpen}
         onClose={() => setIsImportSpreadsheetOpen(false)}

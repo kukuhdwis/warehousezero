@@ -99,11 +99,9 @@ export default function TransactionSuccessModal({
         let totalAmount = 0;
 
         (transaction.items || []).forEach((item, index) => {
-          let itemPrice = Number(item.price || item.totalPrice || 0);
-          // Only multiply if it's single unit price, but sometimes items store totalPrice directly.
-          // To be safe, rely on the item price being unit price if item.totalPrice is not set.
-          if (!item.totalPrice && item.price) {
-             itemPrice = itemPrice * (Number(item.qty) || 1);
+          let itemPrice = Number(item.totalPrice || item.subtotal || 0);
+          if (!itemPrice && item.price) {
+             itemPrice = Number(item.price) * (Number(item.qty) || 1);
           }
           
           if (isTransfer || isInbound) itemPrice = 0; 
@@ -111,8 +109,8 @@ export default function TransactionSuccessModal({
           const rowData = [
             index + 1,
             item.sku || '-',
-            item.productName || item.product_name || '-',
-            `${item.qty || 0} ${item.unit || 'Pcs'}`,
+            item.productName || item.product_name || item.name || '-',
+            `${item.qty || 0} ${item.unit || (isBundling ? 'Paket' : 'Pcs')}`,
             isSale ? `Rp ${itemPrice.toLocaleString('id-ID')}` : '-',
             item.notes || '-'
           ];
@@ -150,26 +148,53 @@ export default function TransactionSuccessModal({
         }
         
         // --- FOOTER & SIGNATURES ---
-        doc.setLineWidth(0.5);
-        doc.line(14, finalY + 12, pageWidth - 14, finalY + 12);
+        const now = new Date();
+        const printTimeStr = new Intl.DateTimeFormat('id-ID', {
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZoneName: 'short'
+        }).format(now);
+
+        doc.setFontSize(7.5);
+        doc.setFont("helvetica", "italic");
+        doc.setTextColor(110, 110, 110);
+        doc.text(`Dicetak pada: ${printTimeStr}`, 14, finalY + 11.5);
+        doc.setTextColor(0, 0, 0);
+
+        doc.setLineWidth(0.4);
+        doc.line(14, finalY + 14, pageWidth - 14, finalY + 14);
         
         doc.setFontSize(8);
         doc.setFont("helvetica", "normal");
-        doc.text("BARANG SUDAH DITERIMA DALAM KEADAAN BAIK DAN CUKUP oleh:", 14, finalY + 17);
-        doc.text("(tanda tangan dan cap stempel perusahaan)", 14, finalY + 21);
+        doc.text("BARANG SUDAH DITERIMA DALAM KEADAAN BAIK DAN CUKUP oleh:", 14, finalY + 19);
+        doc.text("(tanda tangan dan cap stempel perusahaan)", 14, finalY + 23);
         
         doc.setFontSize(9);
-        doc.text("Penerima / Pembeli", 35, finalY + 35, { align: 'center' });
-        doc.text("Bagian Pengiriman", pageWidth / 2, finalY + 35, { align: 'center' });
-        doc.text("Petugas Gudang", pageWidth - 35, finalY + 35, { align: 'center' });
+        doc.text("Penerima / Pembeli", 35, finalY + 36, { align: 'center' });
+        doc.text("Bagian Pengiriman", pageWidth / 2, finalY + 36, { align: 'center' });
+        doc.text("Petugas Gudang", pageWidth - 35, finalY + 36, { align: 'center' });
         
         doc.setLineWidth(0.3);
-        doc.line(14, finalY + 55, 56, finalY + 55);
-        doc.line(pageWidth / 2 - 20, finalY + 55, pageWidth / 2 + 20, finalY + 55);
-        doc.line(pageWidth - 56, finalY + 55, pageWidth - 14, finalY + 55);
+        doc.line(14, finalY + 56, 56, finalY + 56);
+        doc.line(pageWidth / 2 - 20, finalY + 56, pageWidth / 2 + 20, finalY + 56);
+        doc.line(pageWidth - 56, finalY + 56, pageWidth - 14, finalY + 56);
 
-        // --- SAVE ---
-        doc.save(`${title.replace(/ /g, '_')}_${invoiceNo}.pdf`);
+        // --- SAVE (Format: YYYY-MM-DD_[NOMOR_DOKUMEN].pdf) ---
+        let txDateObj = new Date();
+        if (transaction.timestamp) {
+            txDateObj = transaction.timestamp.toDate ? transaction.timestamp.toDate() : new Date(transaction.timestamp);
+        } else if (transaction.createdAt) {
+            txDateObj = transaction.createdAt.toDate ? transaction.createdAt.toDate() : new Date(transaction.createdAt);
+        }
+        const year = txDateObj.getFullYear();
+        const month = String(txDateObj.getMonth() + 1).padStart(2, '0');
+        const day = String(txDateObj.getDate()).padStart(2, '0');
+        const fileDateStr = `${year}-${month}-${day}`;
+        const cleanInvoiceNo = String(invoiceNo || 'TRX').replace(/[/\\?%*:|"<>]/g, '-').trim();
+        doc.save(`${fileDateStr}_${cleanInvoiceNo}.pdf`);
     } catch (err) {
         console.error("Failed to generate PDF", err);
         alert("Gagal mencetak PDF: " + err.message);
@@ -243,25 +268,30 @@ export default function TransactionSuccessModal({
                       <span>{isBundling ? (transaction.bundleName || transaction.productName) : `Daftar Barang (${transaction.items.length} Jenis Produk)`}</span>
                     </div>
                     <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-lg">
-                      Total: {transaction.qty} Pcs
+                      Total: {transaction.qty} {isBundling ? 'Paket' : 'Pcs'}
                     </span>
                   </div>
                   <div className="bg-white p-3 rounded-xl border border-slate-200 divide-y divide-slate-100 text-xs space-y-1.5">
                     {transaction.items.map((it, idx) => (
-                      <div key={idx} className="flex justify-between items-center py-1.5 first:pt-0 last:pb-0">
-                        <div>
-                          <div className="text-slate-800 font-bold">{it.productName}</div>
+                      <div key={idx} className="flex justify-between items-start sm:items-center py-2 first:pt-0 last:pb-0 gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-slate-800 font-bold">{it.productName || it.name}</div>
                           <div className="text-[10px] text-slate-400 font-mono">
                             SKU: {it.sku} {it.price ? `• @ Rp ${(Number(it.price) || 0).toLocaleString('id-ID')}` : ''}
                           </div>
+                          {it.notes && it.notes !== '-' && (
+                            <p className="text-[10px] text-purple-700 font-medium mt-0.5">
+                              Komponen: {it.notes}
+                            </p>
+                          )}
                         </div>
-                        <div className="text-right">
-                          <span className="font-extrabold text-emerald-900 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                            {it.qty} Pcs
+                        <div className="text-right flex-shrink-0">
+                          <span className="font-extrabold text-emerald-900 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 text-xs">
+                            {it.qty} {it.unit || (isBundling ? 'Paket' : 'Pcs')}
                           </span>
-                          {it.price ? (
+                          {(it.totalPrice || it.subtotal || it.price) ? (
                             <div className="text-[11px] font-bold text-slate-700 mt-0.5">
-                              Rp {((Number(it.price) || 0) * Number(it.qty)).toLocaleString('id-ID')}
+                              Rp {(Number(it.totalPrice || it.subtotal || (Number(it.price) * Number(it.qty)))).toLocaleString('id-ID')}
                             </div>
                           ) : null}
                         </div>

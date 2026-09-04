@@ -3,10 +3,20 @@ import { matchesSearch } from '../utils/searchUtils';
 import { History, Download, ArrowDownLeft, ArrowUpRight, Filter, Search, User, Clock, FileText, Trash2, AlertTriangle } from 'lucide-react';
 import { exportToCSV, purgeTransactions } from '../services/dataService';
 import ConfirmationModal from './ConfirmationModal';
+import TransactionDetailModal from './TransactionDetailModal';
 
-export default function TransactionHistory({ transactions = [], currentUser, onTransactionUpdate }) {
+export default function TransactionHistory({ 
+  transactions = [], 
+  currentUser, 
+  onTransactionUpdate, 
+  products = [],
+  initialSearch = '',
+  onClearInitialSearch
+}) {
   const isBranchStaff = currentUser?.role === 'STAFF_BRANCH';
   const branchId = currentUser?.branchId;
+
+  const [selectedDetailTx, setSelectedDetailTx] = useState(null);
 
   const formatTime = (ts) => {
     if (!ts) return '-';
@@ -19,13 +29,22 @@ export default function TransactionHistory({ transactions = [], currentUser, onT
     }
   };
 
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(initialSearch || '');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [selectedBranchFilter, setSelectedBranchFilter] = useState('ALL');
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isPurgeConfirmOpen, setIsPurgeConfirmOpen] = useState(false);
   const [isPurging, setIsPurging] = useState(false);
   const [purgeError, setPurgeError] = useState('');
+
+  // Synchronize initialSearch prop
+  React.useEffect(() => {
+    if (initialSearch) {
+      setSearchTerm(initialSearch);
+      setTypeFilter('ALL');
+      if (onClearInitialSearch) onClearInitialSearch();
+    }
+  }, [initialSearch]);
 
   // Branch data isolation: Branch Staff only sees their own branch's transactions!
   const scopedTransactions = transactions.filter(tx => {
@@ -44,9 +63,24 @@ export default function TransactionHistory({ transactions = [], currentUser, onT
   });
 
   const filteredTransactions = scopedTransactions.filter(tx => {
-    const matchesSearchTerm = matchesSearch(searchTerm, tx.productName, tx.sku, tx.notes, tx.user, tx.branchName);
+    const matchesSearchTerm = matchesSearch(
+      searchTerm, 
+      tx.productName, 
+      tx.sku, 
+      tx.notes, 
+      tx.user, 
+      tx.branchName,
+      tx.deliveryNote,
+      tx.rejectionReason,
+      tx.invoiceNumber
+    );
     
-    const matchesType = typeFilter === 'ALL' || tx.type === typeFilter;
+    const isRetur = tx.transactionType === 'TRANSFER_REJECTED_RETURN' || tx.status === 'REJECTED_RETURN' || tx.transferStatus === 'REJECTED';
+    let matchesType = true;
+    if (typeFilter === 'IN') matchesType = tx.type === 'IN' && tx.transactionType !== 'TRANSFER_REJECTED_RETURN';
+    else if (typeFilter === 'OUT') matchesType = tx.type === 'OUT';
+    else if (typeFilter === 'RETUR') matchesType = isRetur;
+
     return matchesSearchTerm && matchesType;
   });
 
@@ -254,7 +288,7 @@ export default function TransactionHistory({ transactions = [], currentUser, onT
         </div>
 
         {/* Type Filter Buttons */}
-        <div className="grid grid-cols-3 gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
           <button
             onClick={() => setTypeFilter('ALL')}
             className={`py-2 rounded-lg transition text-center cursor-pointer ${
@@ -279,6 +313,14 @@ export default function TransactionHistory({ transactions = [], currentUser, onT
           >
             Keluar
           </button>
+          <button
+            onClick={() => setTypeFilter('RETUR')}
+            className={`py-2 rounded-lg transition text-center cursor-pointer ${
+              typeFilter === 'RETUR' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            ↩️ Retur / Ditolak
+          </button>
         </div>
       </div>
 
@@ -291,21 +333,68 @@ export default function TransactionHistory({ transactions = [], currentUser, onT
           </div>
         ) : (
           filteredTransactions.map((tx) => {
-            const isIn = tx.type === 'IN';
+            const isRejectedReturn = tx.transactionType === 'TRANSFER_REJECTED_RETURN' || tx.status === 'REJECTED_RETURN';
+            const isOutboundRejected = tx.transferStatus === 'REJECTED';
+            const isRejected = isRejectedReturn || isOutboundRejected;
+            const isIn = tx.type === 'IN' && !isRejectedReturn;
+
             return (
-              <div key={tx.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-2.5">
+              <div 
+                key={tx.id} 
+                onClick={() => setSelectedDetailTx(tx)}
+                className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-2.5 cursor-pointer hover:border-sky-300 hover:shadow-sm transition active:scale-[0.99] group"
+              >
                 
                 {/* Header: Type Badge, Product Name, and Qty */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-start gap-2.5">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                      isIn ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition ${
+                      isRejectedReturn
+                        ? 'bg-amber-100 text-amber-700 font-bold'
+                        : isOutboundRejected
+                          ? 'bg-rose-100 text-rose-700 font-bold'
+                          : isIn
+                            ? 'bg-emerald-50 text-emerald-600'
+                            : 'bg-rose-50 text-rose-600'
                     }`}>
-                      {isIn ? <ArrowDownLeft className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
+                      {isRejectedReturn ? (
+                        <span className="text-sm">↩️</span>
+                      ) : isIn ? (
+                        <ArrowDownLeft className="w-5 h-5" />
+                      ) : (
+                        <ArrowUpRight className="w-5 h-5" />
+                      )}
                     </div>
                     <div>
-                      <h4 className="font-bold text-slate-900 text-sm leading-snug">{tx.productName}</h4>
-                      <p className="text-[11px] font-mono text-slate-400 mt-0.5">SKU: {tx.sku}</p>
+                      <h4 className="font-bold text-slate-900 text-sm leading-snug group-hover:text-sky-700 transition">{tx.productName}</h4>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                        <p className="text-[11px] font-mono text-slate-400">SKU: {tx.sku}</p>
+                        {tx.invoiceNumber && (
+                          <span className="font-mono text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded border border-slate-200">
+                            {tx.invoiceNumber}
+                          </span>
+                        )}
+                        {tx.deliveryNote && (
+                          <span className="font-mono text-[9px] bg-sky-50 text-sky-700 px-1.5 py-0.2 rounded border border-sky-200">
+                            {tx.deliveryNote}
+                          </span>
+                        )}
+                      </div>
+                      {isRejectedReturn && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 mt-1">
+                          ↩️ Paket Diretur ke Pusat
+                        </span>
+                      )}
+                      {isOutboundRejected && !isRejectedReturn && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300 mt-1">
+                          ⚠️ Ditolak oleh Cabang
+                        </span>
+                      )}
+                      {tx.rejectionReason && (
+                        <p className="text-[10px] text-rose-700 font-bold bg-rose-50 px-2 py-1 rounded border border-rose-200 mt-1">
+                          Alasan Penolakan: "{tx.rejectionReason}"
+                        </p>
+                      )}
                       {tx.totalPrice !== undefined && tx.type === 'OUT' && (
                         <p className="text-[11px] font-semibold text-emerald-600 mt-0.5">Nilai: Rp {tx.totalPrice.toLocaleString('id-ID')}</p>
                       )}
@@ -314,31 +403,43 @@ export default function TransactionHistory({ transactions = [], currentUser, onT
 
                   <div className="text-right">
                     <span className={`inline-block px-2.5 py-1 rounded-xl text-xs font-bold ${
-                      isIn ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                      isRejectedReturn
+                        ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                        : isIn
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-rose-100 text-rose-800'
                     }`}>
-                      {isIn ? `+${tx.qty}` : `-${tx.qty}`}
+                      {isRejectedReturn ? `+${tx.qty}` : isIn ? `+${tx.qty}` : `-${tx.qty}`}
                     </span>
                   </div>
                 </div>
 
                 {/* Notes if available */}
                 {tx.notes && (
-                  <div className="p-2.5 bg-slate-50 rounded-xl text-xs text-slate-600 flex items-start gap-1.5">
+                  <div className="p-2 bg-slate-50 rounded-xl text-xs text-slate-600 flex items-start gap-1.5">
                     <FileText className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
-                    <span>{tx.notes}</span>
+                    <span className="line-clamp-2">{tx.notes}</span>
                   </div>
                 )}
 
-                {/* Footer: User & Time */}
+                {/* Footer: User, Time & PDF Button */}
                 <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-100">
-                  <div className="flex items-center gap-1 text-slate-600 font-medium">
-                    <User className="w-3 h-3 text-slate-400" />
-                    <span>{tx.user || 'Sistem'}</span>
+                  <div className="flex items-center gap-2 text-slate-600 font-medium">
+                    <div className="flex items-center gap-1">
+                      <User className="w-3 h-3 text-slate-400" />
+                      <span>{tx.user || 'Sistem'}</span>
+                    </div>
+                    <span>•</span>
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-slate-400" />
+                      <span>{formatTime(tx.createdAt || tx.timestamp || tx.date)}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-slate-400" />
-                    <span>{formatTime(tx.createdAt)}</span>
-                  </div>
+
+                  <span className="text-[11px] font-bold text-sky-600 group-hover:underline flex items-center gap-1">
+                    <Download className="w-3 h-3" />
+                    <span>PDF</span>
+                  </span>
                 </div>
 
               </div>
@@ -358,41 +459,86 @@ export default function TransactionHistory({ transactions = [], currentUser, onT
                 <th className="px-4 py-3.5 text-center whitespace-nowrap min-w-[110px]">Jumlah (Qty)</th>
                 <th className="px-4 py-3.5 min-w-[160px]">Catatan / Keterangan</th>
                 <th className="px-4 py-3.5 whitespace-nowrap min-w-[120px]">Petugas</th>
-                <th className="px-5 py-3.5 text-right whitespace-nowrap min-w-[140px]">Waktu</th>
+                <th className="px-5 py-3.5 whitespace-nowrap min-w-[140px]">Waktu</th>
+                <th className="px-5 py-3.5 text-center whitespace-nowrap min-w-[130px]">Aksi Dokumen</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="p-8 text-center text-slate-400 text-sm">
+                  <td colSpan="7" className="p-8 text-center text-slate-400 text-sm">
                     Belum ada riwayat transaksi yang cocok dengan pencarian.
                   </td>
                 </tr>
               ) : (
                 filteredTransactions.map((tx) => {
-                  const isIn = tx.type === 'IN';
+                  const isRejectedReturn = tx.transactionType === 'TRANSFER_REJECTED_RETURN' || tx.status === 'REJECTED_RETURN';
+                  const isOutboundRejected = tx.transferStatus === 'REJECTED';
+                  const isIn = tx.type === 'IN' && !isRejectedReturn;
+
                   return (
-                    <tr key={tx.id} className="hover:bg-slate-50/80 transition">
+                    <tr 
+                      key={tx.id} 
+                      onClick={() => setSelectedDetailTx(tx)}
+                      className="hover:bg-slate-50/90 transition cursor-pointer group"
+                    >
                       <td className="px-5 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
-                          isIn ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                        }`}>
-                          {isIn ? <ArrowDownLeft className="w-3.5 h-3.5" /> : <ArrowUpRight className="w-3.5 h-3.5" />}
-                          {isIn ? 'Masuk' : 'Keluar'}
-                        </span>
+                        {isRejectedReturn ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold whitespace-nowrap bg-amber-100 text-amber-950 border border-amber-300 shadow-2xs">
+                            <span>↩️</span> Retur Masuk
+                          </span>
+                        ) : isOutboundRejected ? (
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold whitespace-nowrap bg-rose-100 text-rose-800">
+                              <ArrowUpRight className="w-3.5 h-3.5" /> Keluar
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold whitespace-nowrap bg-rose-50 text-rose-700 border border-rose-200">
+                              ⚠️ Ditolak Cabang
+                            </span>
+                          </div>
+                        ) : (
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
+                            isIn ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                          }`}>
+                            {isIn ? <ArrowDownLeft className="w-3.5 h-3.5" /> : <ArrowUpRight className="w-3.5 h-3.5" />}
+                            {isIn ? 'Masuk' : 'Keluar'}
+                          </span>
+                        )}
                       </td>
                       <td className="px-5 py-4 min-w-[200px]">
-                        <div className="font-semibold text-slate-800 leading-snug">{tx.productName}</div>
-                        <div className="text-xs text-slate-400 font-mono mt-0.5 whitespace-nowrap">SKU: {tx.sku}</div>
+                        <div className="font-semibold text-slate-800 group-hover:text-sky-700 transition leading-snug">{tx.productName}</div>
+                        <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                          <span className="text-xs text-slate-400 font-mono whitespace-nowrap">SKU: {tx.sku}</span>
+                          {tx.invoiceNumber && (
+                            <span className="font-mono text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded border border-slate-200">
+                              {tx.invoiceNumber}
+                            </span>
+                          )}
+                          {tx.deliveryNote && (
+                            <span className="font-mono text-[10px] bg-sky-50 text-sky-700 px-1.5 py-0.2 rounded border border-sky-200 font-semibold">
+                              {tx.deliveryNote}
+                            </span>
+                          )}
+                        </div>
+                        {tx.rejectionReason && (
+                          <div className="text-[11px] text-rose-700 font-bold mt-1 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1">
+                            <span>⚠️</span>
+                            <span>Alasan Ditolak: "{tx.rejectionReason}"</span>
+                          </div>
+                        )}
                         {tx.totalPrice !== undefined && tx.type === 'OUT' && (
-                          <div className="text-xs font-semibold text-emerald-600 mt-1 whitespace-nowrap">Nilai Transaksi: Rp {tx.totalPrice.toLocaleString('id-ID')}</div>
+                          <div className="text-xs font-semibold text-emerald-600 mt-1 whitespace-nowrap">Nilai: Rp {tx.totalPrice.toLocaleString('id-ID')}</div>
                         )}
                       </td>
                       <td className="px-4 py-4 text-center font-extrabold text-slate-900 whitespace-nowrap">
                         <span className={`px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${
-                          isIn ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                          isRejectedReturn
+                            ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                            : isIn
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-rose-50 text-rose-700'
                         }`}>
-                          {isIn ? `+${tx.qty}` : `-${tx.qty}`}
+                          {isRejectedReturn ? `+${tx.qty}` : isIn ? `+${tx.qty}` : `-${tx.qty}`}
                         </span>
                       </td>
                       <td className="px-4 py-4 text-slate-600 text-xs min-w-[160px] break-words">
@@ -401,8 +547,20 @@ export default function TransactionHistory({ transactions = [], currentUser, onT
                       <td className="px-4 py-4 text-slate-700 text-xs font-medium whitespace-nowrap">
                         {tx.user || '-'}
                       </td>
-                      <td className="px-5 py-4 text-right text-xs text-slate-400 whitespace-nowrap">
-                        {formatTime(tx.createdAt)}
+                      <td className="px-5 py-4 text-xs text-slate-400 whitespace-nowrap">
+                        {formatTime(tx.createdAt || tx.timestamp || tx.date)}
+                      </td>
+                      <td className="px-5 py-4 text-center whitespace-nowrap">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedDetailTx(tx);
+                          }}
+                          className="px-3 py-1.5 bg-sky-50 hover:bg-sky-600 text-sky-700 hover:text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 mx-auto cursor-pointer shadow-2xs"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>Lihat & Cetak</span>
+                        </button>
                       </td>
                     </tr>
                   );
@@ -447,6 +605,14 @@ export default function TransactionHistory({ transactions = [], currentUser, onT
         cancelText="Batal"
         isDangerous={true}
         isLoading={isPurging}
+      />
+
+      {/* Transaction Detail & PDF Generator Modal */}
+      <TransactionDetailModal
+        isOpen={Boolean(selectedDetailTx)}
+        transaction={selectedDetailTx}
+        onClose={() => setSelectedDetailTx(null)}
+        products={products}
       />
     </div>
   );
