@@ -111,6 +111,34 @@ export default function StockOut({
   const [selectedTransferBundleId, setSelectedTransferBundleId] = useState('');
   const [transferBundleQty, setTransferBundleQty] = useState(1);
 
+  // Transfer Cart & Multi-Branch Request Filtering
+  const [transferCart, setTransferCart] = useState([]);
+  const [requestBranchFilter, setRequestBranchFilter] = useState('ALL');
+
+  // Safe pending requests from branches for Pusat/Admin
+  const pendingStockRequests = (!isBranchStaff && Array.isArray(stockRequests))
+    ? stockRequests.filter(r => r && r.status === 'PENDING')
+    : [];
+
+  // Group pending requests by branch
+  const pendingBranchesList = React.useMemo(() => {
+    const map = new Map();
+    pendingStockRequests.forEach(req => {
+      const bId = req.branchId || 'UNKNOWN';
+      const bName = req.branchName || 'Cabang';
+      if (!map.has(bId)) {
+        map.set(bId, { id: bId, name: bName, count: 0 });
+      }
+      map.get(bId).count++;
+    });
+    return Array.from(map.values());
+  }, [pendingStockRequests]);
+
+  const displayedStockRequests = pendingStockRequests.filter(r => {
+    if (requestBranchFilter === 'ALL') return true;
+    return r.branchId === requestBranchFilter;
+  });
+
   // Toggle request fulfillment: adds requested product directly into transferCart, or removes it if already in cart
   const handleToggleRequestFulfillment = (req) => {
     if (!req) return;
@@ -294,7 +322,6 @@ export default function StockOut({
 
   // Batch Barcode Scan Mode State (Requirement 1)
   const [isBatchTransferMode, setIsBatchTransferMode] = useState(false);
-  const [transferCart, setTransferCart] = useState([]);
 
   // Multi-Item Sales Cart State (Requirement: Retail & Store Multi-Item Outbound)
   const [salesCart, setSalesCart] = useState([]);
@@ -1157,8 +1184,45 @@ const parseScannedSKU = (text) => {
             </span>
           </div>
 
+          {/* Multi-Branch Filter Tabs */}
+          {pendingBranchesList.length > 1 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 border-t border-indigo-100/80">
+              <span className="text-[11px] font-bold text-indigo-900 shrink-0 mr-1">Filter Cabang:</span>
+              <button
+                type="button"
+                onClick={() => setRequestBranchFilter('ALL')}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                  requestBranchFilter === 'ALL'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-white text-indigo-900 border border-indigo-200 hover:bg-indigo-50'
+                }`}
+              >
+                Semua Cabang ({pendingStockRequests.length})
+              </button>
+              {pendingBranchesList.map(b => (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => setRequestBranchFilter(b.id)}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                    requestBranchFilter === b.id
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-white text-indigo-900 border border-indigo-200 hover:bg-indigo-50'
+                  }`}
+                >
+                  <span>🏢 {b.name}</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                    requestBranchFilter === b.id ? 'bg-indigo-800 text-white' : 'bg-indigo-100 text-indigo-700'
+                  }`}>
+                    {b.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            {pendingStockRequests.map(req => {
+            {displayedStockRequests.map(req => {
               const isCurrentlySelected = transferCart.some(item => 
                 item.requestId === req.id || 
                 (item.productId && req.productId && item.productId === req.productId) || 
