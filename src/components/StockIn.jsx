@@ -278,7 +278,7 @@ const parseScannedSKU = (text) => {
       const summaryText = items.map(item => `${item.qty_in}x ${item.productName}`).join(' + ');
       
       for (const item of items) {
-        const itemNotes = `Penerimaan Barang Masuk Gudang Pusat • ${item.productName} (${item.qty_in} Pcs)${item.supplier ? ` • Supplier: ${item.supplier}` : ''}${item.invoiceNo ? ` • No. Faktur: ${item.invoiceNo}` : ''}${noteText ? ` • Catatan: ${noteText}` : ''}`;
+        const itemNotes = noteText && noteText.trim() ? noteText.trim() : '';
 
         await onRecordMovement({
           productId: item.productId,
@@ -299,7 +299,7 @@ const parseScannedSKU = (text) => {
         sku: 'BATCH-INBOUND',
         type: 'IN',
         qty: totalQty,
-        notes: `Penerimaan ${items.length} jenis barang ke gudang pusat [${summaryText}]${noteText ? ` • Catatan: ${noteText}` : ''}`,
+        notes: noteText && noteText.trim() ? noteText.trim() : '',
         deliveryNote: deliveryNote,
         user: userName
       });
@@ -553,10 +553,7 @@ const parseScannedSKU = (text) => {
       return;
     }
 
-    const originDescription = `Inbound Gudang Pusat dari Pabrik Produksi Kantor${deliveryNoteNumber ? ` • No. Surat Jalan / Batch: ${deliveryNoteNumber}` : ''}`;
-    const finalNotes = notes 
-      ? `${originDescription} • Catatan: ${notes}` 
-      : originDescription;
+    const finalNotes = notes && notes.trim() ? notes.trim() : '';
 
     const txPayload = {
       productId: selectedProduct.id,

@@ -21,10 +21,13 @@ import {
 export default function ConfirmationModal({
   isOpen,
   onClose,
+  onCancel,
   onConfirm,
   title = "Konfirmasi Tindakan",
-  subtitle = "Mohon periksa kembali data sebelum melanjutkan.",
+  subtitle = null,
+  message = null,
   type = "PRIMARY", // 'PRIMARY' (sky) | 'SUCCESS' (emerald) | 'WARNING' (amber) | 'DANGER' (rose)
+  isDangerous = false,
   icon: CustomIcon = null,
   confirmText = "Ya, Konfirmasi",
   cancelText = "Periksa Kembali",
@@ -38,10 +41,13 @@ export default function ConfirmationModal({
 }) {
   if (!isOpen) return null;
 
-  const isDanger = type === 'DANGER';
-  const isWarning = type === 'WARNING';
-  const isSuccess = type === 'SUCCESS';
-  const isPrimary = type === 'PRIMARY' || (!isDanger && !isWarning && !isSuccess);
+  const handleClose = onClose || onCancel;
+
+  const normType = (isDangerous ? 'DANGER' : (type || 'PRIMARY')).toUpperCase();
+  const isDanger = normType === 'DANGER';
+  const isWarning = normType === 'WARNING';
+  const isSuccess = normType === 'SUCCESS';
+  const isPrimary = normType === 'PRIMARY' || (!isDanger && !isWarning && !isSuccess);
 
   // Theme styles
   const theme = {
@@ -55,8 +61,17 @@ export default function ConfirmationModal({
   const DefaultIcon = isDanger ? Trash2 : isWarning ? AlertTriangle : isSuccess ? CheckCircle2 : Send;
   const RenderIcon = CustomIcon || DefaultIcon;
 
+  const displaySubtitle = subtitle || (isDanger ? "Tindakan ini bersifat destruktif dan permanen." : "Mohon periksa kembali data sebelum melanjutkan.");
+
   return (
-    <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in duration-200 pointer-events-auto">
+    <div 
+      className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in duration-200 pointer-events-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isLoading && handleClose) {
+          handleClose();
+        }
+      }}
+    >
       <div className={`bg-white rounded-3xl shadow-2xl w-full ${maxWidth} overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200 my-auto flex flex-col max-h-[90vh]`}>
         
         {/* Header */}
@@ -67,13 +82,13 @@ export default function ConfirmationModal({
             </div>
             <div>
               <h3 className="font-bold text-slate-900 text-base leading-snug">{title}</h3>
-              <p className="text-xs text-slate-500 leading-tight">{subtitle}</p>
+              <p className="text-xs text-slate-500 leading-tight">{displaySubtitle}</p>
             </div>
           </div>
           <button
             type="button"
             disabled={isLoading}
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-white/60 transition cursor-pointer disabled:opacity-50"
             title="Tutup"
           >
@@ -84,6 +99,20 @@ export default function ConfirmationModal({
         {/* Scrollable Content Body */}
         <div className="p-6 space-y-4 text-sm overflow-y-auto flex-1">
           
+          {/* Message / Explanatory Note */}
+          {message && (
+            <div className="text-slate-600 text-xs sm:text-sm leading-relaxed">
+              {typeof message === 'string' ? (
+                <div className={`p-3.5 rounded-2xl border flex items-start gap-2.5 font-medium ${isDanger ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
+                  {isDanger && <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />}
+                  <p>{message}</p>
+                </div>
+              ) : (
+                message
+              )}
+            </div>
+          )}
+
           {/* Key Summary Grid / Badges */}
           {summaryItems.length > 0 && (
             <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-2">
@@ -166,7 +195,7 @@ export default function ConfirmationModal({
             <button
               type="button"
               disabled={isLoading}
-              onClick={onClose}
+              onClick={handleClose}
               className="px-5 py-2.5 text-xs font-bold text-slate-600 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition active:scale-95 cursor-pointer disabled:opacity-50"
             >
               {cancelText}

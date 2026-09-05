@@ -23,7 +23,6 @@ import {
   Check,
   Send,
   Sparkles,
-  Tag,
   PackageCheck,
   CheckCheck,
   XCircle
@@ -64,7 +63,7 @@ export default function StockOut({
 
   // Sales Platform & Type States (Requirement: Unified Sales Section)
   const [salesType, setSalesType] = useState('SINGLE'); // 'SINGLE' | 'BUNDLE'
-  const [salesPlatform, setSalesPlatform] = useState('OFFLINE'); // 'OFFLINE' | 'SHOPEE' | 'TOKOPEDIA' | 'TIKTOK' | 'OTHER'
+  const [salesPlatform, setSalesPlatform] = useState('OFFLINE'); // 'OFFLINE' | 'SHOPEE' | 'TOKOPEDIA' | 'TIKTOK'
 
   // Single Item State (For Retail Pcs / HQ Transfer)
   const [selectedProductId, setSelectedProductId] = useState('');
@@ -107,11 +106,6 @@ export default function StockOut({
   const [bundleItems, setBundleItems] = useState([
     { productId: products[0]?.id || '', qty: 1 }
   ]);
-
-  // Stock Transfer with Bundling Preset Modal States
-  const [isTransferBundleModalOpen, setIsTransferBundleModalOpen] = useState(false);
-  const [selectedTransferBundleId, setSelectedTransferBundleId] = useState('');
-  const [transferBundleQty, setTransferBundleQty] = useState(1);
 
   // Transfer Cart & Multi-Branch Request Filtering
   const [transferCart, setTransferCart] = useState([]);
@@ -656,7 +650,12 @@ const parseScannedSKU = (text) => {
     const b = bundles.find(item => item.id === bundleId);
     if (!b) return;
 
-    setBundleName(b.name || '');
+    const mainEngine = (b.engine_type || b.engine || b.machineCategory || b.kategoriMesin || '').trim();
+    let formattedName = b.name || '';
+    if (mainEngine && mainEngine.toUpperCase() !== 'UNIVERSAL' && mainEngine.toUpperCase() !== 'ALL' && !formattedName.toLowerCase().includes(mainEngine.toLowerCase())) {
+      formattedName = `${formattedName} - ${mainEngine}`;
+    }
+    setBundleName(formattedName);
 
     // Suggested price based on branch type:
     // If branch staff and branchType === 'DISTRIBUTOR', use distributor_price
@@ -674,57 +673,21 @@ const parseScannedSKU = (text) => {
     if (Array.isArray(b.items) && b.items.length > 0) {
       const mapped = b.items.map(comp => {
         const found = products.find(p => p.id === comp.productId || (comp.sku && p.sku && p.sku.toLowerCase() === comp.sku.toLowerCase()));
+        const compEngine = comp.engine_type || comp.engine || found?.engine_type || found?.machineCategory || '';
+        const compDetail = comp.detail || comp.cleanName || comp.rawName || found?.name || '';
         return {
           productId: found?.id || comp.productId || '',
           sku: comp.sku || found?.sku || '-',
-          productName: comp.productName || found?.name || 'Komponen',
+          productName: comp.productName || found?.name || compDetail || 'Komponen',
+          detail: compDetail,
+          engine_type: compEngine,
+          engine: compEngine,
           qty: Number(comp.qty) || 1,
           unit: comp.unit || found?.unit || 'Pcs'
         };
       });
       setBundleItems(mapped);
     }
-  };
-
-  // Helper: Add Bundle Components to Transfer Cart
-  const handleAddBundleToTransferCart = () => {
-    const b = bundles.find(item => item.id === selectedTransferBundleId);
-    if (!b || !b.items || b.items.length === 0) {
-      showAlert("Pilih Paket 📦", "Silakan pilih paket bundling yang valid!", "WARNING");
-      return;
-    }
-    const multiplier = Math.max(1, Number(transferBundleQty) || 1);
-    const updated = [...transferCart];
-    let addedCount = 0;
-
-    b.items.forEach(comp => {
-      const p = products.find(prod => prod.id === comp.productId || (comp.sku && prod.sku && prod.sku.toLowerCase() === comp.sku.toLowerCase()));
-      if (p) {
-        const addQty = (Number(comp.qty) || 1) * multiplier;
-        const maxStock = Number(p.currentStock) || 0;
-        const existingIdx = updated.findIndex(i => i.productId === p.id);
-        if (existingIdx !== -1) {
-          updated[existingIdx].qty = Math.min(maxStock, updated[existingIdx].qty + addQty);
-        } else {
-          updated.push({
-            productId: p.id,
-            sku: p.sku,
-            productName: p.name,
-            brand: p.brand || 'Generic',
-            price: p.price || 0,
-            currentStock: maxStock,
-            qty: Math.min(maxStock, addQty)
-          });
-        }
-        addedCount++;
-      }
-    });
-
-    setTransferCart(updated);
-    setIsTransferBundleModalOpen(false);
-    setSelectedTransferBundleId('');
-    setTransferBundleQty(1);
-    showAlert("Berhasil Ditambahkan ✅", `${addedCount} komponen dari paket "${b.name}" (${multiplier} set) berhasil dimasukkan ke list transfer cabang.`, "SUCCESS");
   };
 
   // Calculate total regular price of bundling components
@@ -821,8 +784,8 @@ const parseScannedSKU = (text) => {
       case 'SHOPEE': return 'Shopee';
       case 'TOKOPEDIA': return 'Tokopedia';
       case 'TIKTOK': return 'TikTok Shop';
-      case 'OTHER': return 'Direct / Channel';
       case 'OFFLINE':
+      case 'OTHER':
       default: return 'Toko Fisik (Offline)';
     }
   };
@@ -850,7 +813,7 @@ const parseScannedSKU = (text) => {
       const targetBranchName = targetBranch?.name || 'Cabang Tujuan';
       const sjNo = invoiceNumber || `SJ-HQ-${Math.floor(1000 + Math.random() * 9000)}`;
 
-      const finalNotes = `Pengiriman Mutasi ke: ${targetBranchName} (${qty} Pcs) • No. Surat Jalan: ${sjNo}${notes ? ` • Catatan: ${notes}` : ''}`;
+      const finalNotes = notes && notes.trim() ? notes.trim() : '';
       const payload = {
         productId: selectedProduct.id,
         sku: selectedProduct.sku,
@@ -927,9 +890,7 @@ const parseScannedSKU = (text) => {
     
     const totalPcs = salesCart.reduce((acc, i) => acc + (Number(i.qty) || 0), 0);
     const grandTotal = salesCart.reduce((acc, i) => acc + ((Number(i.price) || 0) * (Number(i.qty) || 0)), 0);
-    const itemsSummary = salesCart.map(item => `${item.qty}x ${item.productName}`).join(' + ');
-
-    const finalNotes = `Penjualan (${platformName} • ${locationLabel} • ${salesCart.length} Jenis Produk • Total ${totalPcs} Pcs) • [${itemsSummary}] • Pembeli: ${customerName || 'Walk-in Customer'} • No. Nota: ${notaNo} • Bayar: ${paymentMethod}${notes ? ` • ${notes}` : ''}`;
+    const finalNotes = notes && notes.trim() ? notes.trim() : '';
 
     const payload = {
       productId: salesCart.length === 1 ? salesCart[0].productId : 'MULTI-ITEM-SALE',
@@ -974,8 +935,6 @@ const parseScannedSKU = (text) => {
     const targetBranchName = targetBranch?.name || 'Cabang Tujuan';
     const sjNo = invoiceNumber || `SJ-HQ-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    const summaryList = transferCart.map(item => `${item.qty}x ${item.productName}`).join(' + ');
-
     const payload = {
       productId: 'BATCH-TRANSFER',
       sku: 'MULTI-TRANSFER',
@@ -983,7 +942,7 @@ const parseScannedSKU = (text) => {
       type: 'OUT',
       qty: transferCart.reduce((acc, i) => acc + Number(i.qty), 0),
       unit: 'Pcs',
-      notes: `Batch Transfer ke: ${targetBranchName} [${summaryList}] • No. Surat Jalan: ${sjNo}${notes ? ` • Catatan: ${notes}` : ''}`,
+      notes: notes && notes.trim() ? notes.trim() : '',
       user: user || currentUser?.name || 'Staff',
       transactionType: 'STOCK_TRANSFER_TO_BRANCH',
       targetBranchId: targetBranchId,
@@ -1013,7 +972,7 @@ const parseScannedSKU = (text) => {
           items: items.map(i => ({ ...i, qty: Number(i.qty) || 1 })),
           toBranchId: pendingConfirm.targetBranchId,
           deliveryNote: deliveryNote,
-          shippingNotes: `${pendingConfirm.notes || ''} | SJ: ${deliveryNote}`
+          shippingNotes: pendingConfirm.notes ? `${pendingConfirm.notes} | SJ: ${deliveryNote}` : `SJ: ${deliveryNote}`
         }, currentUser?.uid || 'admin');
 
         // 3. Catat di Audit Log Frontend (onRecordMovement)
@@ -1179,8 +1138,7 @@ const parseScannedSKU = (text) => {
       });
     });
 
-    const bundleSummary = activeBundles.map(b => `${b.qty}x ${b.name}`).join(' + ');
-    const finalNotes = `Penjualan Paket Bundling (${platformName} • ${locationLabel}) • [${bundleSummary}] • Total ${totalBundleSets} Paket • Pembeli: ${customerName || 'Walk-in Customer'} • Total: Rp ${grandTotal.toLocaleString('id-ID')} • No. Nota: ${notaNo}${notes ? ` • ${notes}` : ''}`;
+    const finalNotes = notes && notes.trim() ? notes.trim() : '';
 
     const payload = {
       productId: activeBundles.length === 1 ? (activeBundles[0].bundleId ? `BUNDLE-${activeBundles[0].bundleId}` : 'BUNDLE-CUSTOM') : 'MULTI-BUNDLE-SALE',
@@ -1558,14 +1516,6 @@ const parseScannedSKU = (text) => {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setIsTransferBundleModalOpen(true)}
-                      className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer shadow-xs"
-                    >
-                      <Boxes className="w-4 h-4" />
-                      <span>+ Paket Bundling</span>
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => setIsScannerOpen(true)}
                       className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer shadow-xs"
                     >
@@ -1771,7 +1721,7 @@ const parseScannedSKU = (text) => {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
+                <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
                   
                   {/* Toko Fisik / Offline */}
                   <button
@@ -1837,21 +1787,6 @@ const parseScannedSKU = (text) => {
                       <path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.245V2h-3.445v13.672a2.896 2.896 0 0 1-2.891 2.868 2.896 2.896 0 0 1-2.892-2.868 2.896 2.896 0 0 1 2.892-2.869c.356 0 .695.068 1.008.192V9.45a6.31 6.31 0 0 0-1.008-.08C5.972 9.37 3 12.339 3 15.872 3 19.405 5.972 22.37 9.491 22.37c3.518 0 6.474-2.857 6.474-6.39V8.898a8.21 8.21 0 0 0 4.887 1.587V7.04a4.814 4.814 0 0 1-1.263-.354z"/>
                     </svg>
                     <span className="text-[10px] sm:text-xs">TikTok</span>
-                  </button>
-
-                  {/* Direct / Other */}
-                  <button
-                    type="button"
-                    onClick={() => setSalesPlatform('OTHER')}
-                    title="Lainnya / Direct"
-                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
-                      salesPlatform === 'OTHER'
-                        ? 'bg-sky-600 text-white border-sky-600 shadow-xs ring-2 ring-sky-500/20'
-                        : 'bg-white text-sky-700 border-sky-200 hover:bg-sky-50'
-                    }`}
-                  >
-                    <Tag className="w-4 h-4" />
-                    <span className="text-[10px] sm:text-xs">Direct</span>
                   </button>
 
                 </div>
@@ -2319,23 +2254,48 @@ const parseScannedSKU = (text) => {
                           const reqQty = Number(item.qty) || 1;
                           const totalNeeded = reqQty * Math.max(1, Number(bundleQty) || 1);
                           const isInsufficient = totalNeeded > currentStock;
+                          const itemEngine = item.engine_type || item.engine || compProd?.engine_type || compProd?.machineCategory || compProd?.kategoriMesin || '';
+                          const itemDetail = item.detail || item.cleanName || item.rawName || '';
 
                           return (
-                            <div key={idx} className="p-3 flex items-center justify-between hover:bg-slate-50/80 gap-3">
-                              <div className="min-w-0">
-                                <p className="text-xs font-bold text-slate-900 truncate">
-                                  {compProd?.name || item.productName || 'Komponen Produk'}
-                                </p>
-                                <p className="text-[11px] text-slate-500">
-                                  SKU: <span className="font-mono text-purple-700">{compProd?.sku || item.sku || '-'}</span>
-                                </p>
+                            <div key={idx} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-slate-50/80 gap-3">
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-xs font-bold text-slate-900 leading-snug break-words">
+                                    {compProd?.name || item.productName || itemDetail || 'Komponen Produk'}
+                                  </span>
+                                  {itemEngine && (
+                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 whitespace-nowrap">
+                                      {itemEngine}
+                                    </span>
+                                  )}
+                                  {compProd?.brand && (
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 whitespace-nowrap">
+                                      {compProd.brand}
+                                    </span>
+                                  )}
+                                </div>
+                                {itemDetail && itemDetail !== (compProd?.name || item.productName) && (
+                                  <p className="text-xs text-slate-600 font-medium break-words">
+                                    Detail Isi: <span className="text-slate-800 font-semibold">{itemDetail}</span>
+                                  </p>
+                                )}
+                                <div className="text-[11px] text-slate-500 font-mono flex items-center gap-2 flex-wrap leading-relaxed">
+                                  <span>SKU: <strong className="text-purple-700">{compProd?.sku || item.sku || '-'}</strong></span>
+                                  {(compProd?.car_variant || compProd?.carVariant) && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-slate-600 font-sans font-medium">{compProd?.car_variant || compProd?.carVariant}</span>
+                                    </>
+                                  )}
+                                </div>
                               </div>
 
-                              <div className="flex items-center gap-3 flex-shrink-0">
-                                <span className="text-xs font-bold px-2 py-1 bg-slate-100 text-slate-800 rounded-lg">
+                              <div className="flex items-center gap-2.5 flex-shrink-0 self-start sm:self-center">
+                                <span className="text-xs font-bold px-2.5 py-1 bg-slate-100 text-slate-800 rounded-lg whitespace-nowrap">
                                   {reqQty} Pcs/Paket ({totalNeeded} Pcs Total)
                                 </span>
-                                <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
+                                <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${
                                   isInsufficient 
                                     ? 'bg-rose-100 text-rose-700' 
                                     : 'bg-emerald-100 text-emerald-800'
@@ -2854,153 +2814,6 @@ const parseScannedSKU = (text) => {
                   </button>
                 </div>
               </form>
-
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 4: ADD BUNDLE TO TRANSFER CART MODAL */}
-      {isTransferBundleModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-150">
-            <div className="p-6 space-y-4">
-              
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
-                    <Boxes className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-slate-900 text-base">Tambah dari Paket Bundling</h3>
-                    <p className="text-xs text-slate-500">Pecah resep paket bundling menjadi komponen kirim ke cabang.</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => {
-                    setIsTransferBundleModalOpen(false);
-                    setSelectedTransferBundleId('');
-                    setTransferBundleQty(1);
-                  }}
-                  className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Bundle Selector */}
-              <div className="space-y-3">
-                <div>
-                  {bundles.length === 0 ? (
-                    <div className="p-3 bg-amber-50 text-amber-800 rounded-xl text-xs border border-amber-200">
-                      Belum ada paket bundling yang tersimpan. Silakan tambahkan paket bundling di menu <strong>Katalog Produk</strong> terlebih dahulu.
-                    </div>
-                  ) : (
-                    <BundleSearchPicker
-                      bundles={bundles}
-                      selectedBundleId={selectedTransferBundleId}
-                      onSelectBundle={(b) => setSelectedTransferBundleId(b.id)}
-                      label="Pilih Paket Bundling"
-                      placeholder="🔍 Cari Paket Bundling (Ketik Kode, Nama Paket, Merk, Mesin)..."
-                      showPrice={false}
-                      showComponentsCount={true}
-                    />
-                  )}
-                </div>
-
-                {/* Bundle Set Qty */}
-                {selectedTransferBundleId && (
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                      Jumlah Paket yang Dikirim (Set)
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setTransferBundleQty(Math.max(1, transferBundleQty - 1))}
-                        className="w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-700 flex items-center justify-center cursor-pointer transition active:scale-95"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <input
-                        type="number"
-                        min="1"
-                        value={transferBundleQty}
-                        onChange={(e) => setTransferBundleQty(Math.max(1, Number(e.target.value) || 1))}
-                        className="flex-1 px-3.5 py-2 text-center bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setTransferBundleQty(transferBundleQty + 1)}
-                        className="w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-700 flex items-center justify-center cursor-pointer transition active:scale-95"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Preview Components */}
-                {selectedTransferBundleId && (() => {
-                  const b = bundles.find(item => item.id === selectedTransferBundleId);
-                  if (!b || !b.items || b.items.length === 0) return null;
-
-                  return (
-                    <div className="space-y-2 pt-1">
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                        Pratinjau Komponen yang Akan Dimasukkan ({b.items.length} Jenis Produk):
-                      </label>
-                      <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100 max-h-48 overflow-y-auto">
-                        {b.items.map((comp, idx) => {
-                          const p = getProductFromItem(comp);
-                          const totalAdd = (Number(comp.qty) || 1) * transferBundleQty;
-                          const currentStock = Number(p?.currentStock) || 0;
-                          const isLack = totalAdd > currentStock;
-
-                          return (
-                            <div key={idx} className="p-2.5 bg-slate-50/50 flex items-center justify-between text-xs">
-                              <div>
-                                <p className="font-bold text-slate-900">{p?.name || comp.productName || 'Komponen'}</p>
-                                <p className="text-[11px] text-slate-500 font-mono">SKU: {p?.sku || comp.sku || '-'}</p>
-                              </div>
-                              <div className="text-right">
-                                <span className="font-black text-purple-700">{totalAdd} Pcs</span>
-                                <span className={`block text-[10px] font-bold ${isLack ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                  Stok Pusat: {currentStock} Pcs
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* Actions */}
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsTransferBundleModalOpen(false);
-                    setSelectedTransferBundleId('');
-                    setTransferBundleQty(1);
-                  }}
-                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="button"
-                  disabled={!selectedTransferBundleId}
-                  onClick={handleAddBundleToTransferCart}
-                  className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-xl text-xs shadow-md shadow-purple-600/20 transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Tambahkan ke List Transfer</span>
-                </button>
-              </div>
 
             </div>
           </div>

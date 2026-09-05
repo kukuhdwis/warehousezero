@@ -963,11 +963,13 @@ export default function BranchMonitoring({
   const handlePurgeHistory = async () => {
     setIsPurging(true);
     try {
-      const bId = selectedBranch ? selectedBranch.id : 'ALL';
-      await purgeTransactions(bId);
+      const bId = selectedBranch ? selectedBranch.id : (selectedBranchId || 'ALL');
+      const deletedCount = await purgeTransactions(bId, currentUser);
       setIsPurgeConfirmOpen(false);
+      alert(`Berhasil menghapus ${deletedCount} riwayat transaksi secara permanen.`);
     } catch (e) {
       console.error("Error purging transactions:", e);
+      alert(e.message || "Gagal menghapus data transaksi.");
     } finally {
       setIsPurging(false);
     }
@@ -2449,8 +2451,11 @@ export default function BranchMonitoring({
               : `Apakah Anda yakin ingin menghapus produk "${deleteConfirmItem.item?.productName || deleteConfirmItem.item?.name}" dari gudang ini?`}
             confirmText={isDeleting ? "Menghapus..." : "Ya, Hapus"}
             cancelText="Batal"
-            type="danger"
+            type="DANGER"
+            isDangerous={true}
+            isLoading={isDeleting}
             onConfirm={handleExecuteDelete}
+            onClose={() => setDeleteConfirmItem(null)}
             onCancel={() => setDeleteConfirmItem(null)}
           />
         )}
@@ -2460,11 +2465,14 @@ export default function BranchMonitoring({
           <ConfirmationModal
             isOpen={isPurgeConfirmOpen}
             title="Purge Data Riwayat Transaksi?"
-            message={`Tindakan ini akan menghapus seluruh catatan riwayat transaksi pada cabang ${selectedBranch?.name}. Data transaksi tidak dapat dikembalikan setelah dihapus.`}
+            message={`Tindakan ini akan menghapus seluruh catatan riwayat transaksi pada cabang ${selectedBranch?.name || 'terpilih'}. Data transaksi tidak dapat dikembalikan setelah dihapus.`}
             confirmText={isPurging ? "Memproses..." : "Ya, Purge Data"}
             cancelText="Batal"
-            type="danger"
+            type="DANGER"
+            isDangerous={true}
+            isLoading={isPurging}
             onConfirm={handlePurgeHistory}
+            onClose={() => setIsPurgeConfirmOpen(false)}
             onCancel={() => setIsPurgeConfirmOpen(false)}
           />
         )}
@@ -3155,8 +3163,11 @@ export default function BranchMonitoring({
           message="Tindakan ini akan menghapus seluruh catatan riwayat mutasi transaksi seluruh cabang secara permanen. Pastikan Anda telah mengunduh rekap bulanan sebelum melakukan purge."
           confirmText={isPurging ? "Memproses..." : "Ya, Purge Semua"}
           cancelText="Batal"
-          type="danger"
+          type="DANGER"
+          isDangerous={true}
+          isLoading={isPurging}
           onConfirm={handlePurgeHistory}
+          onClose={() => setIsPurgeConfirmOpen(false)}
           onCancel={() => setIsPurgeConfirmOpen(false)}
         />
       )}

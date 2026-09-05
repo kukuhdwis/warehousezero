@@ -22,7 +22,7 @@ export default function BundleSearchPicker({
   const engines = useMemo(() => {
     const set = new Set();
     safeBundles.forEach(b => {
-      const eng = b.engine || b.machineCategory || b.kategoriMesin;
+      const eng = b.engine_type || b.engine || b.machineCategory || b.kategoriMesin;
       if (eng && typeof eng === 'string' && eng.trim()) {
         set.add(eng.trim());
       }
@@ -33,7 +33,7 @@ export default function BundleSearchPicker({
   // Filter bundles based on search term and engine category
   const filteredBundles = useMemo(() => {
     return safeBundles.filter(b => {
-      const eng = b.engine || b.machineCategory || b.kategoriMesin || '';
+      const eng = b.engine_type || b.engine || b.machineCategory || b.kategoriMesin || '';
       const matchesEngine = selectedEngine === 'ALL' || eng === selectedEngine;
       const matchesTerm = matchesSearch(
         searchTerm,
@@ -50,6 +50,10 @@ export default function BundleSearchPicker({
   }, [safeBundles, searchTerm, selectedEngine]);
 
   const selectedBundle = safeBundles.find(b => b.id === selectedBundleId);
+  const selectedMainEngine = selectedBundle ? (selectedBundle.engine_type || selectedBundle.engine || selectedBundle.machineCategory || selectedBundle.kategoriMesin || '') : '';
+  const selectedDisplayName = (selectedBundle && selectedMainEngine && selectedMainEngine.toUpperCase() !== 'UNIVERSAL' && selectedMainEngine.toUpperCase() !== 'ALL' && !selectedBundle.name.toLowerCase().includes(selectedMainEngine.toLowerCase()))
+    ? `${selectedBundle.name} - ${selectedMainEngine}`
+    : (selectedBundle?.name || '');
 
   const handleSelect = (bundle) => {
     if (onSelectBundle) {
@@ -74,27 +78,27 @@ export default function BundleSearchPicker({
             <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold flex-shrink-0 shadow-xs">
               <Boxes className="w-5 h-5" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 {selectedBundle.code && (
                   <span className="font-mono text-xs font-extrabold text-purple-900 bg-purple-200/80 px-2 py-0.5 rounded-md border border-purple-300">
                     {selectedBundle.code}
                   </span>
                 )}
-                <h4 className="font-bold text-slate-900 text-sm leading-tight">{selectedBundle.name}</h4>
+                <h4 className="font-bold text-slate-900 text-sm leading-snug break-words">{selectedDisplayName}</h4>
               </div>
-              <div className="text-xs text-purple-900 font-medium mt-1 flex items-center gap-2 flex-wrap">
+              <div className="text-xs text-purple-900 font-medium mt-1 flex items-center gap-2 flex-wrap leading-relaxed">
                 {selectedBundle.brand && (
                   <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-white text-purple-800 border border-purple-200 shadow-2xs">
                     {selectedBundle.brand}
                   </span>
                 )}
-                {selectedBundle.engine && (
-                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-800">
-                    {selectedBundle.engine}
+                {selectedMainEngine && (
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                    {selectedMainEngine}
                   </span>
                 )}
-                {selectedBundle.car_variant && (
+                {selectedBundle.car_variant && selectedBundle.car_variant !== '-' && (
                   <span className="text-[11px] text-slate-600">
                     Varian: <strong>{selectedBundle.car_variant}</strong>
                   </span>
@@ -193,6 +197,10 @@ export default function BundleSearchPicker({
               filteredBundles.map(b => {
                 const isSelected = b.id === selectedBundleId;
                 const compCount = (b.items || []).length;
+                const mainEngine = b.engine_type || b.engine || b.machineCategory || b.kategoriMesin || '';
+                const displayName = (mainEngine && mainEngine.toUpperCase() !== 'UNIVERSAL' && mainEngine.toUpperCase() !== 'ALL' && !b.name.toLowerCase().includes(mainEngine.toLowerCase()))
+                  ? `${b.name} - ${mainEngine}`
+                  : b.name;
 
                 return (
                   <button
@@ -208,30 +216,30 @@ export default function BundleSearchPicker({
                     <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         {b.code && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-extrabold bg-purple-200/90 text-purple-900 border border-purple-300/80">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-extrabold bg-purple-200/90 text-purple-900 border border-purple-300/80 whitespace-nowrap">
                             {b.code}
                           </span>
                         )}
-                        <span className="font-bold text-xs text-slate-900 leading-snug">
-                          {b.name}
+                        <span className="font-bold text-xs text-slate-900 leading-snug break-words">
+                          {displayName}
                         </span>
                       </div>
 
-                      <div className="text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
+                      <div className="text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap leading-relaxed">
                         {b.brand && (
-                          <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 whitespace-nowrap">
                             {b.brand}
                           </span>
                         )}
-                        {b.engine && (
-                          <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700">
-                            {b.engine}
+                        {mainEngine && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80 whitespace-nowrap">
+                            {mainEngine}
                           </span>
                         )}
-                        {b.car_variant && (
+                        {b.car_variant && b.car_variant !== '-' && (
                           <>
                             <span>•</span>
-                            <span className="text-slate-600 font-medium truncate max-w-[200px]">
+                            <span className="text-slate-600 font-medium break-words">
                               {b.car_variant}
                             </span>
                           </>
@@ -239,7 +247,7 @@ export default function BundleSearchPicker({
                         {showComponentsCount && (
                           <>
                             <span>•</span>
-                            <span className="text-purple-700 font-semibold">
+                            <span className="text-purple-700 font-semibold whitespace-nowrap">
                               {compCount} Komponen
                             </span>
                           </>

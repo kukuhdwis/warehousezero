@@ -22,6 +22,16 @@ import {
 } from 'lucide-react';
 import { setSEO } from '../utils/seo';
 
+export const formatBundleDisplayName = (b) => {
+  if (!b) return '';
+  const mainEng = (b.engine_type || b.machineCategory || '').trim();
+  const cleanEng = (mainEng && mainEng !== '-' && mainEng.toLowerCase() !== 'all') ? mainEng : '';
+  if (cleanEng && !b.name?.toLowerCase().includes(cleanEng.toLowerCase())) {
+    return `${b.name} - ${cleanEng}`;
+  }
+  return b.name || '';
+};
+
 // Curated high-performance fallback items for instant display if Firestore data is empty or loading
 const FALLBACK_BEST_SELLERS = [
   {
@@ -489,11 +499,11 @@ export default function LandingPage({ currentUser, products = [], bundles = [] }
                     </div>
 
                     <h3 className="font-black text-slate-900 text-sm sm:text-base line-clamp-2 leading-snug group-hover:text-[#D32F2F] transition-colors">
-                      {item.name}
+                      {isBundle ? formatBundleDisplayName(item) : item.name}
                     </h3>
 
                     {/* Sound spec or bundle info if available */}
-                    {item.spec_sound && (
+                    {!isBundle && item.spec_sound && (
                       <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-600 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-100">
                         <Volume2 className="w-3 h-3 text-slate-400" />
                         <span className="font-medium">Karakter: <strong>{item.spec_sound}</strong></span>

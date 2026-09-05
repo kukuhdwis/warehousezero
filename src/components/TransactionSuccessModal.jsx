@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { drawPdfBrandHeader } from '../utils/pdfBrandHeader';
 
 export default function TransactionSuccessModal({ 
   isOpen, 
@@ -36,27 +37,32 @@ export default function TransactionSuccessModal({
     try {
         const doc = new jsPDF();
         
-        // --- HEADER ---
-        doc.setFontSize(20);
-        doc.setFont("helvetica", "bold");
-        
         let title = "BUKTI TRANSAKSI";
-        if (isTransfer) title = "SURAT JALAN";
-        else if (isSale) title = "NOTA PENJUALAN";
-        else if (isInbound) title = "BUKTI PENERIMAAN BARANG";
+        let subtitle = "Sistem Inventaris Resmi NDK Exhaust & RGN Performance";
+        if (isTransfer) {
+          title = "SURAT JALAN PENGIRIMAN";
+          subtitle = "Dokumen Resmi Pengiriman Barang Antar Gudang";
+        } else if (isSale) {
+          title = "NOTA PENJUALAN";
+          subtitle = "Faktur & Bukti Pembayaran Penjualan";
+        } else if (isInbound) {
+          title = "BUKTI PENERIMAAN BARANG";
+          subtitle = "Surat Tanda Terima Barang Masuk Gudang";
+        }
+
+        const branchOrigin = transaction.branchName || (isTransfer ? transaction.sourceBranchName : 'Gudang Pusat');
+        drawPdfBrandHeader(doc, {
+          title,
+          subtitle,
+          branchName: branchOrigin
+        });
         
-        // Right align title
         const pageWidth = doc.internal.pageSize.getWidth();
-        doc.text(title, pageWidth - 14, 22, { align: 'right' });
-        
-        // Draw line under title
-        doc.setLineWidth(0.5);
-        doc.line(14, 25, pageWidth - 14, 25);
         
         // Left Header: Company Info
-        doc.setFontSize(10);
+        doc.setFontSize(9);
         doc.setFont("helvetica", "bold");
-        doc.text("Kepada Yth.", 14, 32);
+        doc.text("Kepada Yth.", 14, 33);
         doc.setFont("helvetica", "normal");
         
         if (isSale) {
@@ -82,14 +88,14 @@ export default function TransactionSuccessModal({
         }
 
         doc.setFont("helvetica", "bold");
-        doc.text("No. Dokumen", pageWidth - 70, 32);
-        doc.text("Tanggal", pageWidth - 70, 38);
-        doc.text("Petugas", pageWidth - 70, 44);
+        doc.text("No. Dokumen", pageWidth - 70, 33);
+        doc.text("Tanggal", pageWidth - 70, 39);
+        doc.text("Petugas", pageWidth - 70, 45);
         
         doc.setFont("helvetica", "normal");
-        doc.text(`: ${invoiceNo}`, pageWidth - 45, 32);
-        doc.text(`: ${txDate}`, pageWidth - 45, 38);
-        doc.text(`: ${transaction.performerName || transaction.callerUid || 'Admin'}`, pageWidth - 45, 44);
+        doc.text(`: ${invoiceNo}`, pageWidth - 45, 33);
+        doc.text(`: ${txDate}`, pageWidth - 45, 39);
+        doc.text(`: ${transaction.performerName || transaction.callerUid || 'Admin'}`, pageWidth - 45, 45);
 
         // --- TABLE ---
         const tableColumn = ["No", "SKU", "Nama Barang", "Qty", "Jumlah (Rp)", "Keterangan"];
@@ -123,7 +129,7 @@ export default function TransactionSuccessModal({
         autoTable(doc, {
           head: [tableColumn],
           body: tableRows,
-          startY: 55,
+          startY: 58,
           theme: 'grid',
           styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0], lineColor: [0,0,0], lineWidth: 0.1 },
           headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', lineColor: [0,0,0], lineWidth: 0.1 },

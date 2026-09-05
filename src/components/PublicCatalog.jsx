@@ -31,6 +31,16 @@ import {
 import { matchesSearch } from '../utils/searchUtils';
 import { setSEO } from '../utils/seo';
 
+export const formatBundleDisplayName = (b) => {
+  if (!b) return '';
+  const mainEng = (b.engine_type || b.machineCategory || '').trim();
+  const cleanEng = (mainEng && mainEng !== '-' && mainEng.toLowerCase() !== 'all') ? mainEng : '';
+  if (cleanEng && !b.name?.toLowerCase().includes(cleanEng.toLowerCase())) {
+    return `${b.name} - ${cleanEng}`;
+  }
+  return b.name || '';
+};
+
 export default function PublicCatalog({ 
   products = [], 
   bundles = [],
@@ -731,7 +741,7 @@ export default function PublicCatalog({
 
               // JIKA ITEM ADALAH PAKET BUNDLING
               if (isBundle) {
-                const bundleItemsPreview = item.rawIsi || (Array.isArray(item.items) ? item.items.map(i => `${i.qty || 1}x ${i.productName || i.name}`).join(' + ') : '');
+                const bundleDisplayName = formatBundleDisplayName(item);
 
                 return (
                   <div 
@@ -793,9 +803,9 @@ export default function PublicCatalog({
                         <h3 
                           onClick={() => setDetailBundle(item)}
                           className="font-bold text-slate-950 text-xs sm:text-[13px] leading-snug group-hover:text-[#D32F2F] transition line-clamp-2 cursor-pointer pt-0.5"
-                          title={item.name}
+                          title={bundleDisplayName}
                         >
-                          {item.name}
+                          {bundleDisplayName}
                         </h3>
 
                         {/* Compatible Car Variant */}
@@ -803,14 +813,6 @@ export default function PublicCatalog({
                           <div className="flex items-start gap-1 text-[10px] sm:text-[11px] text-slate-500 pt-0.5">
                             <Car className="w-3 h-3 text-[#D32F2F] flex-shrink-0 mt-0.5" />
                             <span className="line-clamp-1">{carDisplay}</span>
-                          </div>
-                        )}
-
-                        {/* Rincian Komponen Ringkas */}
-                        {bundleItemsPreview && (
-                          <div className="mt-1.5 p-1.5 bg-slate-50 border border-slate-200/80 rounded text-[10px] text-slate-600 line-clamp-2 leading-relaxed">
-                            <strong className="text-slate-900 font-bold">Isi: </strong>
-                            {bundleItemsPreview}
                           </div>
                         )}
                       </div>
@@ -1533,7 +1535,7 @@ export default function PublicCatalog({
               {/* Title & Official Price */}
               <div className="space-y-1">
                 <h3 className="text-base sm:text-xl font-black text-slate-950 leading-snug">
-                  {detailBundle.name}
+                  {formatBundleDisplayName(detailBundle)}
                 </h3>
                 <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
                   <div>
@@ -1584,31 +1586,81 @@ export default function PublicCatalog({
                 </h4>
 
                 {Array.isArray(detailBundle.items) && detailBundle.items.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {detailBundle.items.map((bItem, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-200 text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded bg-rose-50 text-[#D32F2F] font-bold text-[10px] flex items-center justify-center">
-                            {bItem.qty || 1}x
-                          </span>
-                          <span className="font-bold text-slate-900">{bItem.productName || bItem.cleanName || bItem.rawName}</span>
+                  <div className="space-y-2">
+                    {detailBundle.items.map((bItem, idx) => {
+                      const matchedProd = products.find(p => 
+                        (bItem.productId && p.id === bItem.productId) || 
+                        (bItem.sku && p.sku === bItem.sku)
+                      );
+                      const itemEngine = bItem.engine_type || bItem.engine || matchedProd?.engine_type || matchedProd?.machineCategory || detailBundle.engine_type || '';
+                      const itemDetail = bItem.detail || bItem.cleanName || bItem.rawName;
+                      const mainName = matchedProd?.name || bItem.productName || bItem.cleanName || bItem.rawName || 'Komponen Produk';
+                      const hasDifferentDetail = itemDetail && itemDetail !== mainName;
+                      const displayEngine = (itemEngine && itemEngine !== '-' && itemEngine.toLowerCase() !== 'all') ? itemEngine : '';
+
+                      return (
+                        <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs gap-2 text-xs">
+                          <div className="flex items-start gap-2.5 min-w-0">
+                            <span className="w-6 h-6 rounded-lg bg-rose-50 text-[#D32F2F] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
+                              {bItem.qty || 1}x
+                            </span>
+                            <div className="space-y-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-slate-900 text-xs sm:text-[13px] break-words">{mainName}</span>
+                                {displayEngine && (
+                                  <span className="px-1.5 py-0.5 rounded bg-zinc-900 text-white text-[9px] font-black uppercase tracking-wider shadow-2xs whitespace-nowrap">
+                                    {displayEngine}
+                                  </span>
+                                )}
+                                {(matchedProd?.brand || bItem.brand) && (
+                                  <span className="px-1.5 py-0.5 rounded bg-rose-50 text-[#D32F2F] border border-rose-200 text-[9px] font-bold uppercase whitespace-nowrap">
+                                    {matchedProd?.brand || bItem.brand}
+                                  </span>
+                                )}
+                              </div>
+                              {hasDifferentDetail && (
+                                <div className="text-[11px] text-slate-600 font-medium break-words">
+                                  Detail Isi: <span className="text-slate-800 font-semibold">{itemDetail}</span>
+                                </div>
+                              )}
+                              {(matchedProd?.car_variant || bItem.car_variant) && (
+                                <div className="text-[10px] text-slate-400 flex items-center gap-1 flex-wrap">
+                                  <Car className="w-3 h-3 text-slate-400 shrink-0" />
+                                  <span>{matchedProd?.car_variant || bItem.car_variant}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {(matchedProd?.sku || bItem.sku) && (
+                            <span className="text-[10px] font-mono text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-200/60 shrink-0 self-start sm:self-center">
+                              {matchedProd?.sku || bItem.sku}
+                            </span>
+                          )}
                         </div>
-                        {bItem.sku && (
-                          <span className="text-[10px] font-mono text-slate-400">{bItem.sku}</span>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : detailBundle.rawIsi ? (
                   <div className="space-y-1.5">
-                    {detailBundle.rawIsi.split('+').map((itemStr, idx) => (
-                      <div key={idx} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 text-xs">
-                        <span className="w-5 h-5 rounded bg-rose-50 text-[#D32F2F] font-bold text-[10px] flex items-center justify-center">
-                          ✓
-                        </span>
-                        <span className="font-bold text-slate-900">{itemStr.trim()}</span>
-                      </div>
-                    ))}
+                    {detailBundle.rawIsi.split('+').map((itemStr, idx) => {
+                      const cleanItemStr = itemStr.trim();
+                      const fallbackEngine = (detailBundle.engine_type && detailBundle.engine_type !== '-' && detailBundle.engine_type.toLowerCase() !== 'all') ? detailBundle.engine_type : '';
+                      return (
+                        <div key={idx} className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-slate-200 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded bg-rose-50 text-[#D32F2F] font-bold text-[10px] flex items-center justify-center">
+                              ✓
+                            </span>
+                            <span className="font-bold text-slate-900">{cleanItemStr}</span>
+                          </div>
+                          {fallbackEngine && (
+                            <span className="px-1.5 py-0.5 rounded bg-zinc-900 text-white text-[9px] font-black uppercase tracking-wider">
+                              {fallbackEngine}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-xs text-slate-500 italic">Rincian komponen belum dicantumkan.</p>

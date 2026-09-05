@@ -648,10 +648,18 @@ export const processBundleSpreadsheetData = (rawAoa = [], existingProducts = [])
 
   const headerRow = (rawAoa[headerRowIndex] || []).map(h => String(h || '').trim());
 
+  // Cari semua kolom mesin (kolom mesin utama vs kolom mesin komponen)
+  const mesinIndices = [];
+  headerRow.forEach((h, i) => {
+    const col = String(h || '').trim().toLowerCase();
+    if (col === 'mesin' || col === 'engine' || col.includes('tipe mesin') || col.includes('mesin utama') || col.includes('mesin komponen')) {
+      mesinIndices.push(i);
+    }
+  });
+
   const idxNo = findColumnIndex(headerRow, ['no', '#', 'nomor']);
   const idxMerk = findColumnIndex(headerRow, ['merk', 'brand', 'merek']);
   const idxKode = findColumnIndex(headerRow, ['kode', 'sku', 'code', 'kode bundle', 'kode paket']);
-  const idxMesin = findColumnIndex(headerRow, ['mesin', 'engine', 'tipe mesin']);
   const idxNama = findColumnIndex(headerRow, ['nama bundle', 'nama paket', 'nama', 'bundle name', 'paket']);
   const idxJual = findColumnIndex(headerRow, ['harga jual', 'jual', 'retail', 'selling price', 'harga']);
   const idxReseller = findColumnIndex(headerRow, ['harga reseller', 'reseller', 'harga b2b']);
@@ -659,6 +667,24 @@ export const processBundleSpreadsheetData = (rawAoa = [], existingProducts = [])
   const idxIsi = findColumnIndex(headerRow, ['isi', 'komponen', 'isi paket', 'items', 'komponen bundle']);
   const idxVarian = findColumnIndex(headerRow, ['varian mobil', 'varian', 'mobil', 'car variant']);
   const idxKet = findColumnIndex(headerRow, ['ket', 'keterangan', 'notes', 'catatan']);
+
+  // Tentukan kolom Mesin Utama (SS 3: kolom mesin sebelum Nama Bundle)
+  // dan kolom Mesin Komponen (SS 5: kolom mesin kedua sebelum/dekat kolom Isi)
+  let idxMesinUtama = findColumnIndex(headerRow, ['mesin utama', 'tipe mesin utama', 'mesin paket']);
+  let idxMesinKomponen = findColumnIndex(headerRow, ['mesin komponen', 'tipe mesin komponen', 'mesin isi', 'mesin part', 'mesin kedua']);
+
+  if (idxMesinUtama === -1) {
+    idxMesinUtama = mesinIndices.length > 0 ? mesinIndices[0] : -1;
+  }
+
+  if (idxMesinKomponen === -1) {
+    // Jika ada lebih dari 1 kolom mesin di sheet (seperti pada SS 3 & SS 5), ambil yang kedua sebagai mesin komponen
+    if (mesinIndices.length > 1) {
+      idxMesinKomponen = mesinIndices[1];
+    } else {
+      idxMesinKomponen = idxMesinUtama;
+    }
+  }
 
   // Pre-build index pencarian produk
   const productBySku = new Map();
@@ -681,7 +707,8 @@ export const processBundleSpreadsheetData = (rawAoa = [], existingProducts = [])
     const rawNo = idxNo >= 0 ? row[idxNo] : '';
     const rawMerk = idxMerk >= 0 ? String(row[idxMerk] || '').trim() : '';
     const rawKode = idxKode >= 0 ? String(row[idxKode] || '').trim() : '';
-    const rawMesin = idxMesin >= 0 ? String(row[idxMesin] || '').trim() : '';
+    const rawMesinUtama = idxMesinUtama >= 0 ? String(row[idxMesinUtama] || '').trim() : '';
+    const rawMesinKomponen = idxMesinKomponen >= 0 ? String(row[idxMesinKomponen] || '').trim() : '';
     const rawNama = idxNama >= 0 ? String(row[idxNama] || '').trim() : '';
     const rawJual = idxJual >= 0 ? row[idxJual] : '';
     const rawReseller = idxReseller >= 0 ? row[idxReseller] : '';
@@ -702,22 +729,29 @@ export const processBundleSpreadsheetData = (rawAoa = [], existingProducts = [])
         no: rawNo,
         brand: rawMerk,
         code: rawKode,
-        engine_type: rawMesin,
+        engine_type: rawMesinUtama,
+        engine: rawMesinUtama,
         name: rawNama,
         rawJual,
         rawReseller,
         rawDistributor,
         rawVarian,
         rawKet,
-        itemsRaw: rawIsi ? [rawIsi] : []
+        itemsRaw: rawIsi ? [{ text: rawIsi, engine: rawMesinKomponen || rawMesinUtama }] : []
       };
     } else if (currentGroup && rawIsi) {
       // Sub-baris komponen milik paket yang sedang aktif
-      currentGroup.itemsRaw.push(rawIsi);
+      currentGroup.itemsRaw.push({
+        text: rawIsi,
+        engine: rawMesinKomponen || currentGroup.engine_type
+      });
       if (!currentGroup.rawVarian && rawVarian) currentGroup.rawVarian = rawVarian;
       if (!currentGroup.rawKet && rawKet) currentGroup.rawKet = rawKet;
       if (!currentGroup.brand && rawMerk) currentGroup.brand = rawMerk;
-      if (!currentGroup.engine_type && rawMesin) currentGroup.engine_type = rawMesin;
+      if (!currentGroup.engine_type && rawMesinUtama) {
+        currentGroup.engine_type = rawMesinUtama;
+        currentGroup.engine = rawMesinUtama;
+      }
     }
   }
 
@@ -745,16 +779,33 @@ export const processBundleSpreadsheetData = (rawAoa = [], existingProducts = [])
       rowErrors.push("Nama Bundle tidak boleh kosong.");
     }
 
-    // Gabungkan seluruh item dari baris utama dan sub-baris ke bawah
-    const componentStrings = [];
-    bg.itemsRaw.forEach(rawIsiStr => {
-      const parts = rawIsiStr
-        ? rawIsiStr.split(/[\+,\;\n]+/).map(s => s.trim()).filter(Boolean)
+    // Format nama bundle: sertakan tipe mesin utama jika belum ada di dalam nama bundle
+    const mainEngine = (bg.engine_type || '').trim();
+    let finalBundleName = bg.name || '';
+    if (mainEngine && mainEngine.toUpperCase() !== 'UNIVERSAL' && mainEngine.toUpperCase() !== 'ALL') {
+      if (!finalBundleName.toLowerCase().includes(mainEngine.toLowerCase())) {
+        finalBundleName = `${finalBundleName} - ${mainEngine}`;
+      }
+    }
+
+    // Gabungkan dan petakan seluruh item dari baris utama dan sub-baris ke bawah
+    const componentEntries = [];
+    (bg.itemsRaw || []).forEach(rawItemObj => {
+      const rawText = typeof rawItemObj === 'string' ? rawItemObj : rawItemObj?.text || '';
+      const itemEngine = (typeof rawItemObj === 'object' && rawItemObj?.engine) ? rawItemObj.engine : bg.engine_type || '';
+      
+      const parts = rawText
+        ? rawText.split(/[\+,\;\n]+/).map(s => s.trim()).filter(Boolean)
         : [];
-      componentStrings.push(...parts);
+      
+      parts.forEach(part => {
+        componentEntries.push({ text: part, engine: itemEngine });
+      });
     });
 
-    const parsedComponents = componentStrings.map(compStr => {
+    const parsedComponents = componentEntries.map(entry => {
+      const compStr = entry.text;
+      const compEngine = entry.engine || bg.engine_type || '';
       let qty = 1;
       let cleanComp = compStr;
 
@@ -773,30 +824,30 @@ export const processBundleSpreadsheetData = (rawAoa = [], existingProducts = [])
       // 1. Cocokkan SKU persis
       let matchedProd = productBySku.get(cleanComp.toLowerCase());
 
-      // 2. Cocokkan Nama & Mesin
+      // 2. Cocokkan Nama & Mesin Komponen (SS 5: Mesin Kedua)
       if (!matchedProd) {
         const lowerComp = cleanComp.toLowerCase();
-        const lowerEngine = (bg.engine_type || '').toLowerCase();
+        const lowerEngine = (compEngine || bg.engine_type || '').toLowerCase();
         matchedProd = productsList.find(p => {
           const pName = (p.name || '').toLowerCase();
-          const pEngine = (p.engine_type || p.machineCategory || '').toLowerCase();
+          const pEngine = (p.engine_type || p.machineCategory || p.kategoriMesin || '').toLowerCase();
           const matchesName = pName.includes(lowerComp) || lowerComp.includes(pName);
           const matchesEngine = !lowerEngine || lowerEngine === 'all' || pEngine.includes(lowerEngine) || lowerEngine.includes(pEngine);
           return matchesName && matchesEngine;
         });
       }
 
-      // 3. Cocokkan Kategori Knalpot & Mesin
+      // 3. Cocokkan Kategori Knalpot & Mesin Komponen
       if (!matchedProd) {
         const lowerComp = cleanComp.toLowerCase();
-        const lowerEngine = (bg.engine_type || '').toLowerCase();
+        const lowerEngine = (compEngine || bg.engine_type || '').toLowerCase();
         const categoryKeyword = ['downpipe', 'frontpipe', 'centerpipe', 'bolt-on', 'muffler', 'resonator', 'header']
           .find(k => lowerComp.includes(k));
 
         if (categoryKeyword) {
           matchedProd = productsList.find(p => {
             const pCat = (p.category_name || p.name || '').toLowerCase();
-            const pEngine = (p.engine_type || p.machineCategory || '').toLowerCase();
+            const pEngine = (p.engine_type || p.machineCategory || p.kategoriMesin || '').toLowerCase();
             const matchesCat = pCat.includes(categoryKeyword);
             const matchesEngine = !lowerEngine || lowerEngine === 'all' || pEngine.includes(lowerEngine);
             return matchesCat && matchesEngine;
@@ -804,9 +855,14 @@ export const processBundleSpreadsheetData = (rawAoa = [], existingProducts = [])
         }
       }
 
+      const effectiveEngine = compEngine || matchedProd?.engine_type || matchedProd?.machineCategory || bg.engine_type || '';
+
       return {
         rawName: compStr,
         cleanName: cleanComp,
+        detail: cleanComp, // Detail isi komponen dari datasheet
+        engine_type: effectiveEngine, // Tipe mesin komponen dari kolom mesin kedua
+        engine: effectiveEngine,
         qty,
         productId: matchedProd ? matchedProd.id : null,
         productName: matchedProd ? matchedProd.name : cleanComp,
@@ -843,11 +899,12 @@ export const processBundleSpreadsheetData = (rawAoa = [], existingProducts = [])
       brand: bg.brand || 'RGN Performance',
       code: finalCode,
       engine_type: bg.engine_type || 'Universal',
-      name: bg.name,
+      engine: bg.engine_type || 'Universal',
+      name: finalBundleName,
       selling_price: sellingPrice,
       reseller_price: resellerPrice,
       distributor_price: distributorPrice,
-      rawIsi: componentStrings.join(' + '),
+      rawIsi: componentEntries.map(e => e.text).join(' + '),
       car_variant: bg.rawVarian || '-',
       description: bg.rawKet || '',
       admin_note: '',

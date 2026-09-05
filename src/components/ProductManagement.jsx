@@ -4306,6 +4306,11 @@ export default function ProductManagement({
                                         title={`SKU: ${it.sku || '-'} | Qty: ${it.qty || 1}`}
                                       >
                                         <span>{it.productName || it.cleanName || it.name || it.sku}</span>
+                                        {it.engine_type && (
+                                          <span className="px-1 py-0.2 bg-amber-50 text-amber-800 rounded font-bold text-[9px] border border-amber-200">
+                                            {it.engine_type}
+                                          </span>
+                                        )}
                                         <span className="px-1 py-0.1 bg-purple-100 text-purple-800 rounded font-black">
                                           x{it.qty || 1}
                                         </span>

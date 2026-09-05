@@ -1537,7 +1537,7 @@ export const confirmBatchTransferReceipt = async (transferListOrIds, receiverUse
         branchName,
         source: 'KANTOR_PUSAT',
         deliveryNote: transferObj?.deliveryNote || '-',
-        notes: `Konfirmasi Penerimaan Kiriman • ${transferObj?.productName || ''} (+${qtyToAdd} Pcs)${receiverNotes ? ` • Catatan: ${receiverNotes}` : ''}`,
+        notes: receiverNotes && receiverNotes.trim() ? receiverNotes.trim() : '',
         user: receiverUser?.name || 'Staff Cabang',
         skipMasterProductUpdate: true
       });
@@ -2018,7 +2018,8 @@ export const fetchTransactions = async () => {
 
 export const purgeTransactions = async (branchId, currentUser) => {
   ensureFirebase();
-  if (currentUser?.role !== 'ADMIN') {
+  const userRole = (currentUser?.role || '').toUpperCase();
+  if (userRole !== 'ADMIN') {
     throw new Error('Akses Ditolak: Hanya Administrator pusat yang diizinkan untuk menghapus data riwayat transaksi secara permanen.');
   }
 
@@ -2045,7 +2046,8 @@ export const purgeTransactions = async (branchId, currentUser) => {
       await batch.commit();
     }
 
-    console.warn(`[PURGE ALERT] Admin ${currentUser.name} (${currentUser.email}) has permanently purged ${docsToDelete.length} transaction records for branch filter: ${branchId}`);
+    const adminName = currentUser?.name || currentUser?.email || 'Admin';
+    console.warn(`[PURGE ALERT] Admin ${adminName} has permanently purged ${docsToDelete.length} transaction records for branch filter: ${branchId}`);
     return docsToDelete.length;
   } catch (err) {
     console.error("Firestore error purging transactions:", err);
