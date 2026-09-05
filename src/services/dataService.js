@@ -2652,6 +2652,67 @@ export const exportToExcel = (data, filename = "wms-export.xlsx", sheetName = "D
 };
 
 /**
+ * Ekspor data multi-sheet ke buku kerja Excel (.xlsx).
+ * Parameter sheets berupa array objek: [{ sheetName: string, data: Array<Object> }, ...]
+ */
+export const exportMultiSheetExcel = (sheets = [], filename = "wms-rekap-multisheet.xlsx") => {
+  if (!sheets || !sheets.length) return;
+
+  const workbook = XLSX.utils.book_new();
+  const usedNames = new Set();
+
+  sheets.forEach((sheetObj, sIdx) => {
+    const rawName = (sheetObj.sheetName || `Sheet ${sIdx + 1}`).trim();
+    // Excel sheet name restrictions: max 31 chars, cannot contain :\/?*[]
+    let validName = rawName.replace(/[:\\/?*\[\]]/g, '').trim().slice(0, 31) || `Sheet ${sIdx + 1}`;
+    
+    // Ensure unique sheet name (case-insensitive in Excel)
+    let finalName = validName;
+    let counter = 1;
+    while (usedNames.has(finalName.toLowerCase())) {
+      const suffix = ` (${counter})`;
+      finalName = validName.slice(0, 31 - suffix.length) + suffix;
+      counter++;
+    }
+    usedNames.add(finalName.toLowerCase());
+
+    const data = sheetObj.data || [];
+    const sanitizedRows = data.map(row => {
+      const cleanRow = {};
+      for (const [key, val] of Object.entries(row)) {
+        cleanRow[key] = typeof val === 'string' ? sanitizeExportText(val) : val;
+      }
+      return cleanRow;
+    });
+
+    const rowsToExport = sanitizedRows.length > 0 ? sanitizedRows : [{ 'Keterangan': 'Tidak ada data pada sheet ini' }];
+    const worksheet = XLSX.utils.json_to_sheet(rowsToExport);
+
+    // Auto-calculate column widths
+    const keys = Object.keys(rowsToExport[0] || {});
+    worksheet['!cols'] = keys.map(key => {
+      let maxLen = String(key).length;
+      for (const row of rowsToExport) {
+        const cellVal = row[key];
+        if (cellVal !== null && cellVal !== undefined) {
+          const strLen = String(cellVal).length;
+          if (strLen > maxLen) maxLen = strLen;
+        }
+      }
+      return { wch: Math.min(Math.max(maxLen + 3, 10), 60) };
+    });
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, finalName);
+  });
+
+  const cleanFilename = filename.toLowerCase().endsWith('.xlsx')
+    ? filename
+    : `${filename.replace(/\.[^/.]+$/, '')}.xlsx`;
+
+  XLSX.writeFile(workbook, cleanFilename);
+};
+
+/**
  * Ekspor data ke CSV dengan UTF-8 BOM (\uFEFF) dan RFC 4180 escaping agar tidak error/mojibake di Excel.
  */
 export const exportToCSV = (data, filename = "wms-export.csv") => {

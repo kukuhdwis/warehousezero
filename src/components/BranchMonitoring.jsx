@@ -57,7 +57,7 @@ import {
   Flame,
   Award
 } from 'lucide-react';
-import { exportToCSV, exportToExcel, purgeTransactions } from '../services/dataService';
+import { exportToCSV, exportToExcel, exportMultiSheetExcel, purgeTransactions } from '../services/dataService';
 import { matchesSearch } from '../utils/searchUtils';
 import ConfirmationModal from './ConfirmationModal';
 import TransactionDetailModal from './TransactionDetailModal';
@@ -973,74 +973,343 @@ export default function BranchMonitoring({
     }
   };
 
-  // Export Inventory Excel
+  // Export Inventory Excel (Multi-Sheet per Cabang jika di Overview Semua Cabang)
   const handleExportInventoryCSV = () => {
-    const branchLabel = selectedBranch ? selectedBranch.name.replace(/\s+/g, '-') : 'Semua-Cabang';
-    const reportData = (filteredInventories || []).map((item, idx) => ({
-      'No': idx + 1,
-      'Gudang / Cabang': selectedBranch?.name || 'Semua Cabang',
-      'SKU': item.sku || '-',
-      'Nama Produk': item.productName || item.name || '-',
-      'Merk': item.brand || 'Generic',
-      'Kategori Mesin': item.machineCategory || 'Universal',
-      'Kuantitas Stok': Number(item.stockQuantity) || 0,
-      'Satuan': item.unit || 'Pcs',
-      'Harga Satuan (Rp)': Number(item.price) || 0,
-      'Total Nilai Stok (Rp)': (Number(item.stockQuantity) || 0) * (Number(item.price) || 0),
-      'Status': item.status || 'ACTIVE'
-    }));
-    exportToExcel(reportData, `Stok-Inventaris-${branchLabel}-${Date.now()}.xlsx`, 'Stok Fisik');
+    if (selectedBranchId === 'ALL') {
+      // 1. Sheet Ringkasan Konsolidasi
+      let totalGlobalSKU = products.length || 0;
+      let totalGlobalPcs = 0;
+      let totalGlobalValuation = 0;
+
+      const branchSummaryRows = (branches || []).map((b, idx) => {
+        const isPusat = b.isPusat === true || b.code === 'GUDANG-PUSAT' || (b.name || '').toLowerCase().includes('gudang utama pusat');
+        let branchSkuCount = 0;
+        let branchPcs = 0;
+        let branchValuation = 0;
+
+        if (isPusat) {
+          branchSkuCount = products.length;
+          products.forEach(p => {
+            const stock = Number(p.currentStock || p.stock || 0);
+            const price = Number(p.price || p.selling_price || 0);
+            branchPcs += stock;
+            branchValuation += stock * price;
+          });
+        } else {
+          const bItems = branchInventories.filter(bi => 
+            bi && (bi.branchId === b.id || bi.branchId === b.code || (bi.branchName && b.name && bi.branchName.trim().toLowerCase() === b.name.trim().toLowerCase()))
+          );
+          branchSkuCount = bItems.length;
+          bItems.forEach(bi => {
+            const stock = Number(bi.stockQuantity || 0);
+            const price = Number(bi.price || 0);
+            branchPcs += stock;
+            branchValuation += stock * price;
+          });
+        }
+
+        totalGlobalPcs += branchPcs;
+        totalGlobalValuation += branchValuation;
+
+        return {
+          'No': idx + 1,
+          'Nama Gudang / Cabang': b.name || 'Cabang',
+          'Tipe': isPusat ? 'Pusat (Master HQ)' : (b.type || 'Reseller / Cabang'),
+          'PIC / Kontak': b.pic || b.managerName || '-',
+          'Wilayah / Alamat': b.address || b.city || b.region || '-',
+          'Total SKU Terdaftar': branchSkuCount,
+          'Total Fisik Stok (Pcs)': branchPcs,
+          'Total Valuasi Stok (Rp)': branchValuation,
+          'Status Cabang': b.status || 'ACTIVE'
+        };
+      });
+
+      // Tambahkan baris total akumulasi
+      branchSummaryRows.push({
+        'No': 'TOTAL',
+        'Nama Gudang / Cabang': 'KONSOLIDASI SELURUH GUDANG & CABANG',
+        'Tipe': `${branches.length} Gudang`,
+        'PIC / Kontak': '-',
+        'Wilayah / Alamat': '-',
+        'Total SKU Terdaftar': totalGlobalSKU,
+        'Total Fisik Stok (Pcs)': totalGlobalPcs,
+        'Total Valuasi Stok (Rp)': totalGlobalValuation,
+        'Status Cabang': 'AKTIF'
+      });
+
+      const sheets = [
+        { sheetName: 'Ringkasan Konsolidasi', data: branchSummaryRows }
+      ];
+
+      // 2. Sheet masing-masing cabang
+      (branches || []).forEach(b => {
+        const isPusat = b.isPusat === true || b.code === 'GUDANG-PUSAT' || (b.name || '').toLowerCase().includes('gudang utama pusat');
+        let detailRows = [];
+
+        if (isPusat) {
+          detailRows = products.map((p, pIdx) => {
+            const stock = Number(p.currentStock || p.stock || 0);
+            const price = Number(p.price || p.selling_price || 0);
+            const minStock = Number(p.minStock || 5);
+            return {
+              'No': pIdx + 1,
+              'SKU': p.sku || '-',
+              'Nama Produk': p.name || '-',
+              'Merk': p.brand || 'Generic',
+              'Kategori Mesin': p.machineCategory || p.kategoriMesin || p.engineType || 'Universal',
+              'Kuantitas Stok (Pcs)': stock,
+              'Satuan': p.unit || 'Pcs',
+              'Harga Satuan (Rp)': price,
+              'Total Nilai Stok (Rp)': stock * price,
+              'Status Stok': stock <= 0 ? 'HABIS' : stock <= minStock ? 'MENIPIS' : 'AMAN'
+            };
+          });
+        } else {
+          const bItems = branchInventories.filter(bi => 
+            bi && (bi.branchId === b.id || bi.branchId === b.code || (bi.branchName && b.name && bi.branchName.trim().toLowerCase() === b.name.trim().toLowerCase()))
+          );
+          detailRows = bItems.map((bi, biIdx) => {
+            const matchingProd = products.find(p => p.id === bi.productId || p.sku === bi.sku);
+            const stock = Number(bi.stockQuantity || 0);
+            const price = Number(bi.price || matchingProd?.price || 0);
+            const minStock = Number(bi.minStock || matchingProd?.minStock || 5);
+            return {
+              'No': biIdx + 1,
+              'SKU': bi.sku || matchingProd?.sku || '-',
+              'Nama Produk': bi.productName || bi.name || matchingProd?.name || '-',
+              'Merk': bi.brand || matchingProd?.brand || 'Generic',
+              'Kategori Mesin': bi.machineCategory || matchingProd?.machineCategory || 'Universal',
+              'Kuantitas Stok (Pcs)': stock,
+              'Satuan': bi.unit || matchingProd?.unit || 'Pcs',
+              'Harga Satuan (Rp)': price,
+              'Total Nilai Stok (Rp)': stock * price,
+              'Status Stok': stock <= 0 ? 'HABIS' : stock <= minStock ? 'MENIPIS' : 'AMAN'
+            };
+          });
+        }
+
+        sheets.push({
+          sheetName: b.name || `Cabang ${b.id}`,
+          data: detailRows
+        });
+      });
+
+      exportMultiSheetExcel(sheets, `Rekap-Stok-Konsolidasi-Semua-Cabang-${Date.now()}.xlsx`);
+    } else {
+      // Cabang tunggal yang sedang aktif dibuka
+      const branchName = selectedBranch?.name || 'Cabang';
+      const branchLabel = branchName.replace(/\s+/g, '-');
+      const reportData = (filteredInventories || []).map((item, idx) => ({
+        'No': idx + 1,
+        'Gudang / Cabang': branchName,
+        'SKU': item.sku || '-',
+        'Nama Produk': item.productName || item.name || '-',
+        'Merk': item.brand || 'Generic',
+        'Kategori Mesin': item.machineCategory || 'Universal',
+        'Kuantitas Stok (Pcs)': Number(item.stockQuantity) || 0,
+        'Satuan': item.unit || 'Pcs',
+        'Harga Satuan (Rp)': Number(item.price) || 0,
+        'Total Nilai Stok (Rp)': (Number(item.stockQuantity) || 0) * (Number(item.price) || 0),
+        'Status Stok': (Number(item.stockQuantity) || 0) <= 0 ? 'HABIS' : (Number(item.stockQuantity) || 0) <= (Number(item.minStock) || 5) ? 'MENIPIS' : 'AMAN'
+      }));
+      exportToExcel(reportData, `Stok-Inventaris-${branchLabel}-${Date.now()}.xlsx`, branchName);
+    }
   };
 
-  // Export Monthly Recap Excel
+  // Export Monthly Recap Excel (Multi-Sheet per Cabang jika di Overview Semua Cabang)
   const handleExportMonthlyRecapCSV = () => {
-    const branchLabel = selectedBranch ? selectedBranch.name.replace(/\s+/g, '-') : 'Semua-Cabang';
     const periodLabel = selectedMonth === 'ALL' ? 'Semua-Periode' : selectedMonth;
-    const targetTransactions = selectedBranch ? branchMonthlyTransactions : transactions.filter(t => isTxInSelectedMonth(t, selectedMonth));
+    const periodText = formatMonthLabel(selectedMonth);
 
-    const rows = [];
-    targetTransactions.forEach((tx, idx) => {
-      const { txProfit, profitItems } = calculateTxProfit(tx, products, branchInventories);
-      const branchName = tx.branchName || (branches.find(b => b.id === tx.branchId)?.name) || (selectedBranch?.name) || 'Cabang';
-      const formattedDate = formatTime(tx.createdAt || tx.timestamp || tx.date);
-
-      if (profitItems && profitItems.length > 0) {
-        profitItems.forEach((pi, itemIdx) => {
-          const qty = Number(pi.qty || 1);
-          const sellingPrice = Number(pi.price || 0);
-          const costPrice = Number(pi.costPrice || 0);
-          const omset = sellingPrice * qty;
-          const modal = costPrice * qty;
-          const itemProfit = Number(pi.itemProfit || (omset - modal));
-
-          rows.push({
-            'No': `${idx + 1}.${itemIdx + 1}`,
-            'Periode': formatMonthLabel(selectedMonth),
-            'Waktu Transaksi': formattedDate,
-            'No. Nota / Invoice': tx.invoiceNumber || tx.id || '-',
-            'Gudang / Cabang': branchName,
-            'Petugas': tx.user || '-',
-            'SKU': pi.sku || '-',
-            'Nama Produk': pi.productName || tx.productName || 'Barang',
-            'Qty Terjual': qty,
-            'Satuan': pi.unit || 'Pcs',
-            'Harga Jual Satuan (Rp)': sellingPrice,
-            'Harga Modal Satuan (Rp)': costPrice,
-            'Total Omset (Rp)': omset,
-            'Total Modal (Rp)': modal,
-            'Estimasi Profit (Rp)': itemProfit,
-            'Platform / Saluran': tx.platformName || tx.salesPlatform || 'Offline (Toko Fisik)',
-            'Tipe Transaksi': tx.type === 'OUT' ? 'Penjualan Keluar' : tx.type
-          });
-        });
+    if (selectedBranchId === 'ALL') {
+      const targetTransactions = transactions.filter(t => isTxInSelectedMonth(t, selectedMonth));
+      if (targetTransactions.length === 0) {
+        alert(`Tidak ada transaksi tercatat pada periode ${periodText}.`);
+        return;
       }
-    });
 
-    if (rows.length === 0) {
-      alert(`Tidak ada transaksi tercatat pada periode ${formatMonthLabel(selectedMonth)}.`);
-      return;
+      // 1. Sheet Ringkasan Performa Konsolidasi
+      let globalOmset = 0;
+      let globalModal = 0;
+      let globalProfit = 0;
+      let globalUnits = 0;
+      let globalTxCount = 0;
+
+      const branchPerformanceRows = (branches || []).map((b, idx) => {
+        const isPusat = b.isPusat === true || b.code === 'GUDANG-PUSAT' || (b.name || '').toLowerCase().includes('gudang utama pusat');
+        const bTxs = targetTransactions.filter(t => {
+          if (isPusat) {
+            return t.branchId === b.id || t.branchId === 'PUSAT' || t.branchId === 'branch-pusat-hq' || (t.branchName && t.branchName.toLowerCase().includes('gudang utama pusat'));
+          }
+          return t.branchId === b.id || t.branchId === b.code || (t.branchName && b.name && t.branchName.trim().toLowerCase() === b.name.trim().toLowerCase());
+        });
+
+        let bOmset = 0;
+        let bModal = 0;
+        let bProfit = 0;
+        let bUnits = 0;
+        let bTxCount = 0;
+
+        bTxs.forEach(tx => {
+          if (tx.type === 'OUT') {
+            bTxCount++;
+            const { txProfit, profitItems } = calculateTxProfit(tx, products, branchInventories);
+            if (profitItems && profitItems.length > 0) {
+              profitItems.forEach(pi => {
+                const q = Number(pi.qty || 1);
+                const sp = Number(pi.price || 0);
+                const cp = Number(pi.costPrice || 0);
+                bUnits += q;
+                bOmset += sp * q;
+                bModal += cp * q;
+                bProfit += Number(pi.itemProfit || ((sp - cp) * q));
+              });
+            }
+          }
+        });
+
+        globalOmset += bOmset;
+        globalModal += bModal;
+        globalProfit += bProfit;
+        globalUnits += bUnits;
+        globalTxCount += bTxCount;
+
+        const marginPct = bOmset > 0 ? ((bProfit / bOmset) * 100).toFixed(1) + '%' : '0%';
+
+        return {
+          'No': idx + 1,
+          'Nama Gudang / Cabang': b.name || 'Cabang',
+          'Periode': periodText,
+          'PIC Cabang': b.pic || b.managerName || '-',
+          'Total Transaksi Keluar': bTxCount,
+          'Total Unit Terjual (Pcs)': bUnits,
+          'Total Omset Penjualan (Rp)': bOmset,
+          'Total Modal / HPP (Rp)': bModal,
+          'Estimasi Profit (Rp)': bProfit,
+          'Margin Profit (%)': marginPct
+        };
+      });
+
+      // Total Row
+      const globalMargin = globalOmset > 0 ? ((globalProfit / globalOmset) * 100).toFixed(1) + '%' : '0%';
+      branchPerformanceRows.push({
+        'No': 'TOTAL',
+        'Nama Gudang / Cabang': 'KONSOLIDASI SELURUH CABANG',
+        'Periode': periodText,
+        'PIC Cabang': '-',
+        'Total Transaksi Keluar': globalTxCount,
+        'Total Unit Terjual (Pcs)': globalUnits,
+        'Total Omset Penjualan (Rp)': globalOmset,
+        'Total Modal / HPP (Rp)': globalModal,
+        'Estimasi Profit (Rp)': globalProfit,
+        'Margin Profit (%)': globalMargin
+      });
+
+      const sheets = [
+        { sheetName: 'Ringkasan Performa', data: branchPerformanceRows }
+      ];
+
+      // 2. Sheet Rincian Per Cabang
+      (branches || []).forEach(b => {
+        const isPusat = b.isPusat === true || b.code === 'GUDANG-PUSAT' || (b.name || '').toLowerCase().includes('gudang utama pusat');
+        const bTxs = targetTransactions.filter(t => {
+          if (isPusat) {
+            return t.branchId === b.id || t.branchId === 'PUSAT' || t.branchId === 'branch-pusat-hq' || (t.branchName && t.branchName.toLowerCase().includes('gudang utama pusat'));
+          }
+          return t.branchId === b.id || t.branchId === b.code || (t.branchName && b.name && t.branchName.trim().toLowerCase() === b.name.trim().toLowerCase());
+        });
+
+        const branchDetailRows = [];
+        bTxs.forEach((tx, txIdx) => {
+          const { txProfit, profitItems } = calculateTxProfit(tx, products, branchInventories);
+          const formattedDate = formatTime(tx.createdAt || tx.timestamp || tx.date);
+
+          if (profitItems && profitItems.length > 0) {
+            profitItems.forEach((pi, itemIdx) => {
+              const qty = Number(pi.qty || 1);
+              const sellingPrice = Number(pi.price || 0);
+              const costPrice = Number(pi.costPrice || 0);
+              const omset = sellingPrice * qty;
+              const modal = costPrice * qty;
+              const itemProfit = Number(pi.itemProfit || (omset - modal));
+
+              branchDetailRows.push({
+                'No': `${txIdx + 1}.${itemIdx + 1}`,
+                'Waktu Transaksi': formattedDate,
+                'No. Nota / Invoice': tx.invoiceNumber || tx.id || '-',
+                'Petugas': tx.user || 'Staff',
+                'SKU': pi.sku || '-',
+                'Nama Produk': pi.productName || tx.productName || 'Barang',
+                'Qty Terjual': qty,
+                'Satuan': pi.unit || 'Pcs',
+                'Harga Jual Satuan (Rp)': sellingPrice,
+                'Harga Modal Satuan (Rp)': costPrice,
+                'Total Omset (Rp)': omset,
+                'Total Modal (Rp)': modal,
+                'Estimasi Profit (Rp)': itemProfit,
+                'Platform / Saluran': tx.platformName || tx.salesPlatform || 'Offline (Toko Fisik)',
+                'Tipe Transaksi': tx.type === 'OUT' ? 'Penjualan Keluar' : tx.type
+              });
+            });
+          }
+        });
+
+        sheets.push({
+          sheetName: b.name || `Cabang ${b.id}`,
+          data: branchDetailRows
+        });
+      });
+
+      exportMultiSheetExcel(sheets, `Rekap-Pengeluaran-Konsolidasi-${periodLabel}-${Date.now()}.xlsx`);
+    } else {
+      // Cabang tunggal yang sedang aktif dibuka
+      const branchName = selectedBranch?.name || 'Cabang';
+      const branchLabel = branchName.replace(/\s+/g, '-');
+      const targetTransactions = branchMonthlyTransactions || [];
+
+      if (targetTransactions.length === 0) {
+        alert(`Tidak ada transaksi tercatat pada periode ${periodText} untuk ${branchName}.`);
+        return;
+      }
+
+      const rows = [];
+      targetTransactions.forEach((tx, txIdx) => {
+        const { txProfit, profitItems } = calculateTxProfit(tx, products, branchInventories);
+        const formattedDate = formatTime(tx.createdAt || tx.timestamp || tx.date);
+
+        if (profitItems && profitItems.length > 0) {
+          profitItems.forEach((pi, itemIdx) => {
+            const qty = Number(pi.qty || 1);
+            const sellingPrice = Number(pi.price || 0);
+            const costPrice = Number(pi.costPrice || 0);
+            const omset = sellingPrice * qty;
+            const modal = costPrice * qty;
+            const itemProfit = Number(pi.itemProfit || (omset - modal));
+
+            rows.push({
+              'No': `${txIdx + 1}.${itemIdx + 1}`,
+              'Periode': periodText,
+              'Waktu Transaksi': formattedDate,
+              'No. Nota / Invoice': tx.invoiceNumber || tx.id || '-',
+              'Petugas': tx.user || 'Staff',
+              'SKU': pi.sku || '-',
+              'Nama Produk': pi.productName || tx.productName || 'Barang',
+              'Qty Terjual': qty,
+              'Satuan': pi.unit || 'Pcs',
+              'Harga Jual Satuan (Rp)': sellingPrice,
+              'Harga Modal Satuan (Rp)': costPrice,
+              'Total Omset (Rp)': omset,
+              'Total Modal (Rp)': modal,
+              'Estimasi Profit (Rp)': itemProfit,
+              'Platform / Saluran': tx.platformName || tx.salesPlatform || 'Offline (Toko Fisik)',
+              'Tipe Transaksi': tx.type === 'OUT' ? 'Penjualan Keluar' : tx.type
+            });
+          });
+        }
+      });
+
+      exportToExcel(rows, `Rekap-Bulanan-${branchLabel}-${periodLabel}.xlsx`, branchName);
     }
-    exportToExcel(rows, `Rekap-Bulanan-${branchLabel}-${periodLabel}.xlsx`, 'Rekap Bulanan');
   };
 
   // ==========================================
