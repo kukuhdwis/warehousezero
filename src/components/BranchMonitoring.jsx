@@ -57,7 +57,7 @@ import {
   Flame,
   Award
 } from 'lucide-react';
-import { exportToCSV, purgeTransactions } from '../services/dataService';
+import { exportToCSV, exportToExcel, purgeTransactions } from '../services/dataService';
 import { matchesSearch } from '../utils/searchUtils';
 import ConfirmationModal from './ConfirmationModal';
 import TransactionDetailModal from './TransactionDetailModal';
@@ -973,25 +973,26 @@ export default function BranchMonitoring({
     }
   };
 
-  // Export Inventory CSV
+  // Export Inventory Excel
   const handleExportInventoryCSV = () => {
     const branchLabel = selectedBranch ? selectedBranch.name.replace(/\s+/g, '-') : 'Semua-Cabang';
-    const reportData = filteredInventories.map(item => ({
-      Cabang: selectedBranch?.name || 'Cabang',
-      SKU: item.sku,
-      Nama_Produk: item.productName || item.name,
-      Merk: item.brand || 'Generic',
-      Kategori_Mesin: item.machineCategory || 'Universal',
-      Kuantitas_Stok: item.stockQuantity,
-      Satuan: item.unit || 'Pcs',
-      Harga_Satuan: item.price,
-      Total_Nilai_Stok: (Number(item.stockQuantity) || 0) * (Number(item.price) || 0),
-      Status_Validasi: item.status
+    const reportData = (filteredInventories || []).map((item, idx) => ({
+      'No': idx + 1,
+      'Gudang / Cabang': selectedBranch?.name || 'Semua Cabang',
+      'SKU': item.sku || '-',
+      'Nama Produk': item.productName || item.name || '-',
+      'Merk': item.brand || 'Generic',
+      'Kategori Mesin': item.machineCategory || 'Universal',
+      'Kuantitas Stok': Number(item.stockQuantity) || 0,
+      'Satuan': item.unit || 'Pcs',
+      'Harga Satuan (Rp)': Number(item.price) || 0,
+      'Total Nilai Stok (Rp)': (Number(item.stockQuantity) || 0) * (Number(item.price) || 0),
+      'Status': item.status || 'ACTIVE'
     }));
-    exportToCSV(reportData, `Stok-Inventaris-${branchLabel}-${Date.now()}.csv`);
+    exportToExcel(reportData, `Stok-Inventaris-${branchLabel}-${Date.now()}.xlsx`, 'Stok Fisik');
   };
 
-  // Export Monthly Recap CSV
+  // Export Monthly Recap Excel
   const handleExportMonthlyRecapCSV = () => {
     const branchLabel = selectedBranch ? selectedBranch.name.replace(/\s+/g, '-') : 'Semua-Cabang';
     const periodLabel = selectedMonth === 'ALL' ? 'Semua-Periode' : selectedMonth;
@@ -1039,7 +1040,7 @@ export default function BranchMonitoring({
       alert(`Tidak ada transaksi tercatat pada periode ${formatMonthLabel(selectedMonth)}.`);
       return;
     }
-    exportToCSV(rows, `Rekap-Bulanan-${branchLabel}-${periodLabel}.csv`);
+    exportToExcel(rows, `Rekap-Bulanan-${branchLabel}-${periodLabel}.xlsx`, 'Rekap Bulanan');
   };
 
   // ==========================================

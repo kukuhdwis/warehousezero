@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { matchesSearch } from '../utils/searchUtils';
-import { History, Download, ArrowDownLeft, ArrowUpRight, Filter, Search, User, Clock, FileText, Trash2, AlertTriangle } from 'lucide-react';
-import { exportToCSV, purgeTransactions } from '../services/dataService';
+import { History, Download, ArrowDownLeft, ArrowUpRight, Filter, Search, User, Clock, FileText, Trash2, AlertTriangle, FileSpreadsheet } from 'lucide-react';
+import { exportToCSV, exportToExcel, purgeTransactions } from '../services/dataService';
 import ConfirmationModal from './ConfirmationModal';
 import TransactionDetailModal from './TransactionDetailModal';
 
@@ -33,6 +33,7 @@ export default function TransactionHistory({
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [selectedBranchFilter, setSelectedBranchFilter] = useState('ALL');
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState('EXCEL'); // 'EXCEL' | 'CSV'
   const [isPurgeConfirmOpen, setIsPurgeConfirmOpen] = useState(false);
   const [isPurging, setIsPurging] = useState(false);
   const [purgeError, setPurgeError] = useState('');
@@ -87,7 +88,7 @@ export default function TransactionHistory({
     return matchesSearchTerm && matchesType;
   });
 
-  const handleExport = (exportType = 'ALL') => {
+  const handleExport = (exportType = 'ALL', chosenFormat = exportFormat) => {
     const formattedData = [];
     
     // Filter transactions based on the selected exportType
@@ -106,27 +107,44 @@ export default function TransactionHistory({
       return true;
     });
 
+    let rowNumber = 1;
     transactionsToExport.forEach(tx => {
-      const isOutboundOrSale = tx.type !== 'IN';
-      
+      const isRejectedReturn = tx.transactionType === 'TRANSFER_REJECTED_RETURN' || tx.status === 'REJECTED_RETURN';
+      const isOutboundRejected = tx.transferStatus === 'REJECTED';
+      const isInTx = tx.type === 'IN' && !isRejectedReturn;
+      const isOutboundOrSale = !isInTx;
+
+      let typeLabel = 'Barang Keluar';
+      if (isRejectedReturn) {
+        typeLabel = 'Retur Masuk (Pusat)';
+      } else if (isOutboundRejected) {
+        typeLabel = 'Barang Keluar (Ditolak Cabang)';
+      } else if (isInTx) {
+        typeLabel = 'Barang Masuk';
+      }
+
+      const docNo = tx.invoiceNumber || tx.deliveryNote || '-';
+
       if (tx.items && tx.items.length > 0) {
-        // Flatten multi-item transactions
+        // Multi-item transactions
         tx.items.forEach(item => {
           const itemQty = Number(item.qty || item.qty_in || 1);
           const itemPrice = Number(item.price || 0);
-          const itemTotal = item.subtotal || (itemPrice * itemQty);
+          const itemTotal = Number(item.subtotal || (itemPrice * itemQty));
           
           formattedData.push({
-            ID: tx.id,
-            Tipe: tx.type === 'IN' ? 'Barang Masuk' : 'Barang Keluar',
-            SKU: item.sku || '-',
-            Nama_Produk: item.productName || item.product_name || item.name || '-',
-            Jumlah: itemQty,
-            Harga_Satuan: isOutboundOrSale ? `Rp ${itemPrice}` : '-',
-            Total_Harga: isOutboundOrSale ? `Rp ${itemTotal}` : '-',
-            Catatan: tx.notes || '-',
-            Petugas: tx.user || '-',
-            Waktu: formatTime(tx.createdAt)
+            'No': rowNumber++,
+            'ID Transaksi': tx.id || '-',
+            'No. Dokumen / Nota': docNo,
+            'Tipe Transaksi': typeLabel,
+            'SKU': item.sku || tx.sku || '-',
+            'Nama Produk': item.productName || item.product_name || item.name || tx.productName || '-',
+            'Jumlah (Qty)': itemQty,
+            'Harga Satuan (Rp)': isOutboundOrSale && itemPrice > 0 ? `Rp ${itemPrice.toLocaleString('id-ID')}` : '-',
+            'Total Nilai (Rp)': isOutboundOrSale && itemTotal > 0 ? `Rp ${itemTotal.toLocaleString('id-ID')}` : '-',
+            'Catatan / Keterangan': tx.notes || '-',
+            'Petugas': tx.user || 'Sistem',
+            'Waktu Transaksi': formatTime(tx.createdAt || tx.timestamp || tx.date)
           });
         });
       } else {
@@ -136,16 +154,18 @@ export default function TransactionHistory({
         const total = Number(tx.totalPrice || tx.totalValue || (price * qty));
         
         formattedData.push({
-          ID: tx.id,
-          Tipe: tx.type === 'IN' ? 'Barang Masuk' : 'Barang Keluar',
-          SKU: tx.sku || '-',
-          Nama_Produk: tx.productName || '-',
-          Jumlah: qty,
-          Harga_Satuan: isOutboundOrSale ? `Rp ${price}` : '-',
-          Total_Harga: isOutboundOrSale ? `Rp ${total}` : '-',
-          Catatan: tx.notes || '-',
-          Petugas: tx.user || '-',
-          Waktu: formatTime(tx.createdAt)
+          'No': rowNumber++,
+          'ID Transaksi': tx.id || '-',
+          'No. Dokumen / Nota': docNo,
+          'Tipe Transaksi': typeLabel,
+          'SKU': tx.sku || '-',
+          'Nama Produk': tx.productName || '-',
+          'Jumlah (Qty)': qty,
+          'Harga Satuan (Rp)': isOutboundOrSale && price > 0 ? `Rp ${price.toLocaleString('id-ID')}` : '-',
+          'Total Nilai (Rp)': isOutboundOrSale && total > 0 ? `Rp ${total.toLocaleString('id-ID')}` : '-',
+          'Catatan / Keterangan': tx.notes || '-',
+          'Petugas': tx.user || 'Sistem',
+          'Waktu Transaksi': formatTime(tx.createdAt || tx.timestamp || tx.date)
         });
       }
     });
@@ -155,7 +175,11 @@ export default function TransactionHistory({
       filenameSuffix = `Keluar-${exportType.replace('OUT_', '')}`;
     }
     
-    exportToCSV(formattedData, `WMS-Riwayat-Transaksi-${filenameSuffix}-${Date.now()}.csv`);
+    if (chosenFormat === 'CSV') {
+      exportToCSV(formattedData, `WMS-Riwayat-Transaksi-${filenameSuffix}-${Date.now()}.csv`);
+    } else {
+      exportToExcel(formattedData, `WMS-Riwayat-Transaksi-${filenameSuffix}-${Date.now()}.xlsx`, 'Riwayat Transaksi');
+    }
     setIsExportMenuOpen(false);
   };
 
@@ -205,78 +229,117 @@ export default function TransactionHistory({
           <div className="relative">
             <button
               onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-semibold text-sm shadow-xs transition active:scale-98 cursor-pointer"
-          >
-            <Download className="w-4 h-4" />
-            <span>Export CSV / Excel</span>
-          </button>
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-semibold text-sm shadow-xs transition active:scale-98 cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+              <span>Export Rekap Excel</span>
+            </button>
           
-          {isExportMenuOpen && (
-            <>
-              {/* Backdrop to close menu */}
-              <div 
-                className="fixed inset-0 z-40" 
-                onClick={() => setIsExportMenuOpen(false)}
-              ></div>
-              
-              <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150 origin-top-right">
-                <div className="p-1 text-slate-700 font-medium text-sm">
-                  <button
-                    onClick={() => handleExport('ALL')}
-                    className="w-full text-left px-4 py-2.5 rounded-lg hover:bg-slate-50 transition cursor-pointer flex items-center gap-2"
-                  >
-                    <FileText className="w-4 h-4 text-slate-400" />
-                    <span>Semua Transaksi</span>
-                  </button>
-                  <button
-                    onClick={() => handleExport('OUT')}
-                    className="w-full text-left px-4 py-2.5 rounded-lg hover:bg-rose-50 hover:text-rose-700 transition cursor-pointer flex items-center gap-2"
-                  >
-                    <ArrowUpRight className="w-4 h-4 text-rose-500" />
-                    <span>Hanya Pengeluaran (Keluar)</span>
-                  </button>
-                  <button
-                    onClick={() => handleExport('IN')}
-                    className="w-full text-left px-4 py-2.5 rounded-lg hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer flex items-center gap-2"
-                  >
-                    <ArrowDownLeft className="w-4 h-4 text-emerald-500" />
-                    <span>Hanya Pemasukan (Masuk)</span>
-                  </button>
-                  <div className="h-px bg-slate-100 my-1"></div>
-                  <div className="px-4 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rekap Spesifik (Keluar)</div>
-                  <button
-                    onClick={() => handleExport('OUT_SHOPEE')}
-                    className="w-full text-left px-4 py-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition cursor-pointer flex items-center gap-2 text-xs"
-                  >
-                    <ArrowUpRight className="w-3.5 h-3.5 text-orange-500" />
-                    <span>Shopee</span>
-                  </button>
-                  <button
-                    onClick={() => handleExport('OUT_TOKOPEDIA')}
-                    className="w-full text-left px-4 py-2 rounded-lg hover:bg-green-50 hover:text-green-700 transition cursor-pointer flex items-center gap-2 text-xs"
-                  >
-                    <ArrowUpRight className="w-3.5 h-3.5 text-green-500" />
-                    <span>Tokopedia</span>
-                  </button>
-                  <button
-                    onClick={() => handleExport('OUT_TIKTOK')}
-                    className="w-full text-left px-4 py-2 rounded-lg hover:bg-slate-100 hover:text-slate-800 transition cursor-pointer flex items-center gap-2 text-xs"
-                  >
-                    <ArrowUpRight className="w-3.5 h-3.5 text-slate-700" />
-                    <span>TikTok Shop</span>
-                  </button>
-                  <button
-                    onClick={() => handleExport('OUT_OFFLINE')}
-                    className="w-full text-left px-4 py-2 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer flex items-center gap-2 text-xs"
-                  >
-                    <ArrowUpRight className="w-3.5 h-3.5 text-blue-500" />
-                    <span>Toko Offline / Cabang</span>
-                  </button>
+            {isExportMenuOpen && (
+              <>
+                {/* Backdrop to close menu */}
+                <div 
+                  className="fixed inset-0 z-40" 
+                  onClick={() => setIsExportMenuOpen(false)}
+                ></div>
+                
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150 origin-top-right">
+                  {/* Format Selector Toggle */}
+                  <div className="p-3 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Format File</span>
+                    <div className="flex bg-slate-200/80 p-0.5 rounded-lg text-xs">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setExportFormat('EXCEL'); }}
+                        className={`px-2 py-1 rounded-md transition font-bold flex items-center gap-1 ${
+                          exportFormat === 'EXCEL'
+                            ? 'bg-white text-emerald-700 shadow-2xs'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                        title="Format resmi Microsoft Excel (.xlsx) dengan auto-width & encoding UTF-8 penuh"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        Excel (.xlsx)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setExportFormat('CSV'); }}
+                        className={`px-2 py-1 rounded-md transition font-bold flex items-center gap-1 ${
+                          exportFormat === 'CSV'
+                            ? 'bg-white text-slate-800 shadow-2xs'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                        title="Format CSV standar dengan UTF-8 BOM"
+                      >
+                        CSV (.csv)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-1.5 text-slate-700 font-medium text-sm">
+                    <button
+                      onClick={() => handleExport('ALL')}
+                      className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-slate-50 transition cursor-pointer flex items-center justify-between group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
+                        <span className="font-semibold text-slate-800">Semua Transaksi</span>
+                      </div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                        {exportFormat === 'EXCEL' ? '.xlsx' : '.csv'}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => handleExport('OUT')}
+                      className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-rose-50 hover:text-rose-700 transition cursor-pointer flex items-center gap-2"
+                    >
+                      <ArrowUpRight className="w-4 h-4 text-rose-500" />
+                      <span>Hanya Pengeluaran (Keluar)</span>
+                    </button>
+                    <button
+                      onClick={() => handleExport('IN')}
+                      className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer flex items-center gap-2"
+                    >
+                      <ArrowDownLeft className="w-4 h-4 text-emerald-500" />
+                      <span>Hanya Pemasukan (Masuk)</span>
+                    </button>
+                    
+                    <div className="h-px bg-slate-100 my-1"></div>
+                    <div className="px-3.5 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rekap Spesifik (Keluar)</div>
+                    
+                    <button
+                      onClick={() => handleExport('OUT_SHOPEE')}
+                      className="w-full text-left px-3.5 py-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition cursor-pointer flex items-center gap-2 text-xs font-medium"
+                    >
+                      <ArrowUpRight className="w-3.5 h-3.5 text-orange-500" />
+                      <span>Pesanan Shopee</span>
+                    </button>
+                    <button
+                      onClick={() => handleExport('OUT_TOKOPEDIA')}
+                      className="w-full text-left px-3.5 py-2 rounded-lg hover:bg-green-50 hover:text-green-700 transition cursor-pointer flex items-center gap-2 text-xs font-medium"
+                    >
+                      <ArrowUpRight className="w-3.5 h-3.5 text-green-500" />
+                      <span>Pesanan Tokopedia</span>
+                    </button>
+                    <button
+                      onClick={() => handleExport('OUT_TIKTOK')}
+                      className="w-full text-left px-3.5 py-2 rounded-lg hover:bg-slate-100 hover:text-slate-800 transition cursor-pointer flex items-center gap-2 text-xs font-medium"
+                    >
+                      <ArrowUpRight className="w-3.5 h-3.5 text-slate-700" />
+                      <span>Pesanan TikTok Shop</span>
+                    </button>
+                    <button
+                      onClick={() => handleExport('OUT_OFFLINE')}
+                      className="w-full text-left px-3.5 py-2 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer flex items-center gap-2 text-xs font-medium"
+                    >
+                      <ArrowUpRight className="w-3.5 h-3.5 text-blue-500" />
+                      <span>Toko Offline / Cabang</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </>
-          )}
-        </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 

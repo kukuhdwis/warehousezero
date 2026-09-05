@@ -1,3 +1,4 @@
+import * as XLSX from "xlsx";
 import { db, isFirebaseConfigured } from "./firebase";
 import { registerUserInFirebaseAuth } from "./authService";
 import {
@@ -2584,22 +2585,100 @@ export const createSparkPlanStockTransfer = async (transferData, callerUid = 'ad
   return { id: deliveryNote };
 };
 
+/**
+ * Membersihkan karakter aneh atau mojibake (seperti â€¢ yang berasal dari karakter • yang salah decode)
+ * serta menormalisasi format string untuk diekspor ke Excel / CSV.
+ */
+export const sanitizeExportText = (val) => {
+  if (val === null || val === undefined) return '';
+  if (typeof val !== 'string') return val;
+
+  return val
+    // Perbaiki mojibake karakter bullet dan tanda baca populer
+    .replace(/â€¢/g, '•')
+    .replace(/Ã¢â‚¬Â¢/g, '•')
+    .replace(/â€“/g, '–')
+    .replace(/â€”/g, '—')
+    .replace(/â€˜/g, '‘')
+    .replace(/â€™/g, '’')
+    .replace(/â€œ/g, '“')
+    .replace(/â€/g, '”')
+    .replace(/Â/g, '')
+    // Ganti spasi non-breaking dengan spasi biasa
+    .replace(/\u00A0/g, ' ')
+    .trim();
+};
+
+/**
+ * Ekspor data ke file Excel asli (.xlsx) dengan styling lebar kolom otomatis dan encoding Unicode penuh.
+ */
+export const exportToExcel = (data, filename = "wms-export.xlsx", sheetName = "Data Rekap") => {
+  if (!data || !data.length) return;
+
+  // Sanitasi data baris
+  const sanitizedRows = data.map(row => {
+    const cleanRow = {};
+    for (const [key, val] of Object.entries(row)) {
+      cleanRow[key] = typeof val === 'string' ? sanitizeExportText(val) : val;
+    }
+    return cleanRow;
+  });
+
+  const worksheet = XLSX.utils.json_to_sheet(sanitizedRows);
+
+  // Auto kalkulasi lebar kolom berdasarkan panjang konten & judul
+  const keys = Object.keys(sanitizedRows[0] || {});
+  worksheet['!cols'] = keys.map(key => {
+    let maxLen = String(key).length;
+    for (const row of sanitizedRows) {
+      const cellVal = row[key];
+      if (cellVal !== null && cellVal !== undefined) {
+        const strLen = String(cellVal).length;
+        if (strLen > maxLen) maxLen = strLen;
+      }
+    }
+    return { wch: Math.min(Math.max(maxLen + 3, 10), 60) };
+  });
+
+  const workbook = XLSX.utils.book_new();
+  const validSheetName = (sheetName || 'Data Rekap').replace(/[:\\/?*\[\]]/g, '').slice(0, 31);
+  XLSX.utils.book_append_sheet(workbook, worksheet, validSheetName);
+
+  const cleanFilename = filename.toLowerCase().endsWith('.xlsx')
+    ? filename
+    : `${filename.replace(/\.[^/.]+$/, '')}.xlsx`;
+
+  XLSX.writeFile(workbook, cleanFilename);
+};
+
+/**
+ * Ekspor data ke CSV dengan UTF-8 BOM (\uFEFF) dan RFC 4180 escaping agar tidak error/mojibake di Excel.
+ */
 export const exportToCSV = (data, filename = "wms-export.csv") => {
   if (!data || !data.length) return;
 
   const headers = Object.keys(data[0]);
   const csvRows = [];
-  csvRows.push(headers.join(","));
+  
+  // Header row dengan quote standar
+  csvRows.push(headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(","));
 
   for (const row of data) {
     const values = headers.map(header => {
-      const escaped = ('' + (row[header] ?? '')).replace(/"/g, '\\"');
+      let val = row[header] ?? '';
+      if (typeof val === 'string') {
+        val = sanitizeExportText(val);
+        // Ganti newline dengan spasi agar tidak merusak struktur baris CSV
+        val = val.replace(/[\r\n]+/g, ' ');
+      }
+      const escaped = ('' + val).replace(/"/g, '""');
       return `"${escaped}"`;
     });
     csvRows.push(values.join(","));
   }
 
-  const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+  // Prepend \uFEFF (UTF-8 BOM) sehingga Microsoft Excel mendeteksi file sebagai UTF-8
+  const blob = new Blob(["\uFEFF" + csvRows.join("\r\n")], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.setAttribute("href", url);
@@ -2607,4 +2686,6 @@ export const exportToCSV = (data, filename = "wms-export.csv") => {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 };
+
