@@ -576,14 +576,6 @@ export default function PublicCatalog({
             >
               Marketplace
             </button>
-            <button
-              type="button"
-              onClick={() => scrollToSection('about-section')}
-              className={`py-1.5 border-b-2 border-transparent transition-colors cursor-pointer whitespace-nowrap ${isDark ? 'text-zinc-400 hover:text-white' : 'text-steel hover:text-ink'
-                }`}
-            >
-              Tentang Kami
-            </button>
           </nav>
 
           {/* Header Quick Search (Desktop) */}
@@ -718,13 +710,6 @@ export default function PublicCatalog({
                   className={`py-2.5 text-left border-b ${isDark ? 'border-zinc-800 text-white' : 'border-line text-ink'}`}
                 >
                   Marketplace
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setMobileMenuOpen(false); scrollToSection('about-section'); }}
-                  className={`py-2.5 text-left border-b ${isDark ? 'border-zinc-800 text-white' : 'border-line text-ink'}`}
-                >
-                  Tentang Kami
                 </button>
               </nav>
 
