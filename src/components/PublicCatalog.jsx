@@ -667,11 +667,6 @@ export default function PublicCatalog({
         isDark ? 'bg-ink border-zinc-800' : 'bg-paper border-zinc-200'
       }`}>
         <div className="max-w-4xl mx-auto space-y-3">
-          
-          <p className="font-mono text-xs uppercase tracking-widest text-ember font-bold mb-2">
-            PRECISION EXHAUST ENGINEERING &amp; E-CATALOGUE
-          </p>
-
           <h1 className={`font-display text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight uppercase leading-[1.08] ${
             isDark ? 'text-white' : 'text-ink'
           }`}>

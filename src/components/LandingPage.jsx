@@ -606,10 +606,6 @@ export default function LandingPage({ currentUser }) {
                     </span>
                   </div>
 
-                  <div className="inline-block text-xs font-mono font-bold text-ember uppercase tracking-wider mb-3">
-                    SPESIALISASI MESIN BENSIN (NA &amp; TURBOCHARGED)
-                  </div>
-
                   <p className={`text-sm sm:text-base leading-relaxed mb-6 font-normal ${
                     isDark ? 'text-zinc-300' : 'text-ink'
                   }`}>
@@ -664,10 +660,6 @@ export default function LandingPage({ currentUser }) {
                     </span>
                   </div>
 
-                  <div className="inline-block text-xs font-mono font-bold text-ember uppercase tracking-wider mb-3">
-                    SPESIALISASI MESIN DIESEL MODERN (COMMON RAIL)
-                  </div>
-
                   <p className={`text-sm sm:text-base leading-relaxed mb-6 font-normal ${
                     isDark ? 'text-zinc-300' : 'text-ink'
                   }`}>
@@ -704,9 +696,6 @@ export default function LandingPage({ currentUser }) {
             
             {/* Section Header */}
             <div className="text-center max-w-3xl mx-auto mb-12">
-              <p className="font-mono text-xs uppercase tracking-widest text-ember font-bold mb-2">
-                PRECISION MEETS AESTHETICS
-              </p>
               <h2 className={`font-display text-3xl sm:text-5xl font-bold tracking-tight uppercase ${
                 isDark ? 'text-white' : 'text-ink'
               }`}>
@@ -724,12 +713,6 @@ export default function LandingPage({ currentUser }) {
                 isDark ? 'border-zinc-800 bg-zinc-900/50' : 'border-zinc-200 bg-smoke/60'
               }`}>
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="w-2 h-2 rounded-full bg-ember animate-pulse"></span>
-                    <span className="font-mono text-xs uppercase tracking-widest text-ember font-bold">
-                      HANDCRAFTED SPOTLIGHT
-                    </span>
-                  </div>
                   <h3 className={`font-display text-xl sm:text-2xl font-bold uppercase tracking-tight ${
                     isDark ? 'text-white' : 'text-ink'
                   }`}>
@@ -975,10 +958,6 @@ export default function LandingPage({ currentUser }) {
               <p className="text-zinc-400 text-xs leading-relaxed">
                 Manufaktur exhaust system knalpot mobil berbahan stainless steel berkualitas tinggi untuk harian dan performa. Berbasis di Purbalingga, Jawa Tengah.
               </p>
-              <div className="text-xs text-zinc-400 pt-2">
-                <p className="font-semibold text-zinc-300">Workshop &amp; Produksi:</p>
-                <p className="mt-0.5">Purbalingga, Jawa Tengah, Indonesia.</p>
-              </div>
             </div>
 
             {/* Column 2: Marketplace Resmi */}
