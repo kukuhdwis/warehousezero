@@ -969,19 +969,19 @@ export default function LandingPage({ currentUser }) {
                 <li>
                   <a className="hover:text-ember transition-colors flex items-center gap-2.5 group" href="https://www.tokopedia.com/ndk-exhaust-id" rel="noopener noreferrer" target="_blank">
                     <TokopediaIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-                    <span>Tokopedia Official <span className="bg-emerald-950 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded ml-1">Verified</span></span>
+                    <span>Tokopedia</span>
                   </a>
                 </li>
                 <li>
                   <a className="hover:text-ember transition-colors flex items-center gap-2.5 group" href="https://shopee.co.id/ndk_exhaust_official" rel="noopener noreferrer" target="_blank">
                     <ShopeeIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-                    <span>Shopee Mall</span>
+                    <span>Shopee</span>
                   </a>
                 </li>
                 <li>
                   <a className="hover:text-ember transition-colors flex items-center gap-2.5 group" href="https://wa.me/6289502240040?text=Halo%20Admin%20NDK%20Exhaust,%20saya%20ingin%20konsultasi%20dan%20order%20knalpot" rel="noopener noreferrer" target="_blank">
                     <WhatsAppIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-                    <span>WhatsApp Konsultasi (+62 895-0224-0040)</span>
+                    <span>WhatsApp</span>
                   </a>
                 </li>
               </ul>
@@ -996,19 +996,19 @@ export default function LandingPage({ currentUser }) {
                 <li>
                   <a className="hover:text-ember transition-colors flex items-center gap-2.5 group" href="https://www.instagram.com/ndkexhaust" rel="noopener noreferrer" target="_blank">
                     <InstagramIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-                    <span>Instagram: @ndkexhaust</span>
+                    <span>Instagram</span>
                   </a>
                 </li>
                 <li>
                   <a className="hover:text-ember transition-colors flex items-center gap-2.5 group" href="https://www.tiktok.com/@ndkofficial.id" rel="noopener noreferrer" target="_blank">
                     <TikTokIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-                    <span>TikTok: @ndkofficial.id</span>
+                    <span>TikTok</span>
                   </a>
                 </li>
                 <li>
                   <a className="hover:text-ember transition-colors flex items-center gap-2.5 group" href="http://bit.ly/Youtube-NDKexhaust" rel="noopener noreferrer" target="_blank">
                     <YouTubeIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-                    <span>YouTube: NDK Exhaust</span>
+                    <span>YouTube</span>
                   </a>
                 </li>
                 <li>
@@ -1018,7 +1018,7 @@ export default function LandingPage({ currentUser }) {
                     className="hover:text-ember transition-colors flex items-center gap-2.5 cursor-pointer text-left group"
                   >
                     <BookOpen className="w-4 h-4 text-ember shrink-0 transition-transform group-hover:scale-110" />
-                    <span>E-Katalog Web Resmi</span>
+                    <span>E-Katalog</span>
                   </button>
                 </li>
               </ul>

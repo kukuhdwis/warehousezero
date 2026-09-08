@@ -1308,7 +1308,7 @@ export default function PublicCatalog({
                 </div>
                 <div>
                   <h3 className={`font-display text-base font-bold uppercase tracking-tight ${isDark ? 'text-white' : 'text-ink'}`}>
-                    Tokopedia Official
+                    Tokopedia
                   </h3>
                   <p className={`font-body text-xs mt-1 leading-relaxed ${isDark ? 'text-zinc-400' : 'text-steel'}`}>
                     Official Store terverifikasi, cashback marketplace, cicilan 0% & garansi produk original.
@@ -1339,7 +1339,7 @@ export default function PublicCatalog({
                 </div>
                 <div>
                   <h3 className={`font-display text-base font-bold uppercase tracking-tight ${isDark ? 'text-white' : 'text-ink'}`}>
-                    Shopee Official Mall
+                    Shopee
                   </h3>
                   <p className={`font-body text-xs mt-1 leading-relaxed ${isDark ? 'text-zinc-400' : 'text-steel'}`}>
                     Voucher gratis ongkir XTRA, promo tanggal kembar, dan pengiriman aman se-Indonesia.
@@ -1370,7 +1370,7 @@ export default function PublicCatalog({
                 </div>
                 <div>
                   <h3 className={`font-display text-base font-bold uppercase tracking-tight ${isDark ? 'text-white' : 'text-ink'}`}>
-                    Konsultasi CS WhatsApp
+                    WhatsApp
                   </h3>
                   <p className={`font-body text-xs mt-1 leading-relaxed ${isDark ? 'text-zinc-400' : 'text-steel'}`}>
                     Konsultasi rekomendasi knalpot presisi sesuai karakter harian atau balap dengan engineer kami.
@@ -1493,7 +1493,7 @@ export default function PublicCatalog({
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
                     <TokopediaIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-                    <span>Tokopedia Official</span>
+                    <span>Tokopedia</span>
                   </a>
                 </li>
                 <li>
@@ -1504,7 +1504,7 @@ export default function PublicCatalog({
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
                     <ShopeeIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-                    <span>Shopee Official Mall</span>
+                    <span>Shopee</span>
                   </a>
                 </li>
                 <li>
@@ -1515,7 +1515,7 @@ export default function PublicCatalog({
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
                     <WhatsAppIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-                    <span>WhatsApp Konsultasi</span>
+                    <span>WhatsApp</span>
                   </a>
                 </li>
               </ul>
@@ -1535,7 +1535,7 @@ export default function PublicCatalog({
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
                     <InstagramIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-                    <span>Instagram @ndkexhaust</span>
+                    <span>Instagram</span>
                   </a>
                 </li>
                 <li>
@@ -1546,7 +1546,7 @@ export default function PublicCatalog({
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
                     <YouTubeIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-                    <span>YouTube Sound Test</span>
+                    <span>YouTube</span>
                   </a>
                 </li>
                 <li>
@@ -1557,7 +1557,7 @@ export default function PublicCatalog({
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
                     <TikTokIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-                    <span>TikTok @ndkofficial.id</span>
+                    <span>TikTok</span>
                   </a>
                 </li>
                 <li>
@@ -1566,7 +1566,7 @@ export default function PublicCatalog({
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
                     <BookOpen className="w-4 h-4 text-ember shrink-0 transition-transform group-hover:scale-110" />
-                    <span>E-Katalog Resmi</span>
+                    <span>E-Katalog</span>
                   </a>
                 </li>
               </ul>
