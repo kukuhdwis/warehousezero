@@ -122,11 +122,13 @@ export default function LandingPage({ currentUser }) {
   }, []);
 
   const handleNavigateCatalog = () => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     window.history.pushState({}, '', '/catalog');
     window.dispatchEvent(new PopStateEvent('popstate'));
   };
 
   const handleNavigateLogin = () => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     window.history.pushState({}, '', '/login');
     window.dispatchEvent(new PopStateEvent('popstate'));
   };

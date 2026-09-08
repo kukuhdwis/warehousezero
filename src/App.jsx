@@ -184,6 +184,7 @@ export default function App() {
   // Listen to popstate for browser navigation (Back/Forward buttons)
   useEffect(() => {
     const handlePopStateRoute = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
       const p = window.location.pathname.toLowerCase();
       if (p.startsWith('/catalog') || p.startsWith('/katalog') || p.startsWith('/product')) {
         setCurrentRoute('catalog');
@@ -202,6 +203,11 @@ export default function App() {
     window.addEventListener('popstate', handlePopStateRoute);
     return () => window.removeEventListener('popstate', handlePopStateRoute);
   }, []);
+
+  // Scroll to top whenever the top-level route changes (e.g. landing -> catalog)
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [currentRoute]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [products, setProducts] = useState([]);

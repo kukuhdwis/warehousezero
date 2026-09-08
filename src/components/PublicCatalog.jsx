@@ -96,6 +96,9 @@ export default function PublicCatalog({
   };
 
   useEffect(() => {
+    // Reset window scroll to top whenever catalog page loads
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+
     // Preload logos for instant zero-lag theme transitions
     ['/logos/ndk-white.png', '/logos/ndk-black.png', '/logos/rgn-white.png', '/logos/rgn-black.png'].forEach(src => {
       const img = new Image();
@@ -120,6 +123,7 @@ export default function PublicCatalog({
   const productListRef = useRef(null);
 
   const navigateToLanding = () => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     if (onGoToLanding) {
       onGoToLanding();
     } else {
