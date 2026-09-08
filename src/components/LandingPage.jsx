@@ -104,6 +104,36 @@ export default function LandingPage({ currentUser }) {
     });
   };
 
+  // Dynamic Scrollspy: track active section on scroll
+  const [activeSection, setActiveSection] = useState('beranda');
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollPos = window.scrollY + 140;
+
+      const testimoniEl = document.getElementById('testimoni');
+      const workshopEl = document.getElementById('workshop');
+
+      const testimoniTop = testimoniEl ? testimoniEl.offsetTop : Infinity;
+      const workshopTop = workshopEl ? workshopEl.offsetTop : Infinity;
+
+      const isBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 160;
+
+      if (isBottom || scrollPos >= workshopTop) {
+        setActiveSection('workshop');
+      } else if (scrollPos >= testimoniTop) {
+        setActiveSection('testimoni');
+      } else {
+        setActiveSection('beranda');
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+
   useEffect(() => {
     setSEO({
       title: "NDK Exhaust × RGN Performance | Precision Exhaust Engineering & E-Katalog Resmi",
@@ -190,22 +220,69 @@ export default function LandingPage({ currentUser }) {
           </a>
 
           {/* Navigation Menu (Beranda, Testimoni, Tentang Kami, Katalog) */}
-          <nav className={`hidden md:flex items-center space-x-7 text-xs sm:text-sm font-display uppercase tracking-widest ${
-            isDark ? 'text-zinc-300' : 'text-zinc-700'
-          }`}>
-            <a className={`hover:text-ember transition-colors ${isDark ? 'text-white' : 'text-ink font-semibold'}`} href="#beranda">
+          <nav className="hidden md:flex items-center space-x-7 text-xs sm:text-sm font-display uppercase tracking-widest">
+            <a 
+              href="#beranda"
+              onClick={(e) => {
+                e.preventDefault();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`relative py-1.5 transition-all duration-200 cursor-pointer ${
+                activeSection === 'beranda'
+                  ? 'text-ember font-bold'
+                  : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-600 hover:text-zinc-950'
+              }`}
+            >
               Beranda
+              {activeSection === 'beranda' && (
+                <span className="absolute -bottom-0.5 left-0 right-0 h-[2px] bg-ember rounded-full shadow-sm shadow-ember/50 animate-in fade-in duration-200" />
+              )}
             </a>
-            <a className="hover:text-ember transition-colors" href="#testimoni">
+
+            <a 
+              href="#testimoni"
+              onClick={(e) => {
+                e.preventDefault();
+                const el = document.getElementById('testimoni');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className={`relative py-1.5 transition-all duration-200 cursor-pointer ${
+                activeSection === 'testimoni'
+                  ? 'text-ember font-bold'
+                  : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-600 hover:text-zinc-950'
+              }`}
+            >
               Testimoni
+              {activeSection === 'testimoni' && (
+                <span className="absolute -bottom-0.5 left-0 right-0 h-[2px] bg-ember rounded-full shadow-sm shadow-ember/50 animate-in fade-in duration-200" />
+              )}
             </a>
-            <a className="hover:text-ember transition-colors" href="#workshop">
+
+            <a 
+              href="#workshop"
+              onClick={(e) => {
+                e.preventDefault();
+                const el = document.getElementById('workshop');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className={`relative py-1.5 transition-all duration-200 cursor-pointer ${
+                activeSection === 'workshop'
+                  ? 'text-ember font-bold'
+                  : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-600 hover:text-zinc-950'
+              }`}
+            >
               Tentang Kami
+              {activeSection === 'workshop' && (
+                <span className="absolute -bottom-0.5 left-0 right-0 h-[2px] bg-ember rounded-full shadow-sm shadow-ember/50 animate-in fade-in duration-200" />
+              )}
             </a>
+
             <button 
               type="button" 
               onClick={handleNavigateCatalog}
-              className="hover:text-ember transition-colors cursor-pointer flex items-center gap-1.5"
+              className={`relative py-1.5 transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
+                isDark ? 'text-zinc-400 hover:text-ember' : 'text-zinc-600 hover:text-ember'
+              }`}
             >
               <BookOpen className="w-3.5 h-3.5 text-ember" />
               <span>Katalog</span>
@@ -691,7 +768,7 @@ export default function LandingPage({ currentUser }) {
         {/* ========================================================= */}
         {/* SHOWCASE & TESTIMONIALS SECTION                           */}
         {/* ========================================================= */}
-        <section className={`py-24 transition-colors duration-300 ${
+        <section className={`py-24 transition-colors duration-300 scroll-mt-16 ${
           isDark ? 'bg-zinc-950 text-paper' : 'bg-smoke text-ink'
         }`} id="testimoni">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -937,7 +1014,7 @@ export default function LandingPage({ currentUser }) {
       {/* ========================================================= */}
       {/* MAIN FOOTER (4-Column Layout)                             */}
       {/* ========================================================= */}
-      <footer className="bg-ink text-paper pt-16 pb-12 border-t border-zinc-800" id="workshop">
+      <footer className="bg-ink text-paper pt-16 pb-12 border-t border-zinc-800 scroll-mt-16" id="workshop">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 pb-12 border-b border-zinc-800">

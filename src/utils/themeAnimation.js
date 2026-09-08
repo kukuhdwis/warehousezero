@@ -18,18 +18,35 @@ export function toggleThemeWithClipPath(event, updateThemeCallback) {
     return;
   }
 
-  // Calculate coordinates of the click, or fallback to the center of the trigger element or window
-  let x = window.innerWidth / 2;
-  let y = window.innerHeight / 2;
+  // Calculate coordinates of the click, prioritizing the button element's exact center
+  let x = window.innerWidth - 80;
+  let y = 35;
 
   if (event) {
-    if (typeof event.clientX === 'number' && typeof event.clientY === 'number' && (event.clientX !== 0 || event.clientY !== 0)) {
-      x = event.clientX;
-      y = event.clientY;
-    } else if (event.currentTarget && typeof event.currentTarget.getBoundingClientRect === 'function') {
-      const rect = event.currentTarget.getBoundingClientRect();
-      x = rect.left + rect.width / 2;
-      y = rect.top + rect.height / 2;
+    // Check currentTarget or target (including children like svg or path)
+    const rawTarget = event.currentTarget || event.target;
+    const buttonEl = rawTarget?.closest ? rawTarget.closest('button') || rawTarget : rawTarget;
+    if (buttonEl && typeof buttonEl.getBoundingClientRect === 'function') {
+      const rect = buttonEl.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        x = Math.round(rect.left + rect.width / 2);
+        y = Math.round(rect.top + rect.height / 2);
+      }
+    } else if (typeof event.clientX === 'number' && typeof event.clientY === 'number' && (event.clientX > 0 || event.clientY > 0)) {
+      x = Math.round(event.clientX);
+      y = Math.round(event.clientY);
+    }
+  }
+
+  // Fallback: locate the theme toggle button in DOM if coordinates could not be extracted
+  if (x === window.innerWidth - 80 && y === 35) {
+    const toggleBtn = document.querySelector('button[aria-label*="Mode"], button[aria-label*="mode"], button[aria-label*="Dark"], button[aria-label*="dark"], button[title*="Mode"], button[title*="mode"], button[title*="Dark"], button[title*="dark"]');
+    if (toggleBtn) {
+      const rect = toggleBtn.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        x = Math.round(rect.left + rect.width / 2);
+        y = Math.round(rect.top + rect.height / 2);
+      }
     }
   }
 
@@ -54,10 +71,11 @@ export function toggleThemeWithClipPath(event, updateThemeCallback) {
         ]
       },
       {
-        duration: 550,
-        easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
+        duration: 450,
+        easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
         pseudoElement: '::view-transition-new(root)'
       }
     );
   });
 }
+

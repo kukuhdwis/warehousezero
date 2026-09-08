@@ -106,6 +106,28 @@ export default function PublicCatalog({
     });
   }, []);
 
+  // Dynamic Scrollspy: track active section on Catalog page
+  const [activeCatalogSection, setActiveCatalogSection] = useState('katalog');
+
+  useEffect(() => {
+    const handleCatalogScroll = () => {
+      const scrollPos = window.scrollY + 150;
+      const marketplaceEl = document.getElementById('marketplace-section') || document.getElementById('about-section');
+      const marketplaceTop = marketplaceEl ? marketplaceEl.offsetTop : Infinity;
+      const isBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 160;
+
+      if (isBottom || scrollPos >= marketplaceTop) {
+        setActiveCatalogSection('marketplace');
+      } else {
+        setActiveCatalogSection('katalog');
+      }
+    };
+
+    window.addEventListener('scroll', handleCatalogScroll, { passive: true });
+    handleCatalogScroll();
+    return () => window.removeEventListener('scroll', handleCatalogScroll);
+  }, []);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [catalogMode, setCatalogMode] = useState('ALL'); // 'ALL' | 'PRODUCTS' | 'BUNDLES'
   const [selectedEngine, setSelectedEngine] = useState('ALL');
@@ -560,23 +582,31 @@ export default function PublicCatalog({
             <button
               type="button"
               onClick={navigateToLanding}
-              className={`py-1.5 border-b-2 border-transparent transition-colors cursor-pointer whitespace-nowrap ${isDark ? 'text-zinc-400 hover:text-white' : 'text-steel hover:text-ink'
-                }`}
+              className={`py-1.5 border-b-2 border-transparent transition-colors cursor-pointer whitespace-nowrap ${
+                isDark ? 'text-zinc-400 hover:text-white' : 'text-steel hover:text-ink'
+              }`}
             >
               Beranda
             </button>
             <button
               type="button"
               onClick={scrollToProducts}
-              className="py-1.5 border-b-2 border-ember text-ember font-semibold cursor-pointer whitespace-nowrap"
+              className={`py-1.5 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                activeCatalogSection === 'katalog'
+                  ? 'border-ember text-ember font-semibold'
+                  : `border-transparent ${isDark ? 'text-zinc-400 hover:text-white' : 'text-steel hover:text-ink'}`
+              }`}
             >
               Katalog
             </button>
             <button
               type="button"
               onClick={() => scrollToSection('marketplace-section')}
-              className={`py-1.5 border-b-2 border-transparent transition-colors cursor-pointer whitespace-nowrap ${isDark ? 'text-zinc-400 hover:text-white' : 'text-steel hover:text-ink'
-                }`}
+              className={`py-1.5 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                activeCatalogSection === 'marketplace'
+                  ? 'border-ember text-ember font-semibold'
+                  : `border-transparent ${isDark ? 'text-zinc-400 hover:text-white' : 'text-steel hover:text-ink'}`
+              }`}
             >
               Marketplace
             </button>
@@ -697,21 +727,29 @@ export default function PublicCatalog({
                 <button
                   type="button"
                   onClick={() => { setMobileMenuOpen(false); navigateToLanding(); }}
-                  className={`py-2.5 text-left border-b ${isDark ? 'border-zinc-800 text-white' : 'border-line text-ink'}`}
+                  className={`py-2.5 text-left border-b transition-colors ${isDark ? 'border-zinc-800 text-zinc-300 hover:text-white' : 'border-line text-steel hover:text-ink'}`}
                 >
                   Beranda
                 </button>
                 <button
                   type="button"
                   onClick={() => { setMobileMenuOpen(false); scrollToProducts(); }}
-                  className={`py-2.5 text-left border-b text-ember font-semibold ${isDark ? 'border-zinc-800' : 'border-line'}`}
+                  className={`py-2.5 text-left border-b transition-colors ${
+                    activeCatalogSection === 'katalog'
+                      ? 'border-ember text-ember font-semibold'
+                      : isDark ? 'border-zinc-800 text-zinc-300' : 'border-line text-steel'
+                  }`}
                 >
                   Katalog
                 </button>
                 <button
                   type="button"
                   onClick={() => { setMobileMenuOpen(false); scrollToSection('marketplace-section'); }}
-                  className={`py-2.5 text-left border-b ${isDark ? 'border-zinc-800 text-white' : 'border-line text-ink'}`}
+                  className={`py-2.5 text-left border-b transition-colors ${
+                    activeCatalogSection === 'marketplace'
+                      ? 'border-ember text-ember font-semibold'
+                      : isDark ? 'border-zinc-800 text-zinc-300' : 'border-line text-steel'
+                  }`}
                 >
                   Marketplace
                 </button>
@@ -1346,9 +1384,9 @@ export default function PublicCatalog({
       </section>
 
       {/* ========================================================================= */}
-      {/* 6. CLEAN FOOTER (LANDING PAGE MOTORSPORT DESIGN TOKENS)                    */}
+      {/* 6. CLEAN FOOTER & MARKETPLACE (LANDING PAGE MOTORSPORT DESIGN TOKENS)      */}
       {/* ========================================================================= */}
-      <footer id="about-section" className={`text-xs pt-16 pb-10 border-t mt-auto transition-colors duration-300 ${isDark ? 'bg-ink text-zinc-400 border-zinc-800' : 'bg-smoke text-steel border-zinc-200'
+      <footer id="marketplace-section" className={`text-xs pt-16 pb-10 border-t mt-auto transition-colors duration-300 scroll-mt-16 ${isDark ? 'bg-ink text-zinc-400 border-zinc-800' : 'bg-smoke text-steel border-zinc-200'
         }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
 
