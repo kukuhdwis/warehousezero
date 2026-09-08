@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Search, 
-  Package,
+  Package, 
   Car, 
   Wrench, 
   Volume2, 
@@ -11,26 +11,35 @@ import {
   Eye, 
   X, 
   ArrowRight, 
-  SlidersHorizontal,
-  ChevronRight,
-  ChevronLeft,
-  Info,
-  Check,
-  Flame,
-  ImageIcon,
-  Filter,
-  CheckCircle,
-  ExternalLink,
-  MapPin,
-  ShoppingBag,
-  Store,
-  Layers,
-  RotateCcw,
-  FileText,
-  Sun,
-  Moon,
-  LogIn
+  SlidersHorizontal, 
+  ChevronRight, 
+  ChevronLeft, 
+  Info, 
+  Check, 
+  Flame, 
+  ImageIcon, 
+  Filter, 
+  CheckCircle, 
+  ExternalLink, 
+  MapPin, 
+  ShoppingBag, 
+  Store, 
+  Layers, 
+  RotateCcw, 
+  FileText, 
+  Sun, 
+  Moon, 
+  LogIn,
+  BookOpen
 } from 'lucide-react';
+import { 
+  TokopediaIcon, 
+  ShopeeIcon, 
+  WhatsAppIcon, 
+  InstagramIcon, 
+  TikTokIcon, 
+  YouTubeIcon 
+} from './SocialIcons';
 import { matchesSearch } from '../utils/searchUtils';
 import { setSEO } from '../utils/seo';
 import { toggleThemeWithClipPath } from '../utils/themeAnimation';
@@ -134,7 +143,7 @@ export default function PublicCatalog({
       const price = Number(detailBundle.selling_price || detailBundle.price) || 0;
       setSEO({
         title: `${detailBundle.name} - Paket Bundling Knalpot | NDK Exhaust`,
-        description: `Beli paket bundling ${detailBundle.name} ${detailBundle.brand || 'NDK Exhaust'}. Material stainless steel SUS304 presisi. Harga resmi: Rp ${price.toLocaleString('id-ID')}. Kompatibel: ${detailBundle.car_variant || 'Semua Mobil'}.`,
+        description: `Beli paket bundling ${detailBundle.name} ${detailBundle.brand || 'NDK Exhaust'}. Material stainless steel presisi. Harga resmi: Rp ${price.toLocaleString('id-ID')}. Kompatibel: ${detailBundle.car_variant || 'Semua Mobil'}.`,
         canonical: `https://warehousezero.web.app/catalog?bundle=${encodeURIComponent(detailBundle.id || detailBundle.sku || '')}`,
         image: detailBundle.imageUrl || 'https://warehousezero.web.app/logos/ndk-black.png',
         type: 'product',
@@ -174,7 +183,7 @@ export default function PublicCatalog({
           "@type": "Product",
           "name": detailProduct.name,
           "image": detailProduct.imageUrl || "https://warehousezero.web.app/logos/ndk-black.png",
-          "description": detailProduct.description || `Knalpot mobil ${detailProduct.name} berbahan stainless steel SUS304 teruji dyno dari NDK Exhaust Purbalingga.`,
+          "description": detailProduct.description || `Knalpot mobil ${detailProduct.name} berbahan stainless steel presisi dari NDK Exhaust Purbalingga.`,
           "sku": detailProduct.sku,
           "brand": {
             "@type": "Brand",
@@ -195,7 +204,7 @@ export default function PublicCatalog({
     } else {
       setSEO({
         title: "E-Katalog Resmi NDK Exhaust & RGN Performance | Knalpot Mobil Presisi Purbalingga",
-        description: "E-Katalog resmi knalpot mobil NDK Exhaust & RGN Performance. Downpipe, Frontpipe, Centerpipe, Resonator, dan Muffler stainless steel SUS304 mesin bensin & diesel.",
+        description: "E-Katalog resmi knalpot mobil NDK Exhaust & RGN Performance. Downpipe, Frontpipe, Centerpipe, Resonator, dan Muffler stainless steel presisi mesin bensin & diesel.",
         keywords: "katalog knalpot, knalpot ndk, rgn performance, knalpot purbalingga, knalpot stainless steel, downpipe brio, downpipe innova diesel, muffler mobil",
         canonical: "https://warehousezero.web.app/catalog",
         image: "https://warehousezero.web.app/logos/ndk-black.png",
@@ -204,7 +213,7 @@ export default function PublicCatalog({
           "@context": "https://schema.org",
           "@type": "CollectionPage",
           "name": "E-Katalog Resmi NDK Exhaust & RGN Performance",
-          "description": "Katalog knalpot mobil stainless steel SUS304 teruji riset dyno untuk mesin bensin dan diesel modern Indonesia.",
+          "description": "Katalog knalpot mobil stainless steel presisi untuk mesin bensin dan diesel modern Indonesia.",
           "url": "https://warehousezero.web.app/catalog",
           "mainEntity": {
             "@type": "ItemList",
@@ -675,7 +684,7 @@ export default function PublicCatalog({
           <p className={`font-body text-xs sm:text-base max-w-2xl mx-auto leading-relaxed ${
             isDark ? 'text-zinc-400' : 'text-steel'
           }`}>
-            Stainless steel SUS304 presisi riset dyno Purbalingga. Tersedia Downpipe, Frontpipe, Centerpipe, Resonator, dan Muffler untuk mesin bensin dan diesel modern.
+            Stainless steel presisi Purbalingga. Tersedia Downpipe, Frontpipe, Centerpipe, Resonator, dan Muffler untuk mesin bensin dan diesel modern.
           </p>
 
           <div className="w-24 h-[2px] bg-ember mx-auto mt-4" />
@@ -1356,7 +1365,7 @@ export default function PublicCatalog({
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
                   isDark ? 'bg-emerald-950/60 text-emerald-400 border-emerald-900/60' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
                 }`}>
-                  <Store className="w-5 h-5" />
+                  <TokopediaIcon className="w-6 h-6" />
                 </div>
                 <div>
                   <h3 className={`font-display text-base font-bold uppercase tracking-tight ${isDark ? 'text-white' : 'text-ink'}`}>
@@ -1390,7 +1399,7 @@ export default function PublicCatalog({
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
                   isDark ? 'bg-orange-950/60 text-orange-400 border-orange-900/60' : 'bg-orange-50 text-orange-600 border-orange-100'
                 }`}>
-                  <ShoppingBag className="w-5 h-5" />
+                  <ShopeeIcon className="w-6 h-6" />
                 </div>
                 <div>
                   <h3 className={`font-display text-base font-bold uppercase tracking-tight ${isDark ? 'text-white' : 'text-ink'}`}>
@@ -1422,9 +1431,9 @@ export default function PublicCatalog({
             }`}>
               <div className="space-y-3">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
-                  isDark ? 'bg-ember/15 text-ember border-ember/30' : 'bg-ember-tint text-ember border-ember/20'
+                  isDark ? 'bg-emerald-950/60 text-emerald-400 border-emerald-900/60' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
                 }`}>
-                  <MessageCircle className="w-5 h-5" />
+                  <WhatsAppIcon className="w-6 h-6" />
                 </div>
                 <div>
                   <h3 className={`font-display text-base font-bold uppercase tracking-tight ${isDark ? 'text-white' : 'text-ink'}`}>
@@ -1465,7 +1474,7 @@ export default function PublicCatalog({
                     Workshop &amp; Fitting Center
                   </h3>
                   <p className={`font-body text-xs mt-1 leading-relaxed ${isDark ? 'text-zinc-400' : 'text-steel'}`}>
-                    Instalasi presisi bolt-on di lokasi bengkel mitra NDK Exhaust dengan teknisi tersertifikasi dyno.
+                    Instalasi presisi bolt-on di lokasi bengkel mitra NDK Exhaust dengan teknisi berpengalaman dan tersertifikasi.
                   </p>
                 </div>
               </div>
@@ -1551,15 +1560,15 @@ export default function PublicCatalog({
               <h4 className={`font-display text-xs font-bold uppercase tracking-widest ${isDark ? 'text-white' : 'text-ink'}`}>
                 MARKETPLACE
               </h4>
-              <ul className="space-y-2 text-xs font-body">
+              <ul className="space-y-2.5 text-xs font-body">
                 <li>
                   <a 
                     href="https://www.tokopedia.com/ndk-exhaust-id" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="hover:text-ember transition-colors flex items-center gap-2"
+                    className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-ember" />
+                    <TokopediaIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
                     <span>Tokopedia Official</span>
                   </a>
                 </li>
@@ -1568,9 +1577,9 @@ export default function PublicCatalog({
                     href="https://shopee.co.id/ndk_exhaust_official" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="hover:text-ember transition-colors flex items-center gap-2"
+                    className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-ember" />
+                    <ShopeeIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
                     <span>Shopee Official Mall</span>
                   </a>
                 </li>
@@ -1579,9 +1588,9 @@ export default function PublicCatalog({
                     href="https://wa.me/6289502240040?text=Halo%20Admin%20NDK%20Exhaust%2C%20saya%20ingin%20konsultasi%20exhaust%20system." 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="hover:text-ember transition-colors flex items-center gap-2"
+                    className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-ember" />
+                    <WhatsAppIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
                     <span>WhatsApp Konsultasi</span>
                   </a>
                 </li>
@@ -1593,15 +1602,15 @@ export default function PublicCatalog({
               <h4 className={`font-display text-xs font-bold uppercase tracking-widest ${isDark ? 'text-white' : 'text-ink'}`}>
                 MEDIA &amp; VIDEO
               </h4>
-              <ul className="space-y-2 text-xs font-body">
+              <ul className="space-y-2.5 text-xs font-body">
                 <li>
                   <a 
                     href="https://www.instagram.com/ndkexhaust" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="hover:text-ember transition-colors flex items-center gap-2"
+                    className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-ember" />
+                    <InstagramIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
                     <span>Instagram @ndkexhaust</span>
                   </a>
                 </li>
@@ -1610,9 +1619,9 @@ export default function PublicCatalog({
                     href="http://bit.ly/Youtube-NDKexhaust" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="hover:text-ember transition-colors flex items-center gap-2"
+                    className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-ember" />
+                    <YouTubeIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
                     <span>YouTube Sound Test</span>
                   </a>
                 </li>
@@ -1621,18 +1630,18 @@ export default function PublicCatalog({
                     href="https://www.tiktok.com/@ndkofficial.id" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="hover:text-ember transition-colors flex items-center gap-2"
+                    className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-ember" />
+                    <TikTokIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
                     <span>TikTok @ndkofficial.id</span>
                   </a>
                 </li>
                 <li>
                   <a 
                     href="https://warehousezero.web.app/catalog" 
-                    className="hover:text-ember transition-colors flex items-center gap-2"
+                    className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-ember" />
+                    <BookOpen className="w-4 h-4 text-ember shrink-0 transition-transform group-hover:scale-110" />
                     <span>E-Katalog Resmi</span>
                   </a>
                 </li>

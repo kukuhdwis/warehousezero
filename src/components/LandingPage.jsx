@@ -12,6 +12,14 @@ import {
   ZoomIn,
   X
 } from 'lucide-react';
+import { 
+  TokopediaIcon, 
+  ShopeeIcon, 
+  WhatsAppIcon, 
+  InstagramIcon, 
+  TikTokIcon, 
+  YouTubeIcon 
+} from './SocialIcons';
 import { setSEO } from '../utils/seo';
 import { toggleThemeWithClipPath } from '../utils/themeAnimation';
 
@@ -23,7 +31,7 @@ const PRODUCT_SHOWCASE = [
     name: 'NDK DK-03 v3',
     sound: 'FULL BASS',
     type: 'Universal Muffler',
-    spec: 'Double TIG Argon Welding • SUS304 High Flow Canister'
+    spec: 'Double TIG Argon Welding • High Flow Canister'
   },
   {
     id: 'prod-2',
@@ -47,7 +55,7 @@ const PRODUCT_SHOWCASE = [
     name: 'NDK DK-03 v4 BOLT ON',
     sound: 'PLUG & PLAY',
     type: 'Honda Brio Spec',
-    spec: 'Presisi PNP Tanpa Las • SUS304 Mandrel Bend'
+    spec: 'Presisi PNP Tanpa Las • Mandrel Bend Precision'
   },
   {
     id: 'prod-5',
@@ -99,8 +107,8 @@ export default function LandingPage({ currentUser }) {
   useEffect(() => {
     setSEO({
       title: "NDK Exhaust × RGN Performance | Precision Exhaust Engineering & E-Katalog Resmi",
-      description: "Manufaktur knalpot mobil stainless steel SUS304 presisi riset dyno berbasis di Purbalingga, Jawa Tengah. E-Katalog resmi knalpot racing, harian, downpipe, frontpipe, resonator, dan muffler bensin & diesel.",
-      keywords: "ndk exhaust, rgn performance, knalpot purbalingga, knalpot stainless sus304, knalpot racing, downpipe, frontpipe, resonator, muffler mobil, knalpot diesel",
+      description: "Manufaktur knalpot mobil stainless steel presisi berbasis di Purbalingga, Jawa Tengah. E-Katalog resmi knalpot racing, harian, downpipe, frontpipe, resonator, dan muffler bensin & diesel.",
+      keywords: "ndk exhaust, rgn performance, knalpot purbalingga, knalpot stainless steel, knalpot racing, downpipe, frontpipe, resonator, muffler mobil, knalpot diesel",
       canonical: "https://warehousezero.web.app/",
       image: "https://warehousezero.web.app/logos/ndk-black.png",
       type: "website"
@@ -273,7 +281,7 @@ export default function LandingPage({ currentUser }) {
             <div className="relative w-full overflow-hidden h-[500px] sm:h-[580px] lg:h-[640px]">
               <div className="marquee-track h-full">
                 
-                {/* Slide 1: Stainless SUS304 */}
+                {/* Slide 1: Stainless Precision */}
                 <div className="relative w-[360px] sm:w-[480px] lg:w-[580px] h-full shrink-0 border-r border-zinc-800/80 group">
                   <img 
                     alt="Precision Stainless Steel Exhaust Pipe" 
@@ -282,16 +290,16 @@ export default function LandingPage({ currentUser }) {
                   />
                   <div className="absolute bottom-6 left-6 right-6 z-10">
                     <span className="text-[10px] font-mono uppercase tracking-widest bg-ember/30 text-white px-2 py-0.5 rounded border border-ember/40">
-                      SUS304 TIG Welding
+                      Precision TIG Welding
                     </span>
                     <p className="font-display text-lg text-white font-bold uppercase mt-1">Stainless Steel Craftsmanship</p>
                   </div>
                 </div>
 
-                {/* Slide 2: Dyno Jet Simulation */}
+                {/* Slide 2: Gas Flow Simulation */}
                 <div className="relative w-[360px] sm:w-[480px] lg:w-[580px] h-full shrink-0 border-r border-zinc-800/80 group">
                   <img 
-                    alt="Exhaust Sound Performance & Dyno" 
+                    alt="Exhaust Sound Performance & Flow" 
                     className="w-full h-full object-cover filter brightness-[0.65] group-hover:brightness-[0.8] transition-all duration-700 scale-105 group-hover:scale-100" 
                     src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMTlNHy8rzO_cWzR7RuNuTCT8Fd8Vxs5L64A--ruN_7Fe9oG4LMxn3BaY1Xzqfm_LTctHpL1OcBqm2HjJ3QQU5u886WBGPORGWWQeK0aoLotjJuS-pEZ-zil5aksCLfGaD1rnLeQdIma23Y8LuwOAsE1fTTdjhP7PrNufvFIXgnAQdpMVuDdOU6rpBP7OH1ry3NeUvx8Jh1Zx-fSoSaCcmF5fHCtYv9t4fMb027eUw31Xa7AjSrMkI"
                   />
@@ -299,7 +307,7 @@ export default function LandingPage({ currentUser }) {
                     <span className="text-[10px] font-mono uppercase tracking-widest bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded border border-zinc-700">
                       Backpressure R&D
                     </span>
-                    <p className="font-display text-lg text-white font-bold uppercase mt-1">Dyno Certified Acceleration</p>
+                    <p className="font-display text-lg text-white font-bold uppercase mt-1">High Flow Gas Acceleration</p>
                   </div>
                 </div>
 
@@ -342,7 +350,7 @@ export default function LandingPage({ currentUser }) {
                   />
                   <div className="absolute bottom-6 left-6 right-6 z-10">
                     <span className="text-[10px] font-mono uppercase tracking-widest bg-ember/30 text-white px-2 py-0.5 rounded border border-ember/40">
-                      SUS304 TIG Welding
+                      Precision TIG Welding
                     </span>
                     <p className="font-display text-lg text-white font-bold uppercase mt-1">Stainless Steel Craftsmanship</p>
                   </div>
@@ -350,7 +358,7 @@ export default function LandingPage({ currentUser }) {
 
                 <div className="relative w-[360px] sm:w-[480px] lg:w-[580px] h-full shrink-0 border-r border-zinc-800/80 group">
                   <img 
-                    alt="Exhaust Sound Performance & Dyno" 
+                    alt="Exhaust Sound Performance & Flow" 
                     className="w-full h-full object-cover filter brightness-[0.65] group-hover:brightness-[0.8] transition-all duration-700 scale-105 group-hover:scale-100" 
                     src="https://lh3.googleusercontent.com/aida-public/AB6AXuBCCQKXB8zaNBid_3o_Im3DUI9q8cs3iXyaLkofWjV1AnqYH_HxyT16j8GPOThPVCEJ0ZgXZ4PyGBhzRo5qT1LQnh4_DNOj1sKaC9F0rAqYldnxILgiDVE6EgWQYcCJdiaUYV8xyl3Qthpsnylj1oOaFzHWuwF_EOB8esqFuRRWzMShoJyMDmo3Pg-yUTovAEUL83boJf6aETDQaFT8pwHp3A73uRU5pOXp3DlMPa7DzKA0MHJS48Q0"
                   />
@@ -358,7 +366,7 @@ export default function LandingPage({ currentUser }) {
                     <span className="text-[10px] font-mono uppercase tracking-widest bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded border border-zinc-700">
                       Backpressure R&D
                     </span>
-                    <p className="font-display text-lg text-white font-bold uppercase mt-1">Dyno Certified Acceleration</p>
+                    <p className="font-display text-lg text-white font-bold uppercase mt-1">High Flow Gas Acceleration</p>
                   </div>
                 </div>
 
@@ -504,7 +512,7 @@ export default function LandingPage({ currentUser }) {
               }`}>
                 <div className="md:col-span-6 lg:col-span-5 h-64 md:h-72 w-full overflow-hidden bg-zinc-950">
                   <img 
-                    alt="SUS304 stainless steel pipe TIG welding rainbow seam" 
+                    alt="Stainless steel pipe TIG welding rainbow seam" 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                     src="https://lh3.googleusercontent.com/aida-public/AB6AXuCw_WHcqYP4UeouevzfYMs1ES_TADDpHkxjvCjIWsAPXIIb4-E8LrE0aScHtMvglwXJwxD4-UMklY5_2V9rOgFr5GFb8qmxcN3M6lSNVJ34TYi9KeFcGxkUhX-9RSCREi3WnVu8oTZV5JxVHydf4417BFIRlIjpZTWXOcvkSRq7kvQXu0GzWQFCs9fV-JNekzjwJ5wyJlqYn7MPWv6DRDEeSUVuoxtMrgYQOXA6ua8ioC21kz6zLr1r"
                   />
@@ -524,7 +532,7 @@ export default function LandingPage({ currentUser }) {
               }`}>
                 <div className="md:col-span-6 lg:col-span-5 h-64 md:h-72 w-full overflow-hidden bg-zinc-950">
                   <img 
-                    alt="Micrometer precision measuring & dyno tuning graph" 
+                    alt="Micrometer precision measuring & tuning graph" 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                     src="https://lh3.googleusercontent.com/aida-public/AB6AXuCh6ZlnHLguR9S5gthW4LMv0_nINWtjS-fstQatoIXf71n8gids3At9tEeZU19FQtQwMbsJbrHcyBRgUQa74jCo2rzp2cVSXJBXYzsogpzNnHhzmuN1KM9sG4QMRN-zPdiKfoRcJdk1YLd9vGLOuEBJHxvQ1aaPbUNlVOZ2P36-1lW0zJRGOeGkclO5j_xwhKMI4xiYlPcNS2W2qS5NzSQGvO8rSYoex4NGAb9QTd3xodSEjilmAopx"
                   />
@@ -551,18 +559,12 @@ export default function LandingPage({ currentUser }) {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             
             {/* Section Header */}
-            <div className="text-center max-w-3xl mx-auto mb-16">
-              <p className="font-mono text-xs uppercase tracking-widest text-ember font-bold mb-2">
-                DUAL SPECIALIZATION DIVISION
-              </p>
+            <div className="text-center max-w-3xl mx-auto mb-12">
               <h2 className={`font-display text-3xl sm:text-5xl font-bold tracking-tight uppercase ${
                 isDark ? 'text-white' : 'text-ink'
               }`}>
                 TWO ENGINES TWO SPECIALITY
               </h2>
-              <p className={`mt-3 text-base ${isDark ? 'text-zinc-400' : 'text-steel'}`}>
-                Spesialisasi riset terpisah untuk karakteristik mesin bensin dan diesel modern common-rail.
-              </p>
             </div>
 
             {/* 2 Side-by-Side Comparison Panels */}
@@ -611,7 +613,7 @@ export default function LandingPage({ currentUser }) {
                   <p className={`text-sm sm:text-base leading-relaxed mb-6 font-normal ${
                     isDark ? 'text-zinc-300' : 'text-ink'
                   }`}>
-                    Karakteristik mesin bensin memerlukan kalkulasi scavenging velocity dan resonansi gas buang presisi. Desain exhaust NDK dikembangkan melalui data uji dyno untuk menjaga tekanan balik (backpressure) ideal, mempertahankan torsi RPM bawah dan mengoptimalkan aliran udara pada RPM tinggi.
+                    Karakteristik mesin bensin memerlukan kalkulasi scavenging velocity dan resonansi gas buang presisi. Desain exhaust NDK dikembangkan dengan perhitungan presisi untuk menjaga tekanan balik (backpressure) ideal, mempertahankan torsi RPM bawah dan mengoptimalkan aliran udara pada RPM tinggi.
                   </p>
                 </div>
 
@@ -655,7 +657,9 @@ export default function LandingPage({ currentUser }) {
                         src="/logos/rgn-black.png"
                       />
                     </div>
-                    <span className="text-[11px] font-mono uppercase bg-ember-tint text-ember px-3 py-1 rounded font-semibold border border-ember/20">
+                    <span className={`text-[11px] font-mono uppercase px-3 py-1 rounded font-semibold ${
+                      isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-200 text-zinc-800'
+                    }`}>
                       Diesel Division
                     </span>
                   </div>
@@ -673,7 +677,9 @@ export default function LandingPage({ currentUser }) {
 
                 <div className={`mt-8 pt-6 border-t ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
                   <a 
-                    className="inline-flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wider text-ember hover:text-ember-deep transition-colors" 
+                    className={`inline-flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wider hover:text-ember transition-colors ${
+                      isDark ? 'text-white' : 'text-ink'
+                    }`} 
                     href="https://wa.me/6289502240040?text=Halo%20RGN%20Performance%2C%20saya%20ingin%20konsultasi%20spesialisasi%20knalpot%20mesin%20diesel." 
                     rel="noopener noreferrer" 
                     target="_blank"
@@ -697,7 +703,7 @@ export default function LandingPage({ currentUser }) {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             
             {/* Section Header */}
-            <div className="text-center max-w-3xl mx-auto mb-16">
+            <div className="text-center max-w-3xl mx-auto mb-12">
               <p className="font-mono text-xs uppercase tracking-widest text-ember font-bold mb-2">
                 PRECISION MEETS AESTHETICS
               </p>
@@ -706,9 +712,6 @@ export default function LandingPage({ currentUser }) {
               }`}>
                 Hasil Karya &amp; Review Pelanggan
               </h2>
-              <p className={`mt-3 text-base ${isDark ? 'text-zinc-400' : 'text-steel'}`}>
-                Kombinasi estetika pengelasan TIG argon kelas motorsport dan kepuasan performa di jalan raya.
-              </p>
             </div>
 
             {/* Rolling Product Photos Showcase (Marquee Gallery from /fotoproduk/) */}
@@ -882,7 +885,7 @@ export default function LandingPage({ currentUser }) {
                   <p className={`text-sm sm:text-base leading-relaxed italic mb-6 ${
                     isDark ? 'text-zinc-200' : 'text-ink'
                   }`}>
-                    "Brio 1.2 Street Tuning - Dyno test sebelum dan sesudah pasang full exhaust system naik 4.8 HP murni tanpa utak-atik ECU. Data riil bukan sugesti, recomended!"
+                    "Brio 1.2 Street Tuning - Pengujian sebelum dan sesudah pasang full exhaust system tarikan langsung responsif dan nafas RPM atas jauh lebih panjang tanpa utak-atik ECU. Recomended!"
                   </p>
                 </div>
                 <div className={`pt-4 border-t flex items-center justify-between ${
@@ -970,7 +973,7 @@ export default function LandingPage({ currentUser }) {
                 />
               </div>
               <p className="text-zinc-400 text-xs leading-relaxed">
-                Manufaktur exhaust system knalpot mobil berbahan stainless steel SUS304 untuk harian dan performa. Berbasis di Purbalingga, Jawa Tengah.
+                Manufaktur exhaust system knalpot mobil berbahan stainless steel berkualitas tinggi untuk harian dan performa. Berbasis di Purbalingga, Jawa Tengah.
               </p>
               <div className="text-xs text-zinc-400 pt-2">
                 <p className="font-semibold text-zinc-300">Workshop &amp; Produksi:</p>
@@ -985,20 +988,20 @@ export default function LandingPage({ currentUser }) {
               </h4>
               <ul className="space-y-2.5 text-xs text-zinc-400">
                 <li>
-                  <a className="hover:text-ember transition-colors flex items-center gap-2" href="https://www.tokopedia.com/ndk-exhaust-id" rel="noopener noreferrer" target="_blank">
-                    <ShoppingBag className="w-4 h-4 text-emerald-500" />
+                  <a className="hover:text-ember transition-colors flex items-center gap-2.5 group" href="https://www.tokopedia.com/ndk-exhaust-id" rel="noopener noreferrer" target="_blank">
+                    <TokopediaIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
                     <span>Tokopedia Official <span className="bg-emerald-950 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded ml-1">Verified</span></span>
                   </a>
                 </li>
                 <li>
-                  <a className="hover:text-ember transition-colors flex items-center gap-2" href="https://shopee.co.id/ndk_exhaust_official" rel="noopener noreferrer" target="_blank">
-                    <ShoppingBag className="w-4 h-4 text-orange-500" />
+                  <a className="hover:text-ember transition-colors flex items-center gap-2.5 group" href="https://shopee.co.id/ndk_exhaust_official" rel="noopener noreferrer" target="_blank">
+                    <ShopeeIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
                     <span>Shopee Mall</span>
                   </a>
                 </li>
                 <li>
-                  <a className="hover:text-ember transition-colors flex items-center gap-2" href="https://wa.me/6289502240040?text=Halo%20Admin%20NDK%20Exhaust,%20saya%20ingin%20konsultasi%20dan%20order%20knalpot" rel="noopener noreferrer" target="_blank">
-                    <MessageCircle className="w-4 h-4 text-green-500" />
+                  <a className="hover:text-ember transition-colors flex items-center gap-2.5 group" href="https://wa.me/6289502240040?text=Halo%20Admin%20NDK%20Exhaust,%20saya%20ingin%20konsultasi%20dan%20order%20knalpot" rel="noopener noreferrer" target="_blank">
+                    <WhatsAppIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
                     <span>WhatsApp Konsultasi (+62 895-0224-0040)</span>
                   </a>
                 </li>
@@ -1012,20 +1015,20 @@ export default function LandingPage({ currentUser }) {
               </h4>
               <ul className="space-y-2.5 text-xs text-zinc-400">
                 <li>
-                  <a className="hover:text-ember transition-colors flex items-center gap-2" href="https://www.instagram.com/ndkexhaust" rel="noopener noreferrer" target="_blank">
-                    <ExternalLink className="w-3.5 h-3.5 text-zinc-500" />
+                  <a className="hover:text-ember transition-colors flex items-center gap-2.5 group" href="https://www.instagram.com/ndkexhaust" rel="noopener noreferrer" target="_blank">
+                    <InstagramIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
                     <span>Instagram: @ndkexhaust</span>
                   </a>
                 </li>
                 <li>
-                  <a className="hover:text-ember transition-colors flex items-center gap-2" href="https://www.tiktok.com/@ndkofficial.id" rel="noopener noreferrer" target="_blank">
-                    <ExternalLink className="w-3.5 h-3.5 text-zinc-500" />
+                  <a className="hover:text-ember transition-colors flex items-center gap-2.5 group" href="https://www.tiktok.com/@ndkofficial.id" rel="noopener noreferrer" target="_blank">
+                    <TikTokIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
                     <span>TikTok: @ndkofficial.id</span>
                   </a>
                 </li>
                 <li>
-                  <a className="hover:text-ember transition-colors flex items-center gap-2" href="http://bit.ly/Youtube-NDKexhaust" rel="noopener noreferrer" target="_blank">
-                    <ExternalLink className="w-3.5 h-3.5 text-zinc-500" />
+                  <a className="hover:text-ember transition-colors flex items-center gap-2.5 group" href="http://bit.ly/Youtube-NDKexhaust" rel="noopener noreferrer" target="_blank">
+                    <YouTubeIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
                     <span>YouTube: NDK Exhaust</span>
                   </a>
                 </li>
@@ -1033,9 +1036,9 @@ export default function LandingPage({ currentUser }) {
                   <button 
                     type="button" 
                     onClick={handleNavigateCatalog}
-                    className="hover:text-ember transition-colors flex items-center gap-2 cursor-pointer text-left"
+                    className="hover:text-ember transition-colors flex items-center gap-2.5 cursor-pointer text-left group"
                   >
-                    <BookOpen className="w-3.5 h-3.5 text-ember" />
+                    <BookOpen className="w-4 h-4 text-ember shrink-0 transition-transform group-hover:scale-110" />
                     <span>E-Katalog Web Resmi</span>
                   </button>
                 </li>
@@ -1085,7 +1088,6 @@ export default function LandingPage({ currentUser }) {
               <span className="text-zinc-700">|</span>
               <a className="hover:text-zinc-300 transition-colors" href="#">Kebijakan Privasi</a>
               <a className="hover:text-zinc-300 transition-colors" href="#">Syarat &amp; Ketentuan</a>
-              <a className="hover:text-zinc-300 transition-colors" href="#">Garansi Manufaktur</a>
             </div>
           </div>
 
