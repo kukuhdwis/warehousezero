@@ -1,44 +1,44 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { 
-  Search, 
-  Package, 
-  Car, 
-  Wrench, 
-  Volume2, 
-  CheckCircle2, 
-  MessageCircle, 
-  Share2, 
-  Eye, 
-  X, 
-  ArrowRight, 
-  SlidersHorizontal, 
-  ChevronRight, 
-  ChevronLeft, 
-  Info, 
-  Check, 
-  Flame, 
-  ImageIcon, 
-  Filter, 
-  CheckCircle, 
-  ExternalLink, 
-  MapPin, 
-  ShoppingBag, 
-  Store, 
-  Layers, 
-  RotateCcw, 
-  FileText, 
-  Sun, 
-  Moon, 
+import {
+  Search,
+  Package,
+  Car,
+  Wrench,
+  Volume2,
+  CheckCircle2,
+  MessageCircle,
+  Share2,
+  Eye,
+  X,
+  ArrowRight,
+  SlidersHorizontal,
+  ChevronRight,
+  ChevronLeft,
+  Info,
+  Check,
+  Flame,
+  ImageIcon,
+  Filter,
+  CheckCircle,
+  ExternalLink,
+  MapPin,
+  ShoppingBag,
+  Store,
+  Layers,
+  RotateCcw,
+  FileText,
+  Sun,
+  Moon,
   LogIn,
   BookOpen
 } from 'lucide-react';
-import { 
-  TokopediaIcon, 
-  ShopeeIcon, 
-  WhatsAppIcon, 
-  InstagramIcon, 
-  TikTokIcon, 
-  YouTubeIcon 
+import {
+  TokopediaIcon,
+  ShopeeIcon,
+  WhatsAppIcon,
+  InstagramIcon,
+  TikTokIcon,
+  YouTubeIcon
 } from './SocialIcons';
 import { matchesSearch } from '../utils/searchUtils';
 import { setSEO } from '../utils/seo';
@@ -54,11 +54,11 @@ export const formatBundleDisplayName = (b) => {
   return b.name || '';
 };
 
-export default function PublicCatalog({ 
-  products = [], 
+export default function PublicCatalog({
+  products = [],
   bundles = [],
-  brands = [], 
-  machineCategories = [], 
+  brands = [],
+  machineCategories = [],
   initialSku = '',
   onGoToLanding,
   onGoToLogin
@@ -323,11 +323,11 @@ export default function PublicCatalog({
   const filteredProducts = useMemo(() => {
     const list = activeProducts.filter(p => {
       const matchesSearchTerm = matchesSearch(
-        searchTerm, 
-        p.name, 
-        p.sku || p.code, 
-        p.car_variant || p.carVariant, 
-        p.brand, 
+        searchTerm,
+        p.name,
+        p.sku || p.code,
+        p.car_variant || p.carVariant,
+        p.brand,
         p.category_name,
         p.engine_type || p.machineCategory,
         p.spec_sound
@@ -433,7 +433,7 @@ export default function PublicCatalog({
   useEffect(() => {
     if (initialSku) {
       if (activeProducts.length > 0) {
-        const matched = activeProducts.find(p => 
+        const matched = activeProducts.find(p =>
           (p.sku || '').toLowerCase() === initialSku.toLowerCase() ||
           (p.code || '').toLowerCase() === initialSku.toLowerCase()
         );
@@ -443,7 +443,7 @@ export default function PublicCatalog({
         }
       }
       if (activeBundles.length > 0) {
-        const matchedB = activeBundles.find(b => 
+        const matchedB = activeBundles.find(b =>
           (b.code || '').toLowerCase() === initialSku.toLowerCase()
         );
         if (matchedB) {
@@ -458,7 +458,7 @@ export default function PublicCatalog({
     const price = Number(prod.selling_price ?? prod.price) || 0;
     const formattedPrice = `Rp ${price.toLocaleString('id-ID')}`;
     const text = `Halo Admin NDK Exhaust, saya ingin memesan & konsultasi produk ini dari Katalog Resmi:\n\n*${prod.name}*\n• SKU: ${prod.sku || prod.code || '-'}\n• Merk: ${prod.brand || 'NDK Exhaust'}\n• Tipe Mesin: ${prod.engine_type || prod.machineCategory || '-'}\n• Mobil: ${prod.car_variant || '-'}\n• Karakter Suara: ${prod.spec_sound || '-'}\n• Harga Resmi: ${formattedPrice}\n\nApakah stok unit ini siap kirim? Terima kasih!`;
-    
+
     return `https://wa.me/6289502240040?text=${encodeURIComponent(text)}`;
   };
 
@@ -468,7 +468,7 @@ export default function PublicCatalog({
     const formattedPrice = `Rp ${price.toLocaleString('id-ID')}`;
     const rawItems = bndl.rawIsi || (Array.isArray(bndl.items) ? bndl.items.map(i => `${i.qty || 1}x ${i.productName || i.name}`).join(' + ') : '-');
     const text = `Halo Admin NDK Exhaust, saya ingin memesan & konsultasi Paket Bundling ini dari Katalog Resmi:\n\n*${bndl.name}*\n• Kode Paket: ${bndl.code || '-'}\n• Merk: ${bndl.brand || 'NDK Exhaust'}\n• Tipe Mesin: ${bndl.engine_type || '-'}\n• Kompatibel Mobil: ${bndl.car_variant || '-'}\n• Rincian Isi Paket: ${rawItems}\n• Harga Resmi Paket: ${formattedPrice}\n\nApakah paket ini siap kirim / bisa dijadwalkan pasang? Terima kasih!`;
-    
+
     return `https://wa.me/6289502240040?text=${encodeURIComponent(text)}`;
   };
 
@@ -497,37 +497,33 @@ export default function PublicCatalog({
   };
 
   return (
-    <div className={`min-h-screen flex flex-col font-body antialiased transition-colors duration-300 selection:bg-ember selection:text-white ${
-      isDark ? 'bg-ink text-paper' : 'bg-paper text-ink'
-    }`}>
-      
+    <div className={`min-h-screen flex flex-col font-body antialiased transition-colors duration-300 selection:bg-ember selection:text-white ${isDark ? 'bg-ink text-paper' : 'bg-paper text-ink'
+      }`}>
+
       {/* ========================================================================= */}
       {/* 1. MAIN NAVBAR (LANDING PAGE DESIGN TOKENS & TYPOGRAPHY)                  */}
       {/* ========================================================================= */}
-      <header className={`sticky top-0 z-40 backdrop-blur-md border-b transition-colors duration-300 ${
-        isDark ? 'bg-ink/95 border-zinc-800' : 'bg-paper/95 border-zinc-200 shadow-xs'
-      }`}>
+      <header className={`sticky top-0 z-40 backdrop-blur-md border-b transition-colors duration-300 ${isDark ? 'bg-ink/95 border-zinc-800' : 'bg-paper/95 border-zinc-200 shadow-xs'
+        }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-          
+
           {/* Logo Lockup: NDK & RGN with Seamless Stacked Crossfade */}
-          <div 
+          <div
             onClick={navigateToLanding}
             className="flex items-center gap-2.5 sm:gap-3 group py-1 cursor-pointer flex-shrink-0"
             title="Kembali ke Beranda"
           >
             <div className="relative h-6 sm:h-7 w-[88px] sm:w-[100px] flex items-center">
-              <img 
-                alt="NDK Exhaust Logo" 
-                className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${
-                  isDark ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                }`} 
+              <img
+                alt="NDK Exhaust Logo"
+                className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${isDark ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  }`}
                 src="/logos/ndk-white.png"
               />
-              <img 
-                alt="NDK Exhaust Logo" 
-                className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${
-                  isDark ? 'opacity-0 pointer-events-none' : 'opacity-100'
-                }`} 
+              <img
+                alt="NDK Exhaust Logo"
+                className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${isDark ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                  }`}
                 src="/logos/ndk-black.png"
               />
             </div>
@@ -535,49 +531,46 @@ export default function PublicCatalog({
             <span className={`h-4 sm:h-5 w-[1px] transition-colors duration-300 ${isDark ? 'bg-zinc-700' : 'bg-zinc-300'}`} />
 
             <div className="relative h-5 sm:h-6 w-[78px] sm:w-[90px] flex items-center">
-              <img 
-                alt="RGN Performance Logo" 
-                className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${
-                  isDark ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                }`} 
+              <img
+                alt="RGN Performance Logo"
+                className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${isDark ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  }`}
                 src="/logos/rgn-white.png"
               />
-              <img 
-                alt="RGN Performance Logo" 
-                className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${
-                  isDark ? 'opacity-0 pointer-events-none' : 'opacity-100'
-                }`} 
+              <img
+                alt="RGN Performance Logo"
+                className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${isDark ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                  }`}
                 src="/logos/rgn-black.png"
               />
             </div>
           </div>
 
           {/* Center Navigation Menu Items */}
-          <nav className={`hidden md:flex items-center space-x-7 text-xs sm:text-sm font-display uppercase tracking-widest ${
-            isDark ? 'text-zinc-300' : 'text-zinc-700'
-          }`}>
-            <button 
+          <nav className={`hidden md:flex items-center space-x-7 text-xs sm:text-sm font-display uppercase tracking-widest ${isDark ? 'text-zinc-300' : 'text-zinc-700'
+            }`}>
+            <button
               type="button"
               onClick={navigateToLanding}
               className="hover:text-ember transition-colors cursor-pointer"
             >
               Beranda
             </button>
-            <button 
+            <button
               type="button"
               onClick={scrollToProducts}
               className="text-ember font-semibold hover:text-ember-deep transition-colors cursor-pointer flex items-center gap-1.5"
             >
               <span>Katalog</span>
             </button>
-            <button 
+            <button
               type="button"
               onClick={() => scrollToSection('marketplace-section')}
               className="hover:text-ember transition-colors cursor-pointer"
             >
               Marketplace
             </button>
-            <button 
+            <button
               type="button"
               onClick={() => scrollToSection('about-section')}
               className="hover:text-ember transition-colors cursor-pointer"
@@ -588,7 +581,7 @@ export default function PublicCatalog({
 
           {/* Right Section: Compact Search Bar, Theme Toggle, Dashboard & WhatsApp */}
           <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
-            
+
             {/* Quick Header Search (Desktop) */}
             <div className="relative hidden lg:block w-44 xl:w-52">
               <Search className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`} />
@@ -597,11 +590,10 @@ export default function PublicCatalog({
                 placeholder="Cari knalpot, SKU..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className={`w-full pl-8 pr-7 py-1.5 rounded text-xs font-body transition focus:outline-none focus:ring-1 focus:ring-ember focus:border-ember ${
-                  isDark 
-                    ? 'bg-zinc-900 border border-zinc-700 text-white placeholder-zinc-500' 
+                className={`w-full pl-8 pr-7 py-1.5 rounded text-xs font-body transition focus:outline-none focus:ring-1 focus:ring-ember focus:border-ember ${isDark
+                    ? 'bg-zinc-900 border border-zinc-700 text-white placeholder-zinc-500'
                     : 'bg-smoke border border-zinc-300 text-ink placeholder-zinc-400'
-                }`}
+                  }`}
               />
               {searchTerm && (
                 <button
@@ -619,11 +611,10 @@ export default function PublicCatalog({
               type="button"
               onClick={handleToggleTheme}
               title={isDark ? "Beralih ke Light Mode" : "Beralih ke Dark Mode"}
-              className={`p-2 rounded-lg border transition-all duration-200 cursor-pointer flex items-center justify-center ${
-                isDark 
-                  ? 'bg-zinc-900 border-zinc-700 text-amber-400 hover:bg-zinc-800 hover:text-amber-300' 
+              className={`p-2 rounded-lg border transition-all duration-200 cursor-pointer flex items-center justify-center ${isDark
+                  ? 'bg-zinc-900 border-zinc-700 text-amber-400 hover:bg-zinc-800 hover:text-amber-300'
                   : 'bg-zinc-100 border-zinc-300 text-zinc-700 hover:bg-zinc-200 hover:text-zinc-900'
-              }`}
+                }`}
               aria-label="Toggle Dark/Light Mode"
             >
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -634,21 +625,20 @@ export default function PublicCatalog({
               type="button"
               onClick={onGoToLogin || navigateToLanding}
               title="Masuk ke Dashboard Sistem"
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded text-xs font-display uppercase tracking-wider font-semibold border transition cursor-pointer ${
-                isDark 
-                  ? 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:border-ember hover:text-white' 
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded text-xs font-display uppercase tracking-wider font-semibold border transition cursor-pointer ${isDark
+                  ? 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:border-ember hover:text-white'
                   : 'bg-zinc-100 border-zinc-300 text-zinc-800 hover:border-ember hover:text-ember'
-              }`}
+                }`}
             >
               <LogIn className="w-3.5 h-3.5 text-ember" />
               <span className="hidden sm:inline">Dashboard</span>
             </button>
 
             {/* WhatsApp Consultation CTA Button */}
-            <a 
-              className="hidden md:inline-flex bg-ember hover:bg-ember-deep text-white text-xs font-display font-semibold uppercase tracking-wider px-3.5 sm:px-4 py-2 rounded transition-all shadow-md items-center gap-1.5" 
-              href="https://wa.me/6289502240040?text=Halo%20NDK%20Exhaust%20%26%20RGN%20Performance%2C%20saya%20ingin%20konsultasi%20exhaust%20system." 
-              rel="noopener noreferrer" 
+            <a
+              className="hidden md:inline-flex bg-ember hover:bg-ember-deep text-white text-xs font-display font-semibold uppercase tracking-wider px-3.5 sm:px-4 py-2 rounded transition-all shadow-md items-center gap-1.5"
+              href="https://wa.me/6289502240040?text=Halo%20NDK%20Exhaust%20%26%20RGN%20Performance%2C%20saya%20ingin%20konsultasi%20exhaust%20system."
+              rel="noopener noreferrer"
               target="_blank"
             >
               <span>KONSULTASI</span>
@@ -663,22 +653,19 @@ export default function PublicCatalog({
       {/* ========================================================================= */}
       {/* 2. HERO & SEARCH BAR SECTION                                              */}
       {/* ========================================================================= */}
-      <section className={`py-10 sm:py-14 px-4 sm:px-6 text-center border-b transition-colors duration-300 ${
-        isDark ? 'bg-ink border-zinc-800' : 'bg-paper border-zinc-200'
-      }`}>
+      <section className={`py-10 sm:py-14 px-4 sm:px-6 text-center border-b transition-colors duration-300 ${isDark ? 'bg-ink border-zinc-800' : 'bg-paper border-zinc-200'
+        }`}>
         <div className="max-w-4xl mx-auto space-y-3">
-          <h1 className={`font-display text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight uppercase leading-[1.08] ${
-            isDark ? 'text-white' : 'text-ink'
-          }`}>
+          <h1 className={`font-display text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight uppercase leading-[1.08] ${isDark ? 'text-white' : 'text-ink'
+            }`}>
             Katalog Resmi{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-ember via-rose-500 to-rose-400">
               NDK Exhaust
             </span>
           </h1>
 
-          <p className={`font-body text-xs sm:text-base max-w-2xl mx-auto leading-relaxed ${
-            isDark ? 'text-zinc-400' : 'text-steel'
-          }`}>
+          <p className={`font-body text-xs sm:text-base max-w-2xl mx-auto leading-relaxed ${isDark ? 'text-zinc-400' : 'text-steel'
+            }`}>
             Stainless steel presisi Purbalingga. Tersedia Downpipe, Frontpipe, Centerpipe, Resonator, dan Muffler untuk mesin bensin dan diesel modern.
           </p>
 
@@ -686,29 +673,25 @@ export default function PublicCatalog({
 
           {/* Search Box with FILTER Button */}
           <div className="max-w-2xl mx-auto pt-4">
-            <div className={`flex items-stretch gap-2 p-1.5 rounded-xl border shadow-sm transition-all focus-within:ring-2 focus-within:ring-ember/20 focus-within:border-ember ${
-              isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-smoke border-zinc-300'
-            }`}>
+            <div className={`flex items-stretch gap-2 p-1.5 rounded-xl border shadow-sm transition-all focus-within:ring-2 focus-within:ring-ember/20 focus-within:border-ember ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-smoke border-zinc-300'
+              }`}>
               <div className="relative flex-1 flex items-center">
-                <Search className={`w-4 h-4 sm:w-5 sm:h-5 absolute left-3.5 pointer-events-none ${
-                  isDark ? 'text-zinc-500' : 'text-zinc-400'
-                }`} />
+                <Search className={`w-4 h-4 sm:w-5 sm:h-5 absolute left-3.5 pointer-events-none ${isDark ? 'text-zinc-500' : 'text-zinc-400'
+                  }`} />
                 <input
                   type="text"
                   placeholder="Cari tipe knalpot, mobil (Innova 2GD, Brio, Fortuner, Pajero), SKU..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className={`w-full pl-10 sm:pl-11 pr-7 py-2 text-xs sm:text-sm font-body bg-transparent focus:outline-none ${
-                    isDark ? 'text-white placeholder-zinc-500' : 'text-ink placeholder-zinc-400'
-                  }`}
+                  className={`w-full pl-10 sm:pl-11 pr-7 py-2 text-xs sm:text-sm font-body bg-transparent focus:outline-none ${isDark ? 'text-white placeholder-zinc-500' : 'text-ink placeholder-zinc-400'
+                    }`}
                 />
                 {searchTerm && (
                   <button
                     type="button"
                     onClick={() => setSearchTerm('')}
-                    className={`absolute right-2 p-1 ${
-                      isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-700'
-                    }`}
+                    className={`absolute right-2 p-1 ${isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-700'
+                      }`}
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -733,11 +716,10 @@ export default function PublicCatalog({
                   key={tag}
                   type="button"
                   onClick={() => setSearchTerm(tag)}
-                  className={`px-2.5 py-1 rounded text-xs font-display uppercase tracking-wider transition cursor-pointer border ${
-                    isDark 
-                      ? 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-800 hover:border-ember' 
+                  className={`px-2.5 py-1 rounded text-xs font-display uppercase tracking-wider transition cursor-pointer border ${isDark
+                      ? 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-800 hover:border-ember'
                       : 'bg-smoke hover:bg-zinc-200 text-zinc-700 border-zinc-200 hover:border-ember'
-                  }`}
+                    }`}
                 >
                   {tag}
                 </button>
@@ -751,11 +733,10 @@ export default function PublicCatalog({
       {/* ========================================================================= */}
       {/* 3. ENGINE CHIPS & SUB-FILTER BAR (STICKY)                                 */}
       {/* ========================================================================= */}
-      <section ref={productListRef} className={`border-b sticky top-16 z-30 shadow-xs transition-colors duration-300 backdrop-blur-md ${
-        isDark ? 'bg-ink/95 border-zinc-800' : 'bg-paper/95 border-zinc-200'
-      }`}>
+      <section ref={productListRef} className={`border-b sticky top-16 z-30 shadow-xs transition-colors duration-300 backdrop-blur-md ${isDark ? 'bg-ink/95 border-zinc-800' : 'bg-paper/95 border-zinc-200'
+        }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 space-y-2.5">
-          
+
           {/* Horizontal Slider Engine Tabs */}
           <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 no-scrollbar text-xs">
             {availableEngineChips.map(eng => {
@@ -767,11 +748,10 @@ export default function PublicCatalog({
                   key={eng.id}
                   type="button"
                   onClick={() => setSelectedEngine(eng.id)}
-                  className={`px-3.5 py-2 rounded-lg whitespace-nowrap font-display uppercase tracking-wider font-semibold transition flex items-center gap-1.5 cursor-pointer flex-shrink-0 text-xs ${
-                    isSelected
+                  className={`px-3.5 py-2 rounded-lg whitespace-nowrap font-display uppercase tracking-wider font-semibold transition flex items-center gap-1.5 cursor-pointer flex-shrink-0 text-xs ${isSelected
                       ? 'bg-ember text-white shadow-md'
                       : (isDark ? 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700' : 'bg-smoke text-zinc-700 hover:bg-zinc-200 border border-zinc-200')
-                  }`}
+                    }`}
                 >
                   {eng.icon && <Layers className="w-3.5 h-3.5" />}
                   <span>{eng.label}</span>
@@ -784,21 +764,19 @@ export default function PublicCatalog({
           </div>
 
           {/* Sub-Filters: Components, Sounds & Sorting */}
-          <div className={`flex flex-wrap items-center justify-between gap-2.5 pt-1.5 text-xs border-t ${
-            isDark ? 'border-zinc-850' : 'border-zinc-100'
-          }`}>
-            
+          <div className={`flex flex-wrap items-center justify-between gap-2.5 pt-1.5 text-xs border-t ${isDark ? 'border-zinc-850' : 'border-zinc-100'
+            }`}>
+
             <div className="flex flex-wrap items-center gap-2">
               {/* Category Filter */}
               <div className="relative">
                 <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
-                  className={`pl-3 pr-8 py-1.5 rounded-lg text-xs font-display uppercase tracking-wider font-semibold focus:outline-none focus:ring-1 focus:ring-ember cursor-pointer border ${
-                    isDark 
-                      ? 'bg-zinc-900 border-zinc-750 text-zinc-200' 
+                  className={`pl-3 pr-8 py-1.5 rounded-lg text-xs font-display uppercase tracking-wider font-semibold focus:outline-none focus:ring-1 focus:ring-ember cursor-pointer border ${isDark
+                      ? 'bg-zinc-900 border-zinc-750 text-zinc-200'
                       : 'bg-smoke border-zinc-300 text-zinc-800'
-                  }`}
+                    }`}
                 >
                   <option value="ALL">SEMUA KOMPONEN</option>
                   {categoryList.map(cat => (
@@ -812,11 +790,10 @@ export default function PublicCatalog({
                 <select
                   value={selectedSound}
                   onChange={(e) => setSelectedSound(e.target.value)}
-                  className={`pl-3 pr-8 py-1.5 rounded-lg text-xs font-display uppercase tracking-wider font-semibold focus:outline-none focus:ring-1 focus:ring-ember cursor-pointer border ${
-                    isDark 
-                      ? 'bg-zinc-900 border-zinc-750 text-zinc-200' 
+                  className={`pl-3 pr-8 py-1.5 rounded-lg text-xs font-display uppercase tracking-wider font-semibold focus:outline-none focus:ring-1 focus:ring-ember cursor-pointer border ${isDark
+                      ? 'bg-zinc-900 border-zinc-750 text-zinc-200'
                       : 'bg-smoke border-zinc-300 text-zinc-800'
-                  }`}
+                    }`}
                 >
                   <option value="ALL">SEMUA KARAKTER SUARA</option>
                   {soundList.map(snd => (
@@ -849,11 +826,10 @@ export default function PublicCatalog({
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className={`pl-3 pr-7 py-1.5 rounded-lg text-xs font-display uppercase tracking-wider font-semibold focus:outline-none focus:ring-1 focus:ring-ember cursor-pointer border ${
-                  isDark 
-                    ? 'bg-zinc-900 border-zinc-750 text-zinc-200' 
+                className={`pl-3 pr-7 py-1.5 rounded-lg text-xs font-display uppercase tracking-wider font-semibold focus:outline-none focus:ring-1 focus:ring-ember cursor-pointer border ${isDark
+                    ? 'bg-zinc-900 border-zinc-750 text-zinc-200'
                     : 'bg-smoke border-zinc-300 text-zinc-800'
-                }`}
+                  }`}
               >
                 <option value="POPULAR">PALING POPULER</option>
                 <option value="PRICE_LOW">HARGA: TERENDAH</option>
@@ -871,29 +847,25 @@ export default function PublicCatalog({
       {/* 4. PRODUCT LISTING GRID (LANDING PAGE MOTORSPORT DESIGN TOKENS)           */}
       {/* ========================================================================= */}
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 w-full">
-        
+
         {/* TAB GROUPING: SEMUA | PART SATUAN | PAKET BUNDLING */}
-        <div className={`flex flex-wrap items-center justify-between gap-3 mb-6 pb-3 border-b transition-colors duration-300 ${
-          isDark ? 'border-zinc-800' : 'border-zinc-200'
-        }`}>
-          <div className={`inline-flex p-1 rounded-xl gap-1.5 ${
-            isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-smoke border border-zinc-200'
+        <div className={`flex flex-wrap items-center justify-between gap-3 mb-6 pb-3 border-b transition-colors duration-300 ${isDark ? 'border-zinc-800' : 'border-zinc-200'
           }`}>
+          <div className={`inline-flex p-1 rounded-xl gap-1.5 ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-smoke border border-zinc-200'
+            }`}>
             <button
               type="button"
               onClick={() => setCatalogMode('ALL')}
-              className={`px-3.5 sm:px-4 py-2 rounded-lg text-xs font-display uppercase tracking-wider font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-                catalogMode === 'ALL'
+              className={`px-3.5 sm:px-4 py-2 rounded-lg text-xs font-display uppercase tracking-wider font-semibold transition cursor-pointer flex items-center gap-1.5 ${catalogMode === 'ALL'
                   ? 'bg-ember text-white shadow-md'
                   : (isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-600 hover:text-ink')
-              }`}
+                }`}
             >
               <span>Semua</span>
-              <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold ${
-                catalogMode === 'ALL' 
-                  ? 'bg-black/30 text-white' 
+              <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold ${catalogMode === 'ALL'
+                  ? 'bg-black/30 text-white'
                   : (isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-zinc-200 text-zinc-700')
-              }`}>
+                }`}>
                 {activeProducts.length + activeBundles.length}
               </span>
             </button>
@@ -901,18 +873,16 @@ export default function PublicCatalog({
             <button
               type="button"
               onClick={() => setCatalogMode('PRODUCTS')}
-              className={`px-3.5 sm:px-4 py-2 rounded-lg text-xs font-display uppercase tracking-wider font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-                catalogMode === 'PRODUCTS'
+              className={`px-3.5 sm:px-4 py-2 rounded-lg text-xs font-display uppercase tracking-wider font-semibold transition cursor-pointer flex items-center gap-1.5 ${catalogMode === 'PRODUCTS'
                   ? 'bg-ember text-white shadow-md'
                   : (isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-600 hover:text-ink')
-              }`}
+                }`}
             >
               <span>Part Satuan</span>
-              <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold ${
-                catalogMode === 'PRODUCTS' 
-                  ? 'bg-black/30 text-white' 
+              <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold ${catalogMode === 'PRODUCTS'
+                  ? 'bg-black/30 text-white'
                   : (isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-zinc-200 text-zinc-700')
-              }`}>
+                }`}>
                 {activeProducts.length}
               </span>
             </button>
@@ -920,169 +890,291 @@ export default function PublicCatalog({
             <button
               type="button"
               onClick={() => setCatalogMode('BUNDLES')}
-              className={`px-3.5 sm:px-4 py-2 rounded-lg text-xs font-display uppercase tracking-wider font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-                catalogMode === 'BUNDLES'
+              className={`px-3.5 sm:px-4 py-2 rounded-lg text-xs font-display uppercase tracking-wider font-semibold transition cursor-pointer flex items-center gap-1.5 ${catalogMode === 'BUNDLES'
                   ? 'bg-ember text-white shadow-md'
                   : (isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-600 hover:text-ink')
-              }`}
+                }`}
             >
               <Layers className="w-3.5 h-3.5" />
               <span>Paket Bundling</span>
-              <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold ${
-                catalogMode === 'BUNDLES' 
-                  ? 'bg-black/30 text-white' 
+              <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold ${catalogMode === 'BUNDLES'
+                  ? 'bg-black/30 text-white'
                   : (isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-zinc-200 text-zinc-700')
-              }`}>
+                }`}>
                 {activeBundles.length}
               </span>
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-ember animate-pulse" />
             <span className={`font-mono text-[10px] uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-steel'}`}>
               Stok Siap Kirim Hari Ini
             </span>
-          </div>
+          </div> */}
         </div>
 
-        {/* Section Header: Title & Count */}
-        <div className="flex items-center justify-between gap-2 mb-5">
-          <div className="flex items-baseline gap-2">
-            <h2 className={`font-display text-base sm:text-lg font-bold uppercase tracking-tight ${
-              isDark ? 'text-white' : 'text-ink'
-            }`}>
-              {catalogMode === 'BUNDLES' ? 'DAFTAR PAKET BUNDLING' : catalogMode === 'PRODUCTS' ? 'DAFTAR PART SATUAN' : 'DAFTAR PRODUK & BUNDLE'}
-            </h2>
-            <span className="font-mono text-xs sm:text-sm font-bold text-ember">
-              ({paginatedItems.length} dari {displayedItems.length} Item)
-            </span>
-          </div>
-        </div>
-
-        {/* Empty State */}
-        {displayedItems.length === 0 ? (
-          <div className={`rounded-2xl border p-10 sm:p-16 text-center space-y-3 shadow-xs ${
-            isDark ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-paper border-zinc-200'
-          }`}>
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto ${
-              isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-smoke text-zinc-500'
-            }`}>
-              <Package className="w-7 h-7" />
+          {/* Section Header: Title & Count */}
+          <div className="flex items-center justify-between gap-2 mb-5">
+            <div className="flex items-baseline gap-2">
+              <h2 className={`font-display text-base sm:text-lg font-bold uppercase tracking-tight ${isDark ? 'text-white' : 'text-ink'
+                }`}>
+                {catalogMode === 'BUNDLES' ? 'DAFTAR PAKET BUNDLING' : catalogMode === 'PRODUCTS' ? 'DAFTAR PART SATUAN' : 'DAFTAR PRODUK & BUNDLE'}
+              </h2>
+              <span className="font-mono text-xs sm:text-sm font-bold text-ember">
+                ({paginatedItems.length} dari {displayedItems.length} Item)
+              </span>
             </div>
-            <h4 className={`font-display text-lg font-bold uppercase tracking-tight ${isDark ? 'text-white' : 'text-ink'}`}>
-              {catalogMode === 'BUNDLES' ? 'Paket Bundling Tidak Ditemukan' : 'Spesifikasi Knalpot Tidak Ditemukan'}
-            </h4>
-            <p className={`font-body text-xs max-w-md mx-auto leading-relaxed ${isDark ? 'text-zinc-400' : 'text-steel'}`}>
-              Tidak ada item yang cocok dengan kata kunci "{searchTerm || selectedEngine}". Hubungi CS WhatsApp untuk ketersediaan atau pemesanan custom.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedEngine('ALL');
-                setSelectedCategory('ALL');
-                setSelectedSound('ALL');
-                setSearchTerm('');
-                setCatalogMode('ALL');
-              }}
-              className="mt-2 px-5 py-2.5 bg-ember hover:bg-ember-deep text-white rounded-lg text-xs font-display uppercase tracking-wider font-semibold transition shadow-md cursor-pointer"
-            >
-              Tampilkan Semua
-            </button>
           </div>
-        ) : (
-          /* Grid 4-Columns Desktop / 2-Columns Mobile */
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
-            {paginatedItems.map(item => {
-              const isBundle = item.isBundle;
-              const price = Number(item.selling_price ?? item.price) || 0;
-              const formattedPrice = `Rp ${price.toLocaleString('id-ID')}`;
-              const engineDisplay = item.engine_type || item.machineCategory || '';
-              const carDisplay = item.car_variant || item.carVariant || '';
 
-              // JIKA ITEM ADALAH PAKET BUNDLING
-              if (isBundle) {
-                const bundleDisplayName = formatBundleDisplayName(item);
+          {/* Empty State */}
+          {displayedItems.length === 0 ? (
+            <div className={`rounded-2xl border p-10 sm:p-16 text-center space-y-3 shadow-xs ${isDark ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-paper border-zinc-200'
+              }`}>
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto ${isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-smoke text-zinc-500'
+                }`}>
+                <Package className="w-7 h-7" />
+              </div>
+              <h4 className={`font-display text-lg font-bold uppercase tracking-tight ${isDark ? 'text-white' : 'text-ink'}`}>
+                {catalogMode === 'BUNDLES' ? 'Paket Bundling Tidak Ditemukan' : 'Spesifikasi Knalpot Tidak Ditemukan'}
+              </h4>
+              <p className={`font-body text-xs max-w-md mx-auto leading-relaxed ${isDark ? 'text-zinc-400' : 'text-steel'}`}>
+                Tidak ada item yang cocok dengan kata kunci "{searchTerm || selectedEngine}". Hubungi CS WhatsApp untuk ketersediaan atau pemesanan custom.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedEngine('ALL');
+                  setSelectedCategory('ALL');
+                  setSelectedSound('ALL');
+                  setSearchTerm('');
+                  setCatalogMode('ALL');
+                }}
+                className="mt-2 px-5 py-2.5 bg-ember hover:bg-ember-deep text-white rounded-lg text-xs font-display uppercase tracking-wider font-semibold transition shadow-md cursor-pointer"
+              >
+                Tampilkan Semua
+              </button>
+            </div>
+          ) : (
+            /* Grid 4-Columns Desktop / 2-Columns Mobile */
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
+              {paginatedItems.map(item => {
+                const isBundle = item.isBundle;
+                const price = Number(item.selling_price ?? item.price) || 0;
+                const formattedPrice = `Rp ${price.toLocaleString('id-ID')}`;
+                const engineDisplay = item.engine_type || item.machineCategory || '';
+                const carDisplay = item.car_variant || item.carVariant || '';
+
+                // JIKA ITEM ADALAH PAKET BUNDLING
+                if (isBundle) {
+                  const bundleDisplayName = formatBundleDisplayName(item);
+
+                  return (
+                    <div
+                      key={`bndl-${item.id || item.code}`}
+                      className={`rounded-2xl border shadow-xs hover:shadow-md transition-all duration-300 flex flex-col overflow-hidden group ${isDark
+                          ? 'bg-zinc-900/90 border-zinc-800 hover:border-ember'
+                          : 'bg-paper border-zinc-200 hover:border-ember'
+                        }`}
+                    >
+                      {/* Photo / Graphic Area */}
+                      <div
+                        onClick={() => setDetailBundle(item)}
+                        className={`relative aspect-4/3 overflow-hidden cursor-pointer flex items-center justify-center border-b bg-zinc-950 ${isDark ? 'border-zinc-800' : 'border-zinc-200'
+                          }`}
+                      >
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt={item.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center text-ember gap-1.5 p-2 text-center">
+                            <div className={`w-10 h-10 rounded-xl shadow-xs flex items-center justify-center border ${isDark ? 'bg-zinc-900 text-rose-400 border-zinc-800' : 'bg-paper text-ember border-zinc-200'
+                              }`}>
+                              <Layers className="w-5 h-5" />
+                            </div>
+                            <span className={`text-[10px] font-mono uppercase tracking-widest font-bold ${isDark ? 'text-zinc-300' : 'text-zinc-800'}`}>
+                              {item.brand || 'NDK EXHAUST'}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Top Left Badge: Engine Type */}
+                        {engineDisplay && (
+                          <div className="absolute top-2 left-2">
+                            <span className={`px-2 py-0.5 rounded font-mono text-[9px] uppercase tracking-widest font-semibold ${isDark ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-white'
+                              }`}>
+                              {engineDisplay}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Top Right Badge: PAKET BUNDLE */}
+                        <div className="absolute top-2 right-2">
+                          <span className="px-2 py-0.5 rounded bg-ember text-white font-mono text-[8px] sm:text-[9px] font-bold tracking-widest uppercase shadow-sm flex items-center gap-1">
+                            <Layers className="w-2.5 h-2.5" />
+                            <span>PAKET BUNDLE</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Card Body Info */}
+                      <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between space-y-2.5">
+                        <div className="space-y-1">
+                          {/* Kode Bundle */}
+                          {item.code && (
+                            <div className={`text-[10px] font-mono font-bold uppercase tracking-widest truncate ${isDark ? 'text-zinc-500' : 'text-steel'}`}>
+                              {item.code}
+                            </div>
+                          )}
+
+                          {/* Bundle Name */}
+                          <h3
+                            onClick={() => setDetailBundle(item)}
+                            className={`font-display font-bold text-xs sm:text-[13px] leading-snug transition-colors line-clamp-2 cursor-pointer pt-0.5 ${isDark ? 'text-zinc-100 group-hover:text-ember' : 'text-ink group-hover:text-ember'
+                              }`}
+                            title={bundleDisplayName}
+                          >
+                            {bundleDisplayName}
+                          </h3>
+
+                          {/* Compatible Car Variant */}
+                          {carDisplay && carDisplay !== '-' && (
+                            <div className={`flex items-start gap-1 font-body text-[10px] sm:text-[11px] pt-0.5 ${isDark ? 'text-zinc-400' : 'text-steel'}`}>
+                              <Car className="w-3 h-3 text-ember shrink-0 mt-0.5" />
+                              <span className="line-clamp-1">{carDisplay}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Price & Actions */}
+                        <div className={`pt-2 border-t space-y-2 ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
+                          <div>
+                            <span className={`text-[9px] font-mono font-bold uppercase tracking-widest block ${isDark ? 'text-zinc-500' : 'text-steel'}`}>
+                              HARGA RESMI PAKET
+                            </span>
+                            <div className="text-sm sm:text-base font-display font-bold text-ember leading-none mt-1">
+                              {formattedPrice}
+                            </div>
+                          </div>
+
+                          {/* Action Buttons: DETAIL ISI & WA */}
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setDetailBundle(item)}
+                              className={`py-1.5 px-2 rounded text-[11px] font-display uppercase tracking-wider font-semibold transition flex items-center justify-center gap-1 cursor-pointer border ${isDark
+                                  ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700 hover:border-ember'
+                                  : 'bg-smoke hover:bg-zinc-200 border-zinc-300 text-zinc-800 hover:border-ember'
+                                }`}
+                            >
+                              <Eye className={`w-3 h-3 ${isDark ? 'text-zinc-400' : 'text-steel'}`} />
+                              <span>DETAIL ISI</span>
+                            </button>
+
+                            <a
+                              href={getWhatsAppBundleOrderUrl(item)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="py-1.5 px-2 bg-ember hover:bg-ember-deep text-white rounded text-[11px] font-display uppercase tracking-wider font-semibold transition flex items-center justify-center gap-1 shadow-sm active:scale-95 cursor-pointer text-center"
+                            >
+                              <MessageCircle className="w-3 h-3 text-white" />
+                              <span>WA</span>
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // JIKA ITEM ADALAH PRODUK SATUAN
+                const soundDisplay = item.spec_sound || '';
 
                 return (
-                  <div 
-                    key={`bndl-${item.id || item.code}`}
-                    className={`rounded-2xl border shadow-xs hover:shadow-md transition-all duration-300 flex flex-col overflow-hidden group ${
-                      isDark 
-                        ? 'bg-zinc-900/90 border-zinc-800 hover:border-ember' 
+                  <div
+                    key={`prod-${item.id || item.sku || item.code}`}
+                    className={`rounded-2xl border shadow-xs hover:shadow-md transition-all duration-300 flex flex-col overflow-hidden group ${isDark
+                        ? 'bg-zinc-900/90 border-zinc-800 hover:border-ember'
                         : 'bg-paper border-zinc-200 hover:border-ember'
-                    }`}
-                  >
-                    {/* Photo / Graphic Area */}
-                    <div 
-                      onClick={() => setDetailBundle(item)}
-                      className={`relative aspect-4/3 overflow-hidden cursor-pointer flex items-center justify-center border-b bg-zinc-950 ${
-                        isDark ? 'border-zinc-800' : 'border-zinc-200'
                       }`}
+                  >
+                    {/* Photo & Spec Badges Area */}
+                    <div
+                      onClick={() => setDetailProduct(item)}
+                      className={`relative aspect-4/3 overflow-hidden cursor-pointer flex items-center justify-center border-b bg-zinc-950 ${isDark ? 'border-zinc-800' : 'border-zinc-200'
+                        }`}
                     >
                       {item.imageUrl ? (
-                        <img 
-                          src={item.imageUrl} 
-                          alt={item.name} 
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           loading="lazy"
                         />
                       ) : (
-                        <div className="flex flex-col items-center justify-center text-ember gap-1.5 p-2 text-center">
-                          <div className={`w-10 h-10 rounded-xl shadow-xs flex items-center justify-center border ${
-                            isDark ? 'bg-zinc-900 text-rose-400 border-zinc-800' : 'bg-paper text-ember border-zinc-200'
-                          }`}>
-                            <Layers className="w-5 h-5" />
-                          </div>
-                          <span className={`text-[10px] font-mono uppercase tracking-widest font-bold ${isDark ? 'text-zinc-300' : 'text-zinc-800'}`}>
-                            {item.brand || 'NDK EXHAUST'}
-                          </span>
+                        <div className="flex flex-col items-center justify-center text-zinc-500 gap-1 p-2 text-center">
+                          <ImageIcon className={`w-8 h-8 ${isDark ? 'text-zinc-700' : 'text-zinc-400'}`} />
+                          <span className={`text-[10px] font-mono uppercase tracking-widest font-bold ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>NDK Exhaust</span>
                         </div>
                       )}
 
                       {/* Top Left Badge: Engine Type */}
                       {engineDisplay && (
                         <div className="absolute top-2 left-2">
-                          <span className={`px-2 py-0.5 rounded font-mono text-[9px] uppercase tracking-widest font-semibold ${
-                            isDark ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-white'
-                          }`}>
+                          <span className={`px-2 py-0.5 rounded font-mono text-[9px] uppercase tracking-widest font-semibold ${isDark ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-white'
+                            }`}>
                             {engineDisplay}
                           </span>
                         </div>
                       )}
 
-                      {/* Top Right Badge: PAKET BUNDLE */}
-                      <div className="absolute top-2 right-2">
-                        <span className="px-2 py-0.5 rounded bg-ember text-white font-mono text-[8px] sm:text-[9px] font-bold tracking-widest uppercase shadow-sm flex items-center gap-1">
-                          <Layers className="w-2.5 h-2.5" />
-                          <span>PAKET BUNDLE</span>
-                        </span>
-                      </div>
+                      {/* Top Left / Center Badge: Brand */}
+                      {item.brand && (
+                        <div className="absolute top-2 left-14">
+                          <span className={`px-2 py-0.5 rounded text-[8px] sm:text-[9px] font-display uppercase tracking-wider font-semibold border shadow-xs ${isDark ? 'bg-zinc-900/90 text-zinc-200 border-zinc-700' : 'bg-paper/90 text-zinc-800 border-zinc-300'
+                            }`}>
+                            {item.brand}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Bottom Left Badge: Sound Character */}
+                      {soundDisplay && (
+                        <div className="absolute bottom-2 left-2">
+                          <span className="px-2 py-0.5 rounded bg-black/85 text-zinc-200 border border-zinc-800 font-mono text-[9px] uppercase tracking-widest font-semibold backdrop-blur-xs flex items-center gap-1">
+                            <Volume2 className="w-2.5 h-2.5 text-amber-400" />
+                            <span>{soundDisplay}</span>
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Card Body Info */}
                     <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between space-y-2.5">
                       <div className="space-y-1">
-                        {/* Kode Bundle */}
-                        {item.code && (
+                        {/* SKU */}
+                        {(item.sku || item.code) && (
                           <div className={`text-[10px] font-mono font-bold uppercase tracking-widest truncate ${isDark ? 'text-zinc-500' : 'text-steel'}`}>
-                            {item.code}
+                            {item.sku || item.code}
                           </div>
                         )}
 
-                        {/* Bundle Name */}
-                        <h3 
-                          onClick={() => setDetailBundle(item)}
-                          className={`font-display font-bold text-xs sm:text-[13px] leading-snug transition-colors line-clamp-2 cursor-pointer pt-0.5 ${
-                            isDark ? 'text-zinc-100 group-hover:text-ember' : 'text-ink group-hover:text-ember'
-                          }`}
-                          title={bundleDisplayName}
+                        {/* Product Title */}
+                        <h3
+                          onClick={() => setDetailProduct(item)}
+                          className={`font-display font-bold text-xs sm:text-[13px] leading-snug transition-colors line-clamp-2 cursor-pointer pt-0.5 ${isDark ? 'text-zinc-100 group-hover:text-ember' : 'text-ink group-hover:text-ember'
+                            }`}
+                          title={item.name}
                         >
-                          {bundleDisplayName}
+                          {item.name}
                         </h3>
 
                         {/* Compatible Car Variant */}
-                        {carDisplay && carDisplay !== '-' && (
+                        {carDisplay && (
                           <div className={`flex items-start gap-1 font-body text-[10px] sm:text-[11px] pt-0.5 ${isDark ? 'text-zinc-400' : 'text-steel'}`}>
                             <Car className="w-3 h-3 text-ember shrink-0 mt-0.5" />
                             <span className="line-clamp-1">{carDisplay}</span>
@@ -1094,30 +1186,29 @@ export default function PublicCatalog({
                       <div className={`pt-2 border-t space-y-2 ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
                         <div>
                           <span className={`text-[9px] font-mono font-bold uppercase tracking-widest block ${isDark ? 'text-zinc-500' : 'text-steel'}`}>
-                            HARGA RESMI PAKET
+                            HARGA RESMI
                           </span>
                           <div className="text-sm sm:text-base font-display font-bold text-ember leading-none mt-1">
                             {formattedPrice}
                           </div>
                         </div>
 
-                        {/* Action Buttons: DETAIL ISI & WA */}
+                        {/* Action Buttons: SPEK & WA */}
                         <div className="grid grid-cols-2 gap-1.5">
                           <button
                             type="button"
-                            onClick={() => setDetailBundle(item)}
-                            className={`py-1.5 px-2 rounded text-[11px] font-display uppercase tracking-wider font-semibold transition flex items-center justify-center gap-1 cursor-pointer border ${
-                              isDark 
-                                ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700 hover:border-ember' 
+                            onClick={() => setDetailProduct(item)}
+                            className={`py-1.5 px-2 rounded text-[11px] font-display uppercase tracking-wider font-semibold transition flex items-center justify-center gap-1 cursor-pointer border ${isDark
+                                ? 'bg-zinc-800 hover:bg-zinc-750 text-zinc-200 border-zinc-700 hover:border-ember'
                                 : 'bg-smoke hover:bg-zinc-200 border-zinc-300 text-zinc-800 hover:border-ember'
-                            }`}
+                              }`}
                           >
                             <Eye className={`w-3 h-3 ${isDark ? 'text-zinc-400' : 'text-steel'}`} />
-                            <span>DETAIL ISI</span>
+                            <span>SPEK</span>
                           </button>
 
                           <a
-                            href={getWhatsAppBundleOrderUrl(item)}
+                            href={getWhatsAppOrderUrl(item)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="py-1.5 px-2 bg-ember hover:bg-ember-deep text-white rounded text-[11px] font-display uppercase tracking-wider font-semibold transition flex items-center justify-center gap-1 shadow-sm active:scale-95 cursor-pointer text-center"
@@ -1130,218 +1221,73 @@ export default function PublicCatalog({
                     </div>
                   </div>
                 );
-              }
-
-              // JIKA ITEM ADALAH PRODUK SATUAN
-              const soundDisplay = item.spec_sound || '';
-
-              return (
-                <div 
-                  key={`prod-${item.id || item.sku || item.code}`}
-                  className={`rounded-2xl border shadow-xs hover:shadow-md transition-all duration-300 flex flex-col overflow-hidden group ${
-                    isDark 
-                      ? 'bg-zinc-900/90 border-zinc-800 hover:border-ember' 
-                      : 'bg-paper border-zinc-200 hover:border-ember'
-                  }`}
-                >
-                  {/* Photo & Spec Badges Area */}
-                  <div 
-                    onClick={() => setDetailProduct(item)}
-                    className={`relative aspect-4/3 overflow-hidden cursor-pointer flex items-center justify-center border-b bg-zinc-950 ${
-                      isDark ? 'border-zinc-800' : 'border-zinc-200'
-                    }`}
-                  >
-                    {item.imageUrl ? (
-                      <img 
-                        src={item.imageUrl} 
-                        alt={item.name} 
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center justify-center text-zinc-500 gap-1 p-2 text-center">
-                        <ImageIcon className={`w-8 h-8 ${isDark ? 'text-zinc-700' : 'text-zinc-400'}`} />
-                        <span className={`text-[10px] font-mono uppercase tracking-widest font-bold ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>NDK Exhaust</span>
-                      </div>
-                    )}
-
-                    {/* Top Left Badge: Engine Type */}
-                    {engineDisplay && (
-                      <div className="absolute top-2 left-2">
-                        <span className={`px-2 py-0.5 rounded font-mono text-[9px] uppercase tracking-widest font-semibold ${
-                          isDark ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-white'
-                        }`}>
-                          {engineDisplay}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Top Left / Center Badge: Brand */}
-                    {item.brand && (
-                      <div className="absolute top-2 left-14">
-                        <span className={`px-2 py-0.5 rounded text-[8px] sm:text-[9px] font-display uppercase tracking-wider font-semibold border shadow-xs ${
-                          isDark ? 'bg-zinc-900/90 text-zinc-200 border-zinc-700' : 'bg-paper/90 text-zinc-800 border-zinc-300'
-                        }`}>
-                          {item.brand}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Bottom Left Badge: Sound Character */}
-                    {soundDisplay && (
-                      <div className="absolute bottom-2 left-2">
-                        <span className="px-2 py-0.5 rounded bg-black/85 text-zinc-200 border border-zinc-800 font-mono text-[9px] uppercase tracking-widest font-semibold backdrop-blur-xs flex items-center gap-1">
-                          <Volume2 className="w-2.5 h-2.5 text-amber-400" />
-                          <span>{soundDisplay}</span>
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Card Body Info */}
-                  <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between space-y-2.5">
-                    <div className="space-y-1">
-                      {/* SKU */}
-                      {(item.sku || item.code) && (
-                        <div className={`text-[10px] font-mono font-bold uppercase tracking-widest truncate ${isDark ? 'text-zinc-500' : 'text-steel'}`}>
-                          {item.sku || item.code}
-                        </div>
-                      )}
-
-                      {/* Product Title */}
-                      <h3 
-                        onClick={() => setDetailProduct(item)}
-                        className={`font-display font-bold text-xs sm:text-[13px] leading-snug transition-colors line-clamp-2 cursor-pointer pt-0.5 ${
-                          isDark ? 'text-zinc-100 group-hover:text-ember' : 'text-ink group-hover:text-ember'
-                        }`}
-                        title={item.name}
-                      >
-                        {item.name}
-                      </h3>
-
-                      {/* Compatible Car Variant */}
-                      {carDisplay && (
-                        <div className={`flex items-start gap-1 font-body text-[10px] sm:text-[11px] pt-0.5 ${isDark ? 'text-zinc-400' : 'text-steel'}`}>
-                          <Car className="w-3 h-3 text-ember shrink-0 mt-0.5" />
-                          <span className="line-clamp-1">{carDisplay}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Price & Actions */}
-                    <div className={`pt-2 border-t space-y-2 ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
-                      <div>
-                        <span className={`text-[9px] font-mono font-bold uppercase tracking-widest block ${isDark ? 'text-zinc-500' : 'text-steel'}`}>
-                          HARGA RESMI
-                        </span>
-                        <div className="text-sm sm:text-base font-display font-bold text-ember leading-none mt-1">
-                          {formattedPrice}
-                        </div>
-                      </div>
-
-                      {/* Action Buttons: SPEK & WA */}
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setDetailProduct(item)}
-                          className={`py-1.5 px-2 rounded text-[11px] font-display uppercase tracking-wider font-semibold transition flex items-center justify-center gap-1 cursor-pointer border ${
-                            isDark 
-                              ? 'bg-zinc-800 hover:bg-zinc-750 text-zinc-200 border-zinc-700 hover:border-ember' 
-                              : 'bg-smoke hover:bg-zinc-200 border-zinc-300 text-zinc-800 hover:border-ember'
-                          }`}
-                        >
-                          <Eye className={`w-3 h-3 ${isDark ? 'text-zinc-400' : 'text-steel'}`} />
-                          <span>SPEK</span>
-                        </button>
-
-                        <a
-                          href={getWhatsAppOrderUrl(item)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="py-1.5 px-2 bg-ember hover:bg-ember-deep text-white rounded text-[11px] font-display uppercase tracking-wider font-semibold transition flex items-center justify-center gap-1 shadow-sm active:scale-95 cursor-pointer text-center"
-                        >
-                          <MessageCircle className="w-3 h-3 text-white" />
-                          <span>WA</span>
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Pagination Controls */}
-        {displayedItems.length > pageSize && (
-          <div className={`mt-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs border-t pt-4 ${
-            isDark ? 'text-zinc-400 border-zinc-800' : 'text-steel border-zinc-200'
-          }`}>
-            <div className="font-body">
-              Menampilkan <strong className={`font-mono ${isDark ? 'text-white' : 'text-ink'}`}>{((currentPage - 1) * pageSize) + 1}</strong> - <strong className={`font-mono ${isDark ? 'text-white' : 'text-ink'}`}>{Math.min(currentPage * pageSize, displayedItems.length)}</strong> dari <strong className={`font-mono ${isDark ? 'text-white' : 'text-ink'}`}>{displayedItems.length}</strong> Item
+              })}
             </div>
+          )}
 
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className={`w-8 h-8 rounded-lg border flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer ${
-                  isDark ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-zinc-300' : 'bg-smoke border-zinc-200 hover:bg-zinc-200 text-zinc-700'
-                }`}
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
+          {/* Pagination Controls */}
+          {displayedItems.length > pageSize && (
+            <div className={`mt-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs border-t pt-4 ${isDark ? 'text-zinc-400 border-zinc-800' : 'text-steel border-zinc-200'
+              }`}>
+              <div className="font-body">
+                Menampilkan <strong className={`font-mono ${isDark ? 'text-white' : 'text-ink'}`}>{((currentPage - 1) * pageSize) + 1}</strong> - <strong className={`font-mono ${isDark ? 'text-white' : 'text-ink'}`}>{Math.min(currentPage * pageSize, displayedItems.length)}</strong> dari <strong className={`font-mono ${isDark ? 'text-white' : 'text-ink'}`}>{displayedItems.length}</strong> Item
+              </div>
 
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <div className="flex items-center gap-1.5">
                 <button
-                  key={page}
                   type="button"
-                  onClick={() => setCurrentPage(page)}
-                  className={`w-8 h-8 rounded-lg font-display text-xs font-semibold transition cursor-pointer border ${
-                    currentPage === page
-                      ? 'bg-ember text-white border-ember shadow-md'
-                      : (isDark ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-zinc-300' : 'bg-smoke border-zinc-200 hover:bg-zinc-200 text-zinc-700')
-                  }`}
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className={`w-8 h-8 rounded-lg border flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer ${isDark ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-zinc-300' : 'bg-smoke border-zinc-200 hover:bg-zinc-200 text-zinc-700'
+                    }`}
                 >
-                  {page}
+                  <ChevronLeft className="w-4 h-4" />
                 </button>
-              ))}
 
-              <button
-                type="button"
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className={`w-8 h-8 rounded-lg border flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer ${
-                  isDark ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-zinc-300' : 'bg-smoke border-zinc-200 hover:bg-zinc-200 text-zinc-700'
-                }`}
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => setCurrentPage(page)}
+                    className={`w-8 h-8 rounded-lg font-display text-xs font-semibold transition cursor-pointer border ${currentPage === page
+                        ? 'bg-ember text-white border-ember shadow-md'
+                        : (isDark ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-zinc-300' : 'bg-smoke border-zinc-200 hover:bg-zinc-200 text-zinc-700')
+                      }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className={`w-8 h-8 rounded-lg border flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer ${isDark ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-zinc-300' : 'bg-smoke border-zinc-200 hover:bg-zinc-200 text-zinc-700'
+                    }`}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
       </main>
-         {/* ========================================================================= */}
+      {/* ========================================================================= */}
       {/* 5. OFFICIAL ORDER GATEWAY (LANDING PAGE MOTORSPORT DESIGN TOKENS)         */}
       {/* ========================================================================= */}
-      <section id="marketplace-section" className={`border-t py-16 px-4 sm:px-6 lg:px-8 transition-colors duration-300 ${
-        isDark ? 'bg-ink border-zinc-800 text-paper' : 'bg-smoke/60 border-zinc-200 text-ink'
-      }`}>
+      <section id="marketplace-section" className={`border-t py-16 px-4 sm:px-6 lg:px-8 transition-colors duration-300 ${isDark ? 'bg-ink border-zinc-800 text-paper' : 'bg-smoke/60 border-zinc-200 text-ink'
+        }`}>
         <div className="max-w-7xl mx-auto space-y-8 text-center">
-          
+
           <div className="space-y-2">
             <p className="font-mono text-xs uppercase tracking-widest text-ember font-bold mb-2">
               OFFICIAL ORDER GATEWAY
             </p>
-            <h2 className={`font-display text-2xl sm:text-4xl font-bold uppercase tracking-tight ${
-              isDark ? 'text-white' : 'text-ink'
-            }`}>
+            <h2 className={`font-display text-2xl sm:text-4xl font-bold uppercase tracking-tight ${isDark ? 'text-white' : 'text-ink'
+              }`}>
               Pesan Melalui Platform Resmi
             </h2>
-            <p className={`font-body text-xs sm:text-sm max-w-xl mx-auto leading-relaxed ${
-              isDark ? 'text-zinc-400' : 'text-steel'
-            }`}>
+            <p className={`font-body text-xs sm:text-sm max-w-xl mx-auto leading-relaxed ${isDark ? 'text-zinc-400' : 'text-steel'
+              }`}>
               Nikmati fasilitas Cicilan 0%, Bebas Ongkir se-Indonesia, dan Garansi Keaslian Produk 100% Original NDK Exhaust &amp; RGN Performance.
             </p>
             <div className="w-20 h-[2px] bg-ember mx-auto mt-3" />
@@ -1349,17 +1295,15 @@ export default function PublicCatalog({
 
           {/* 4 Cards Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-left">
-            
+
             {/* 1. Tokopedia */}
-            <div className={`rounded-2xl p-6 border shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between space-y-4 group hover:border-ember ${
-              isDark 
-                ? 'bg-zinc-900/90 border-zinc-800' 
+            <div className={`rounded-2xl p-6 border shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between space-y-4 group hover:border-ember ${isDark
+                ? 'bg-zinc-900/90 border-zinc-800'
                 : 'bg-paper border-zinc-200'
-            }`}>
+              }`}>
               <div className="space-y-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
-                  isDark ? 'bg-emerald-950/60 text-emerald-400 border-emerald-900/60' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                }`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${isDark ? 'bg-emerald-950/60 text-emerald-400 border-emerald-900/60' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                  }`}>
                   <TokopediaIcon className="w-6 h-6" />
                 </div>
                 <div>
@@ -1375,9 +1319,8 @@ export default function PublicCatalog({
                 href="https://www.tokopedia.com/ndk-exhaust-id"
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`font-display text-xs font-semibold uppercase tracking-wider flex items-center justify-between pt-3 border-t transition-colors ${
-                  isDark ? 'text-zinc-300 hover:text-emerald-400 border-zinc-800' : 'text-zinc-800 hover:text-emerald-700 border-zinc-200'
-                }`}
+                className={`font-display text-xs font-semibold uppercase tracking-wider flex items-center justify-between pt-3 border-t transition-colors ${isDark ? 'text-zinc-300 hover:text-emerald-400 border-zinc-800' : 'text-zinc-800 hover:text-emerald-700 border-zinc-200'
+                  }`}
               >
                 <span>Buka Tokopedia</span>
                 <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
@@ -1385,15 +1328,13 @@ export default function PublicCatalog({
             </div>
 
             {/* 2. Shopee */}
-            <div className={`rounded-2xl p-6 border shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between space-y-4 group hover:border-ember ${
-              isDark 
-                ? 'bg-zinc-900/90 border-zinc-800' 
+            <div className={`rounded-2xl p-6 border shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between space-y-4 group hover:border-ember ${isDark
+                ? 'bg-zinc-900/90 border-zinc-800'
                 : 'bg-paper border-zinc-200'
-            }`}>
+              }`}>
               <div className="space-y-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
-                  isDark ? 'bg-orange-950/60 text-orange-400 border-orange-900/60' : 'bg-orange-50 text-orange-600 border-orange-100'
-                }`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${isDark ? 'bg-orange-950/60 text-orange-400 border-orange-900/60' : 'bg-orange-50 text-orange-600 border-orange-100'
+                  }`}>
                   <ShopeeIcon className="w-6 h-6" />
                 </div>
                 <div>
@@ -1409,9 +1350,8 @@ export default function PublicCatalog({
                 href="https://shopee.co.id/ndk_exhaust_official"
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`font-display text-xs font-semibold uppercase tracking-wider flex items-center justify-between pt-3 border-t transition-colors ${
-                  isDark ? 'text-zinc-300 hover:text-orange-400 border-zinc-800' : 'text-zinc-800 hover:text-orange-700 border-zinc-200'
-                }`}
+                className={`font-display text-xs font-semibold uppercase tracking-wider flex items-center justify-between pt-3 border-t transition-colors ${isDark ? 'text-zinc-300 hover:text-orange-400 border-zinc-800' : 'text-zinc-800 hover:text-orange-700 border-zinc-200'
+                  }`}
               >
                 <span>Buka Shopee</span>
                 <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
@@ -1419,15 +1359,13 @@ export default function PublicCatalog({
             </div>
 
             {/* 3. Konsultasi CS WhatsApp */}
-            <div className={`rounded-2xl p-6 border shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between space-y-4 group hover:border-ember ${
-              isDark 
-                ? 'bg-zinc-900/90 border-zinc-800' 
+            <div className={`rounded-2xl p-6 border shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between space-y-4 group hover:border-ember ${isDark
+                ? 'bg-zinc-900/90 border-zinc-800'
                 : 'bg-paper border-zinc-200'
-            }`}>
+              }`}>
               <div className="space-y-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
-                  isDark ? 'bg-emerald-950/60 text-emerald-400 border-emerald-900/60' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                }`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${isDark ? 'bg-emerald-950/60 text-emerald-400 border-emerald-900/60' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                  }`}>
                   <WhatsAppIcon className="w-6 h-6" />
                 </div>
                 <div>
@@ -1443,9 +1381,8 @@ export default function PublicCatalog({
                 href="https://wa.me/6289502240040?text=Halo%20Admin%20NDK%20Exhaust%2C%20saya%20ingin%20konsultasi%20exhaust%20system."
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`font-display text-xs font-semibold uppercase tracking-wider flex items-center justify-between pt-3 border-t transition-colors ${
-                  isDark ? 'text-ember hover:text-rose-400 border-zinc-800' : 'text-ember hover:text-ember-deep border-zinc-200'
-                }`}
+                className={`font-display text-xs font-semibold uppercase tracking-wider flex items-center justify-between pt-3 border-t transition-colors ${isDark ? 'text-ember hover:text-rose-400 border-zinc-800' : 'text-ember hover:text-ember-deep border-zinc-200'
+                  }`}
               >
                 <span>Chat Admin WA</span>
                 <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
@@ -1453,15 +1390,13 @@ export default function PublicCatalog({
             </div>
 
             {/* 4. Workshop & Fitting Center */}
-            <div className={`rounded-2xl p-6 border shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between space-y-4 group hover:border-ember ${
-              isDark 
-                ? 'bg-zinc-900/90 border-zinc-800' 
+            <div className={`rounded-2xl p-6 border shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between space-y-4 group hover:border-ember ${isDark
+                ? 'bg-zinc-900/90 border-zinc-800'
                 : 'bg-paper border-zinc-200'
-            }`}>
+              }`}>
               <div className="space-y-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
-                  isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-smoke text-zinc-800 border-zinc-200'
-                }`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-smoke text-zinc-800 border-zinc-200'
+                  }`}>
                   <Wrench className="w-5 h-5" />
                 </div>
                 <div>
@@ -1477,9 +1412,8 @@ export default function PublicCatalog({
                 href="https://g.page/ndkexhaust"
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`font-display text-xs font-semibold uppercase tracking-wider flex items-center justify-between pt-3 border-t transition-colors ${
-                  isDark ? 'text-zinc-300 hover:text-white border-zinc-800' : 'text-zinc-800 hover:text-black border-zinc-200'
-                }`}
+                className={`font-display text-xs font-semibold uppercase tracking-wider flex items-center justify-between pt-3 border-t transition-colors ${isDark ? 'text-zinc-300 hover:text-white border-zinc-800' : 'text-zinc-800 hover:text-black border-zinc-200'
+                  }`}
               >
                 <span>Jadwalkan Pasang</span>
                 <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
@@ -1494,33 +1428,30 @@ export default function PublicCatalog({
       {/* ========================================================================= */}
       {/* 6. CLEAN FOOTER (LANDING PAGE MOTORSPORT DESIGN TOKENS)                    */}
       {/* ========================================================================= */}
-      <footer id="about-section" className={`text-xs pt-16 pb-10 border-t mt-auto transition-colors duration-300 ${
-        isDark ? 'bg-ink text-zinc-400 border-zinc-800' : 'bg-smoke text-steel border-zinc-200'
-      }`}>
+      <footer id="about-section" className={`text-xs pt-16 pb-10 border-t mt-auto transition-colors duration-300 ${isDark ? 'bg-ink text-zinc-400 border-zinc-800' : 'bg-smoke text-steel border-zinc-200'
+        }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            
+
             {/* Column 1: Brand & Description */}
             <div className="space-y-4">
-              <div 
+              <div
                 className="flex items-center gap-2.5 sm:gap-3 cursor-pointer group"
                 onClick={navigateToLanding}
                 title="Kembali ke Beranda"
               >
                 <div className="relative h-6 sm:h-7 w-[88px] sm:w-[100px] flex items-center">
-                  <img 
-                    alt="NDK Exhaust Logo" 
-                    className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${
-                      isDark ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                    }`} 
+                  <img
+                    alt="NDK Exhaust Logo"
+                    className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${isDark ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                      }`}
                     src="/logos/ndk-white.png"
                   />
-                  <img 
-                    alt="NDK Exhaust Logo" 
-                    className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${
-                      isDark ? 'opacity-0 pointer-events-none' : 'opacity-100'
-                    }`} 
+                  <img
+                    alt="NDK Exhaust Logo"
+                    className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${isDark ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                      }`}
                     src="/logos/ndk-black.png"
                   />
                 </div>
@@ -1528,18 +1459,16 @@ export default function PublicCatalog({
                 <span className={`h-4 sm:h-5 w-[1px] transition-colors duration-300 ${isDark ? 'bg-zinc-700' : 'bg-zinc-300'}`} />
 
                 <div className="relative h-5 sm:h-6 w-[78px] sm:w-[90px] flex items-center">
-                  <img 
-                    alt="RGN Performance Logo" 
-                    className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${
-                      isDark ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                    }`} 
+                  <img
+                    alt="RGN Performance Logo"
+                    className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${isDark ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                      }`}
                     src="/logos/rgn-white.png"
                   />
-                  <img 
-                    alt="RGN Performance Logo" 
-                    className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${
-                      isDark ? 'opacity-0 pointer-events-none' : 'opacity-100'
-                    }`} 
+                  <img
+                    alt="RGN Performance Logo"
+                    className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${isDark ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                      }`}
                     src="/logos/rgn-black.png"
                   />
                 </div>
@@ -1557,9 +1486,9 @@ export default function PublicCatalog({
               </h4>
               <ul className="space-y-2.5 text-xs font-body">
                 <li>
-                  <a 
-                    href="https://www.tokopedia.com/ndk-exhaust-id" 
-                    target="_blank" 
+                  <a
+                    href="https://www.tokopedia.com/ndk-exhaust-id"
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
@@ -1568,9 +1497,9 @@ export default function PublicCatalog({
                   </a>
                 </li>
                 <li>
-                  <a 
-                    href="https://shopee.co.id/ndk_exhaust_official" 
-                    target="_blank" 
+                  <a
+                    href="https://shopee.co.id/ndk_exhaust_official"
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
@@ -1579,9 +1508,9 @@ export default function PublicCatalog({
                   </a>
                 </li>
                 <li>
-                  <a 
-                    href="https://wa.me/6289502240040?text=Halo%20Admin%20NDK%20Exhaust%2C%20saya%20ingin%20konsultasi%20exhaust%20system." 
-                    target="_blank" 
+                  <a
+                    href="https://wa.me/6289502240040?text=Halo%20Admin%20NDK%20Exhaust%2C%20saya%20ingin%20konsultasi%20exhaust%20system."
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
@@ -1599,9 +1528,9 @@ export default function PublicCatalog({
               </h4>
               <ul className="space-y-2.5 text-xs font-body">
                 <li>
-                  <a 
-                    href="https://www.instagram.com/ndkexhaust" 
-                    target="_blank" 
+                  <a
+                    href="https://www.instagram.com/ndkexhaust"
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
@@ -1610,9 +1539,9 @@ export default function PublicCatalog({
                   </a>
                 </li>
                 <li>
-                  <a 
-                    href="http://bit.ly/Youtube-NDKexhaust" 
-                    target="_blank" 
+                  <a
+                    href="http://bit.ly/Youtube-NDKexhaust"
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
@@ -1621,9 +1550,9 @@ export default function PublicCatalog({
                   </a>
                 </li>
                 <li>
-                  <a 
-                    href="https://www.tiktok.com/@ndkofficial.id" 
-                    target="_blank" 
+                  <a
+                    href="https://www.tiktok.com/@ndkofficial.id"
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
@@ -1632,8 +1561,8 @@ export default function PublicCatalog({
                   </a>
                 </li>
                 <li>
-                  <a 
-                    href="https://warehousezero.web.app/catalog" 
+                  <a
+                    href="https://warehousezero.web.app/catalog"
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
                     <BookOpen className="w-4 h-4 text-ember shrink-0 transition-transform group-hover:scale-110" />
@@ -1669,9 +1598,8 @@ export default function PublicCatalog({
           </div>
 
           {/* Copyright Bar */}
-          <div className={`pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-body ${
-            isDark ? 'border-zinc-800 text-zinc-500' : 'border-zinc-200 text-steel'
-          }`}>
+          <div className={`pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-body ${isDark ? 'border-zinc-800 text-zinc-500' : 'border-zinc-200 text-steel'
+            }`}>
             <p>
               © 2026 NDK Exhaust &amp; RGN Performance. All Rights Reserved.
             </p>
@@ -1692,18 +1620,15 @@ export default function PublicCatalog({
       {/* ========================================================================= */}
       {detailProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
-          <div className={`rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden border my-auto animate-in zoom-in-95 duration-150 flex flex-col max-h-[90vh] ${
-            isDark ? 'bg-zinc-900 border-zinc-800 text-paper' : 'bg-paper border-zinc-200 text-ink'
-          }`}>
-            
-            {/* Modal Header */}
-            <div className={`p-3.5 sm:p-4 border-b flex items-center justify-between flex-shrink-0 ${
-              isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke border-zinc-200'
+          <div className={`rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden border my-auto animate-in zoom-in-95 duration-150 flex flex-col max-h-[90vh] ${isDark ? 'bg-zinc-900 border-zinc-800 text-paper' : 'bg-paper border-zinc-200 text-ink'
             }`}>
+
+            {/* Modal Header */}
+            <div className={`p-3.5 sm:p-4 border-b flex items-center justify-between flex-shrink-0 ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke border-zinc-200'
+              }`}>
               <div className="flex items-center gap-2">
-                <span className={`px-2.5 py-0.5 rounded font-mono text-[10px] font-bold uppercase tracking-widest ${
-                  isDark ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-white'
-                }`}>
+                <span className={`px-2.5 py-0.5 rounded font-mono text-[10px] font-bold uppercase tracking-widest ${isDark ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-white'
+                  }`}>
                   {detailProduct.engine_type || detailProduct.machineCategory || 'UNIVERSAL'}
                 </span>
                 <span className={`text-xs font-mono font-bold uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-steel'}`}>
@@ -1713,9 +1638,8 @@ export default function PublicCatalog({
               <button
                 type="button"
                 onClick={() => setDetailProduct(null)}
-                className={`p-1.5 rounded-lg border transition cursor-pointer ${
-                  isDark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800 border-zinc-800' : 'text-zinc-500 hover:text-ink hover:bg-zinc-200 border-zinc-300'
-                }`}
+                className={`p-1.5 rounded-lg border transition cursor-pointer ${isDark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800 border-zinc-800' : 'text-zinc-500 hover:text-ink hover:bg-zinc-200 border-zinc-300'
+                  }`}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1723,16 +1647,15 @@ export default function PublicCatalog({
 
             {/* Modal Body */}
             <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
-              
+
               {/* Product Photo Frame */}
-              <div className={`aspect-16/9 rounded-xl border overflow-hidden flex items-center justify-center relative bg-zinc-950 ${
-                isDark ? 'border-zinc-800' : 'border-zinc-200'
-              }`}>
+              <div className={`aspect-16/9 rounded-xl border overflow-hidden flex items-center justify-center relative bg-zinc-950 ${isDark ? 'border-zinc-800' : 'border-zinc-200'
+                }`}>
                 {detailProduct.imageUrl ? (
-                  <img 
-                    src={detailProduct.imageUrl} 
-                    alt={detailProduct.name} 
-                    className="w-full h-full object-contain bg-transparent" 
+                  <img
+                    src={detailProduct.imageUrl}
+                    alt={detailProduct.name}
+                    className="w-full h-full object-contain bg-transparent"
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center text-zinc-500 gap-1.5 p-4 text-center">
@@ -1766,11 +1689,10 @@ export default function PublicCatalog({
                   <button
                     type="button"
                     onClick={() => handleShareProduct(detailProduct)}
-                    className={`px-3.5 py-2 rounded-lg text-xs font-display uppercase tracking-wider font-semibold transition flex items-center gap-1.5 cursor-pointer border ${
-                      isDark 
-                        ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700 hover:border-ember' 
+                    className={`px-3.5 py-2 rounded-lg text-xs font-display uppercase tracking-wider font-semibold transition flex items-center gap-1.5 cursor-pointer border ${isDark
+                        ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700 hover:border-ember'
                         : 'bg-smoke hover:bg-zinc-200 text-zinc-800 border-zinc-300 hover:border-ember'
-                    }`}
+                      }`}
                   >
                     {copiedSku ? (
                       <>
@@ -1788,58 +1710,50 @@ export default function PublicCatalog({
               </div>
 
               {/* Structured Technical Specifications Table */}
-              <div className={`border rounded-xl p-4 space-y-3 ${
-                isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
-              }`}>
-                <h4 className={`font-display text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${
-                  isDark ? 'text-zinc-200' : 'text-zinc-800'
+              <div className={`border rounded-xl p-4 space-y-3 ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
                 }`}>
+                <h4 className={`font-display text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${isDark ? 'text-zinc-200' : 'text-zinc-800'
+                  }`}>
                   <Wrench className="w-3.5 h-3.5 text-ember" />
                   <span>Spesifikasi &amp; Kompatibilitas Mobil</span>
                 </h4>
 
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className={`p-3 rounded-xl border ${
-                    isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
-                  }`}>
+                  <div className={`p-3 rounded-xl border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
+                    }`}>
                     <span className={`font-mono text-[9px] block font-bold uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-steel'}`}>Tipe Mesin</span>
                     <strong className={`font-display text-xs sm:text-sm font-semibold uppercase tracking-tight truncate block mt-0.5 ${isDark ? 'text-zinc-100' : 'text-ink'}`}>{detailProduct.engine_type || detailProduct.machineCategory || '-'}</strong>
                   </div>
 
-                  <div className={`p-3 rounded-xl border ${
-                    isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
-                  }`}>
+                  <div className={`p-3 rounded-xl border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
+                    }`}>
                     <span className={`font-mono text-[9px] block font-bold uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-steel'}`}>Varian Mobil</span>
                     <strong className={`font-display text-xs sm:text-sm font-semibold uppercase tracking-tight truncate block mt-0.5 ${isDark ? 'text-zinc-100' : 'text-ink'}`}>{detailProduct.car_variant || '-'}</strong>
                   </div>
 
-                  <div className={`p-3 rounded-xl border ${
-                    isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
-                  }`}>
+                  <div className={`p-3 rounded-xl border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
+                    }`}>
                     <span className={`font-mono text-[9px] block font-bold uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-steel'}`}>Material</span>
                     <strong className={`font-display text-xs sm:text-sm font-semibold uppercase tracking-tight truncate block mt-0.5 ${isDark ? 'text-zinc-100' : 'text-ink'}`}>{detailProduct.material_finish || '-'}</strong>
                   </div>
 
-                  <div className={`p-3 rounded-xl border ${
-                    isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
-                  }`}>
+                  <div className={`p-3 rounded-xl border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
+                    }`}>
                     <span className={`font-mono text-[9px] block font-bold uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-steel'}`}>Karakter Suara</span>
                     <strong className={`font-display text-xs sm:text-sm font-semibold uppercase tracking-tight truncate block mt-0.5 ${isDark ? 'text-zinc-100' : 'text-ink'}`}>{detailProduct.spec_sound || '-'}</strong>
                   </div>
 
                   {detailProduct.spec_resonator !== undefined && (
-                    <div className={`p-3 rounded-xl border ${
-                      isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
-                    }`}>
+                    <div className={`p-3 rounded-xl border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
+                      }`}>
                       <span className={`font-mono text-[9px] block font-bold uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-steel'}`}>Tabung Resonator</span>
                       <strong className={`font-display text-xs sm:text-sm font-semibold uppercase tracking-tight truncate block mt-0.5 ${isDark ? 'text-zinc-100' : 'text-ink'}`}>{detailProduct.spec_resonator === false ? 'Non-Resonator' : 'Ada Resonator'}</strong>
                     </div>
                   )}
 
                   {detailProduct.spec_pipe_size && (
-                    <div className={`p-3 rounded-xl border ${
-                      isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
-                    }`}>
+                    <div className={`p-3 rounded-xl border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
+                      }`}>
                       <span className={`font-mono text-[9px] block font-bold uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-steel'}`}>Inlet / Outlet</span>
                       <strong className={`font-display text-xs sm:text-sm font-semibold uppercase tracking-tight truncate block mt-0.5 ${isDark ? 'text-zinc-100' : 'text-ink'}`}>{detailProduct.spec_pipe_size}</strong>
                     </div>
@@ -1849,9 +1763,8 @@ export default function PublicCatalog({
 
               {/* Multiline Description Section */}
               {detailProduct.description && (
-                <div className={`border rounded-xl p-4 space-y-2 ${
-                  isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
-                }`}>
+                <div className={`border rounded-xl p-4 space-y-2 ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
+                  }`}>
                   <h4 className={`font-display text-xs font-bold uppercase tracking-wider ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
                     Deskripsi Produk
                   </h4>
@@ -1885,23 +1798,20 @@ export default function PublicCatalog({
       {/* ========================================================================= */}
       {detailBundle && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
-          <div className={`rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden border my-auto animate-in zoom-in-95 duration-150 flex flex-col max-h-[90vh] ${
-            isDark ? 'bg-zinc-900 border-zinc-800 text-paper' : 'bg-paper border-zinc-200 text-ink'
-          }`}>
-            
-            {/* Modal Header */}
-            <div className={`p-3.5 sm:p-4 border-b flex items-center justify-between flex-shrink-0 ${
-              isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke border-zinc-200'
+          <div className={`rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden border my-auto animate-in zoom-in-95 duration-150 flex flex-col max-h-[90vh] ${isDark ? 'bg-zinc-900 border-zinc-800 text-paper' : 'bg-paper border-zinc-200 text-ink'
             }`}>
+
+            {/* Modal Header */}
+            <div className={`p-3.5 sm:p-4 border-b flex items-center justify-between flex-shrink-0 ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke border-zinc-200'
+              }`}>
               <div className="flex items-center gap-2">
                 <span className="px-2.5 py-0.5 rounded font-mono text-[10px] font-bold uppercase tracking-widest bg-ember text-white flex items-center gap-1">
                   <Layers className="w-3 h-3" />
                   <span>PAKET BUNDLING</span>
                 </span>
                 {detailBundle.engine_type && (
-                  <span className={`px-2.5 py-0.5 rounded font-mono text-[10px] font-bold uppercase tracking-widest ${
-                    isDark ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-white'
-                  }`}>
+                  <span className={`px-2.5 py-0.5 rounded font-mono text-[10px] font-bold uppercase tracking-widest ${isDark ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-white'
+                    }`}>
                     {detailBundle.engine_type}
                   </span>
                 )}
@@ -1912,9 +1822,8 @@ export default function PublicCatalog({
               <button
                 type="button"
                 onClick={() => setDetailBundle(null)}
-                className={`p-1.5 rounded-lg border transition cursor-pointer ${
-                  isDark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800 border-zinc-800' : 'text-zinc-500 hover:text-ink hover:bg-zinc-200 border-zinc-300'
-                }`}
+                className={`p-1.5 rounded-lg border transition cursor-pointer ${isDark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800 border-zinc-800' : 'text-zinc-500 hover:text-ink hover:bg-zinc-200 border-zinc-300'
+                  }`}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1922,22 +1831,20 @@ export default function PublicCatalog({
 
             {/* Modal Body */}
             <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
-              
+
               {/* Product Photo or Bundle Graphic Frame */}
-              <div className={`aspect-16/9 rounded-xl border overflow-hidden flex items-center justify-center relative bg-zinc-950 ${
-                isDark ? 'border-zinc-800' : 'border-zinc-200'
-              }`}>
+              <div className={`aspect-16/9 rounded-xl border overflow-hidden flex items-center justify-center relative bg-zinc-950 ${isDark ? 'border-zinc-800' : 'border-zinc-200'
+                }`}>
                 {detailBundle.imageUrl ? (
-                  <img 
-                    src={detailBundle.imageUrl} 
-                    alt={detailBundle.name} 
-                    className="w-full h-full object-contain bg-transparent" 
+                  <img
+                    src={detailBundle.imageUrl}
+                    alt={detailBundle.name}
+                    className="w-full h-full object-contain bg-transparent"
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center text-zinc-400 gap-2 p-4 text-center">
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border ${
-                      isDark ? 'bg-zinc-900 text-rose-400 border-zinc-800' : 'bg-smoke text-ember border-zinc-200'
-                    }`}>
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border ${isDark ? 'bg-zinc-900 text-rose-400 border-zinc-800' : 'bg-smoke text-ember border-zinc-200'
+                      }`}>
                       <Layers className="w-7 h-7" />
                     </div>
                     <span className="font-mono text-xs font-bold uppercase tracking-widest text-zinc-400">
@@ -1971,11 +1878,10 @@ export default function PublicCatalog({
                   <button
                     type="button"
                     onClick={() => handleShareProduct(detailBundle)}
-                    className={`px-3.5 py-2 rounded-lg text-xs font-display uppercase tracking-wider font-semibold transition flex items-center gap-1.5 cursor-pointer border ${
-                      isDark 
-                        ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700 hover:border-ember' 
+                    className={`px-3.5 py-2 rounded-lg text-xs font-display uppercase tracking-wider font-semibold transition flex items-center gap-1.5 cursor-pointer border ${isDark
+                        ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700 hover:border-ember'
                         : 'bg-smoke hover:bg-zinc-200 text-zinc-800 border-zinc-300 hover:border-ember'
-                    }`}
+                      }`}
                   >
                     {copiedSku ? (
                       <>
@@ -1994,28 +1900,24 @@ export default function PublicCatalog({
 
               {/* Specifications: Mesin & Mobil */}
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className={`p-3 rounded-xl border ${
-                  isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
-                }`}>
+                <div className={`p-3 rounded-xl border ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
+                  }`}>
                   <span className={`font-mono text-[9px] block font-bold uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-steel'}`}>Tipe Mesin</span>
                   <strong className={`font-display text-xs sm:text-sm font-semibold uppercase tracking-tight truncate block mt-0.5 ${isDark ? 'text-zinc-100' : 'text-ink'}`}>{detailBundle.engine_type || '-'}</strong>
                 </div>
 
-                <div className={`p-3 rounded-xl border ${
-                  isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
-                }`}>
+                <div className={`p-3 rounded-xl border ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
+                  }`}>
                   <span className={`font-mono text-[9px] block font-bold uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-steel'}`}>Varian Mobil</span>
                   <strong className={`font-display text-xs sm:text-sm font-semibold uppercase tracking-tight truncate block mt-0.5 ${isDark ? 'text-zinc-100' : 'text-ink'}`}>{detailBundle.car_variant || '-'}</strong>
                 </div>
               </div>
 
               {/* RINCIAN KOMPONEN ISI PAKET */}
-              <div className={`border rounded-xl p-4 space-y-3 ${
-                isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
-              }`}>
-                <h4 className={`font-display text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${
-                  isDark ? 'text-zinc-200' : 'text-zinc-800'
+              <div className={`border rounded-xl p-4 space-y-3 ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
                 }`}>
+                <h4 className={`font-display text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${isDark ? 'text-zinc-200' : 'text-zinc-800'
+                  }`}>
                   <Layers className="w-3.5 h-3.5 text-ember" />
                   <span>Rincian Komponen Isi Paket</span>
                 </h4>
@@ -2023,8 +1925,8 @@ export default function PublicCatalog({
                 {Array.isArray(detailBundle.items) && detailBundle.items.length > 0 ? (
                   <div className="space-y-2">
                     {detailBundle.items.map((bItem, idx) => {
-                      const matchedProd = products.find(p => 
-                        (bItem.productId && p.id === bItem.productId) || 
+                      const matchedProd = products.find(p =>
+                        (bItem.productId && p.id === bItem.productId) ||
                         (bItem.sku && p.sku === bItem.sku)
                       );
                       const itemEngine = bItem.engine_type || bItem.engine || matchedProd?.engine_type || matchedProd?.machineCategory || detailBundle.engine_type || '';
@@ -2034,9 +1936,8 @@ export default function PublicCatalog({
                       const displayEngine = (itemEngine && itemEngine !== '-' && itemEngine.toLowerCase() !== 'all') ? itemEngine : '';
 
                       return (
-                        <div key={idx} className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border shadow-xs gap-2 text-xs ${
-                          isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
-                        }`}>
+                        <div key={idx} className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border shadow-xs gap-2 text-xs ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
+                          }`}>
                           <div className="flex items-start gap-2.5 min-w-0">
                             <span className="font-mono text-xs font-bold w-6 h-6 rounded flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 bg-ember/15 text-ember border border-ember/20">
                               {bItem.qty || 1}x
@@ -2045,16 +1946,14 @@ export default function PublicCatalog({
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className={`font-display font-bold text-xs sm:text-sm uppercase tracking-tight break-words ${isDark ? 'text-white' : 'text-ink'}`}>{mainName}</span>
                                 {displayEngine && (
-                                  <span className={`px-2 py-0.5 rounded font-mono text-[9px] uppercase tracking-widest font-semibold whitespace-nowrap ${
-                                    isDark ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-white'
-                                  }`}>
+                                  <span className={`px-2 py-0.5 rounded font-mono text-[9px] uppercase tracking-widest font-semibold whitespace-nowrap ${isDark ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-white'
+                                    }`}>
                                     {displayEngine}
                                   </span>
                                 )}
                                 {(matchedProd?.brand || bItem.brand) && (
-                                  <span className={`px-2 py-0.5 rounded text-[9px] font-display uppercase tracking-wider font-semibold whitespace-nowrap border ${
-                                    isDark ? 'bg-zinc-900/90 text-zinc-300 border-zinc-700' : 'bg-smoke text-zinc-800 border-zinc-300'
-                                  }`}>
+                                  <span className={`px-2 py-0.5 rounded text-[9px] font-display uppercase tracking-wider font-semibold whitespace-nowrap border ${isDark ? 'bg-zinc-900/90 text-zinc-300 border-zinc-700' : 'bg-smoke text-zinc-800 border-zinc-300'
+                                    }`}>
                                     {matchedProd?.brand || bItem.brand}
                                   </span>
                                 )}
@@ -2073,9 +1972,8 @@ export default function PublicCatalog({
                             </div>
                           </div>
                           {(matchedProd?.sku || bItem.sku) && (
-                            <span className={`font-mono text-[10px] uppercase tracking-widest px-2 py-1 rounded border shrink-0 self-start sm:self-center ${
-                              isDark ? 'text-zinc-400 bg-zinc-950 border-zinc-800' : 'text-zinc-500 bg-smoke border-zinc-200'
-                            }`}>
+                            <span className={`font-mono text-[10px] uppercase tracking-widest px-2 py-1 rounded border shrink-0 self-start sm:self-center ${isDark ? 'text-zinc-400 bg-zinc-950 border-zinc-800' : 'text-zinc-500 bg-smoke border-zinc-200'
+                              }`}>
                               {matchedProd?.sku || bItem.sku}
                             </span>
                           )}
@@ -2089,9 +1987,8 @@ export default function PublicCatalog({
                       const cleanItemStr = itemStr.trim();
                       const fallbackEngine = (detailBundle.engine_type && detailBundle.engine_type !== '-' && detailBundle.engine_type.toLowerCase() !== 'all') ? detailBundle.engine_type : '';
                       return (
-                        <div key={idx} className={`flex items-center justify-between p-3 rounded-xl border text-xs ${
-                          isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
-                        }`}>
+                        <div key={idx} className={`flex items-center justify-between p-3 rounded-xl border text-xs ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
+                          }`}>
                           <div className="flex items-center gap-2">
                             <span className="w-5 h-5 rounded font-mono font-bold text-[10px] flex items-center justify-center bg-ember/15 text-ember border border-ember/20">
                               ✓
@@ -2099,9 +1996,8 @@ export default function PublicCatalog({
                             <span className={`font-display font-bold uppercase tracking-tight text-xs sm:text-sm ${isDark ? 'text-white' : 'text-ink'}`}>{cleanItemStr}</span>
                           </div>
                           {fallbackEngine && (
-                            <span className={`px-2 py-0.5 rounded font-mono text-[9px] uppercase tracking-widest font-semibold ${
-                              isDark ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-white'
-                            }`}>
+                            <span className={`px-2 py-0.5 rounded font-mono text-[9px] uppercase tracking-widest font-semibold ${isDark ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-white'
+                              }`}>
                               {fallbackEngine}
                             </span>
                           )}
@@ -2116,12 +2012,10 @@ export default function PublicCatalog({
 
               {/* Keterangan / Deskripsi Publik Paket */}
               {(detailBundle.description || detailBundle.keterangan) && (
-                <div className={`border rounded-xl p-4 space-y-2 ${
-                  isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
-                }`}>
-                  <h4 className={`font-display text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
-                    isDark ? 'text-zinc-300' : 'text-zinc-700'
+                <div className={`border rounded-xl p-4 space-y-2 ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
                   }`}>
+                  <h4 className={`font-display text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? 'text-zinc-300' : 'text-zinc-700'
+                    }`}>
                     <FileText className="w-3.5 h-3.5 text-ember" />
                     <span>Deskripsi / Keterangan Paket</span>
                   </h4>
