@@ -15,6 +15,8 @@ export default {
         'ember-tint': '#FBEAEA',
         smoke: '#F5F5F4',
         steel: '#5B5B58',
+        'steel-soft': '#8A8A86',
+        line: '#E7E5E3',
         brand: {
           50: '#f0f9ff',
           100: '#e0f2fe',

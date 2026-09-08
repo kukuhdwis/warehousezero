@@ -2,6 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --ink: #0a0a0a;
+  --paper: #ffffff;
+  --ember: #d91f2c;
+  --ember-deep: #8f1019;
+  --ember-tint: #fbeaea;
+  --smoke: #f5f5f4;
+  --steel: #5b5b58;
+  --steel-soft: #8a8a86;
+  --line: #e7e5e3;
+  --max: 1180px;
+  --radius: 10px;
+  --radius-pill: 999px;
+}
+
+.dark {
+  --ink: #ffffff;
+  --paper: #0a0a0a;
+  --smoke: #141414;
+  --steel: #a1a1aa;
+  --steel-soft: #71717a;
+  --line: #27272a;
+}
+
 body {
   background-color: #f8fafc;
   color: #1e293b;
