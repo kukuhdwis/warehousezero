@@ -508,19 +508,51 @@ export default function PublicCatalog({
         }`}>
         <div className="max-w-[1180px] mx-auto px-4 sm:px-5 h-16 flex items-center gap-3.5">
 
-          {/* Logo Group: NDK | RGN */}
+          {/* Logo Lockup: NDK & RGN with Seamless Stacked Crossfade */}
           <div
             onClick={navigateToLanding}
-            className="flex items-center gap-2.5 font-display font-bold text-[1.1rem] whitespace-nowrap shrink-0 cursor-pointer select-none"
+            className="flex items-center gap-2.5 sm:gap-3 group py-1 cursor-pointer shrink-0 select-none"
             title="Kembali ke Beranda"
           >
-            <span className={isDark ? 'text-white' : 'text-ink'}>NDK</span>
-            <span className={`w-[1px] h-5 ${isDark ? 'bg-zinc-700' : 'bg-line'}`} />
-            <span className="text-ember">RGN</span>
+            <div className="relative h-6 sm:h-7 w-[88px] sm:w-[100px] flex items-center">
+              <img
+                alt="NDK Exhaust Logo"
+                className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${
+                  isDark ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                }`}
+                src="/logos/ndk-white.png"
+              />
+              <img
+                alt="NDK Exhaust Logo"
+                className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${
+                  isDark ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                }`}
+                src="/logos/ndk-black.png"
+              />
+            </div>
+
+            <span className={`h-4 sm:h-5 w-[1px] transition-colors duration-300 ${isDark ? 'bg-zinc-700' : 'bg-line'}`} />
+
+            <div className="relative h-5 sm:h-6 w-[78px] sm:w-[90px] flex items-center">
+              <img
+                alt="RGN Performance Logo"
+                className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${
+                  isDark ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                }`}
+                src="/logos/rgn-white.png"
+              />
+              <img
+                alt="RGN Performance Logo"
+                className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ease-in-out ${
+                  isDark ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                }`}
+                src="/logos/rgn-black.png"
+              />
+            </div>
           </div>
 
-          {/* Main Navigation Links */}
-          <nav className="hidden md:flex items-center gap-5.5 text-[0.88rem] font-medium ml-2">
+          {/* Main Navigation Links with Generous Spacing */}
+          <nav className="hidden md:flex items-center gap-7 lg:gap-8 text-[0.88rem] font-medium ml-6 sm:ml-8">
             <button
               type="button"
               onClick={navigateToLanding}
@@ -1007,6 +1039,8 @@ export default function PublicCatalog({
                 const itemKey = isBundle ? `bndl-${item.id || item.code}` : `prod-${item.id || item.sku || item.code}`;
                 const displayName = isBundle ? formatBundleDisplayName(item) : item.name;
 
+                const cardImage = item.imageUrl || (isBundle && Array.isArray(item.items) ? item.items.find(sub => sub.imageUrl)?.imageUrl : null);
+
                 return (
                   <article
                     key={itemKey}
@@ -1015,14 +1049,14 @@ export default function PublicCatalog({
                         : 'bg-paper border-line hover:border-ink hover:shadow-[0_6px_18px_rgba(0,0,0,0.06)]'
                       }`}
                   >
-                    {/* Product Media Area (aspect 4/3) */}
+                    {/* Product Media Area (Aspect-Square: dominant visual presentation) */}
                     <div
                       onClick={() => isBundle ? setDetailBundle(item) : setDetailProduct(item)}
-                      className="product-media relative aspect-4/3 bg-gradient-to-br from-[#181818] to-[#050505] flex items-center justify-center overflow-hidden cursor-pointer"
+                      className="product-media relative aspect-square bg-gradient-to-br from-[#222222] via-[#161616] to-[#0a0a0a] flex items-center justify-center overflow-hidden cursor-pointer"
                     >
                       {/* Top Left Code Tag (Engine / Code) */}
                       {engineDisplay && (
-                        <span className="code-tag absolute top-2.5 left-2.5 bg-white/12 text-white text-[11px] font-bold px-2.5 py-1 rounded-[6px] tracking-wide uppercase font-mono z-10">
+                        <span className="code-tag absolute top-2.5 left-2.5 bg-black/60 backdrop-blur-md text-white text-[11px] font-bold px-2.5 py-1 rounded-[6px] tracking-wide uppercase font-mono z-10 border border-white/10">
                           {engineDisplay}
                         </span>
                       )}
@@ -1035,63 +1069,68 @@ export default function PublicCatalog({
                         </span>
                       )}
 
-                      {/* Product Image or Icon Badge */}
-                      {item.imageUrl ? (
+                      {/* Product Image or Aesthetic Graphic Fallback */}
+                      {cardImage ? (
                         <img
-                          src={item.imageUrl}
+                          src={cardImage}
                           alt={item.name}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           loading="lazy"
                         />
                       ) : (
-                        <div className="icon-badge w-12 h-12 rounded-[12px] bg-white/95 flex items-center justify-center text-ink shadow-sm">
-                          {isBundle ? (
-                            <Layers className="w-6 h-6 stroke-ink text-ink" />
-                          ) : (
-                            <Package className="w-6 h-6 stroke-ink text-ink" />
-                          )}
+                        <div className="flex flex-col items-center justify-center gap-2 p-6 text-center select-none">
+                          <div className="w-14 h-14 rounded-xl bg-white/10 backdrop-blur-md border border-white/15 flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform duration-300">
+                            {isBundle ? (
+                              <Layers className="w-7 h-7 stroke-white text-white" />
+                            ) : (
+                              <Package className="w-7 h-7 stroke-white text-white" />
+                            )}
+                          </div>
+                          <span className="font-display font-semibold text-[11px] uppercase tracking-wider text-zinc-400">
+                            {isBundle ? 'NDK Paket Exhaust' : (item.category || 'NDK Exhaust Part')}
+                          </span>
                         </div>
                       )}
 
                       {/* Bottom Watermark */}
-                      <span className="watermark absolute bottom-2 left-0 right-0 text-center font-display text-[10px] tracking-[0.18em] text-white/30 font-semibold uppercase pointer-events-none">
-                        {item.brand || 'RGN PERFORMANCE'}
+                      <span className="watermark absolute bottom-2 left-0 right-0 text-center font-display text-[10px] tracking-[0.2em] text-white/35 font-semibold uppercase pointer-events-none">
+                        {item.brand || 'NDK EXHAUST'}
                       </span>
                     </div>
 
-                    {/* Product Body */}
-                    <div className="product-body p-4 flex flex-col gap-2 flex-1">
+                    {/* Product Body: Compact to ensure the image above is clearly larger than the text */}
+                    <div className="product-body p-3.5 flex flex-col gap-1.5 flex-1">
                       {/* SKU */}
-                      <span className="product-sku text-[11px] font-mono font-semibold tracking-wider text-steel-soft uppercase truncate">
+                      <span className="product-sku text-[10px] sm:text-[11px] font-mono font-medium tracking-wider text-steel-soft uppercase truncate">
                         {item.sku || item.code || '-'}
                       </span>
 
                       {/* Product Name */}
                       <h3
                         onClick={() => isBundle ? setDetailBundle(item) : setDetailProduct(item)}
-                        className={`product-name font-body font-bold text-[0.92rem] leading-[1.35] line-clamp-2 cursor-pointer transition-colors ${isDark ? 'text-white group-hover:text-ember' : 'text-ink group-hover:text-ember'
+                        className={`product-name font-body font-semibold text-[13px] sm:text-[14px] leading-snug line-clamp-2 min-h-[2.35rem] cursor-pointer transition-colors ${isDark ? 'text-white group-hover:text-ember' : 'text-ink group-hover:text-ember'
                           }`}
                         title={displayName}
                       >
                         {displayName}
                       </h3>
 
-                      {/* Price Label */}
-                      <span className="product-price-label text-[11px] font-body font-semibold tracking-wider uppercase text-steel-soft mt-0.5">
-                        {isBundle ? 'Harga Resmi Paket' : 'Harga Resmi'}
-                      </span>
-
-                      {/* Price */}
-                      <span className="product-price text-[1.15rem] font-bold font-display text-ember leading-none">
-                        {formattedPrice}
-                      </span>
+                      {/* Price Section */}
+                      <div className="mt-0.5">
+                        <span className="block text-[10px] font-body font-semibold tracking-wider uppercase text-steel-soft">
+                          {isBundle ? 'Harga Resmi Paket' : 'Harga Resmi'}
+                        </span>
+                        <span className="product-price text-[1.12rem] sm:text-[1.18rem] font-bold font-display text-ember leading-none">
+                          {formattedPrice}
+                        </span>
+                      </div>
 
                       {/* Product Actions */}
-                      <div className="product-actions flex gap-2 mt-auto pt-1.5">
+                      <div className="product-actions flex gap-2 mt-auto pt-2">
                         <button
                           type="button"
                           onClick={() => isBundle ? setDetailBundle(item) : setDetailProduct(item)}
-                          className={`btn btn-outline btn-sm flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-[10px] text-xs font-semibold font-body border transition-colors cursor-pointer ${isDark
+                          className={`btn btn-outline btn-sm flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-[8px] text-xs font-semibold font-body border transition-colors cursor-pointer ${isDark
                               ? 'border-zinc-800 hover:border-zinc-700 text-zinc-300 bg-zinc-900/60'
                               : 'border-line hover:border-ink text-ink bg-paper'
                             }`}
@@ -1104,7 +1143,7 @@ export default function PublicCatalog({
                           href={isBundle ? getWhatsAppBundleOrderUrl(item) : getWhatsAppOrderUrl(item)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="btn btn-primary btn-sm flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-[10px] text-xs font-semibold font-body bg-ember hover:bg-ember-deep text-white transition-colors shadow-sm cursor-pointer text-center"
+                          className="btn btn-primary btn-sm flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-[8px] text-xs font-semibold font-body bg-ember hover:bg-ember-deep text-white transition-colors shadow-sm cursor-pointer text-center"
                         >
                           <WhatsAppIcon className="w-3.5 h-3.5 fill-current text-white" />
                           <span>WA</span>
