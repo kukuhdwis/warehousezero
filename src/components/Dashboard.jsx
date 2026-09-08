@@ -170,29 +170,29 @@ export default function Dashboard({
     <div className="space-y-4 sm:space-y-6">
       
       {/* Welcome Banner & Page Header */}
-      <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4 transition-colors">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
               Halo, {currentUser?.name || 'Pengguna'} 👋
             </h2>
             <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
               isAdmin 
-                ? 'bg-sky-100 text-sky-800 border border-sky-200' 
+                ? 'bg-sky-100 dark:bg-sky-950/70 text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-sky-800/50' 
                 : isStaffPusat
-                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                  : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                  ? 'bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50'
+                  : 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50'
             }`}>
               {isAdmin ? 'Admin' : isStaffPusat ? 'Staff Pusat' : 'Staff Cabang'}
             </span>
           </div>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Cabang: <strong className="text-slate-700">{currentUser?.branchName || (currentUser?.branchId === 'ALL' ? 'Semua Cabang (Pusat)' : currentUser?.branchId)}</strong>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            Cabang: <strong className="text-slate-700 dark:text-slate-200">{currentUser?.branchName || (currentUser?.branchId === 'ALL' ? 'Semua Cabang (Pusat)' : currentUser?.branchId)}</strong>
           </p>
         </div>
 
         {/* Quick Action Grid (Touch Friendly for Smartphones) */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-slate-100">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
           <button
             onClick={() => onNavigate('stock-in')}
             className="flex items-center justify-center gap-2 py-3 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-98 cursor-pointer"
@@ -241,47 +241,47 @@ export default function Dashboard({
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-4">
         
         {/* Card 1: Total SKU */}
-        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between transition-colors">
           <div>
-            <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Produk</p>
-            <h3 className="text-lg sm:text-2xl font-bold text-slate-900 mt-0.5 sm:mt-1">{totalItemTypes} <span className="text-[10px] sm:text-xs font-normal text-slate-500">SKU</span></h3>
+            <p className="text-[10px] sm:text-xs font-semibold text-slate-400 dark:text-slate-400 uppercase tracking-wider">Total Produk</p>
+            <h3 className="text-lg sm:text-2xl font-bold text-slate-900 dark:text-white mt-0.5 sm:mt-1">{totalItemTypes} <span className="text-[10px] sm:text-xs font-normal text-slate-500 dark:text-slate-400">SKU</span></h3>
           </div>
-          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center flex-shrink-0">
+          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-sky-50 dark:bg-sky-950/70 text-sky-600 dark:text-sky-400 flex items-center justify-center flex-shrink-0">
             <Package className="w-4 h-4 sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* Card 2: Total Unit */}
-        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between transition-colors">
           <div>
-            <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Unit Stok</p>
-            <h3 className="text-lg sm:text-2xl font-bold text-slate-900 mt-0.5 sm:mt-1">{totalStockQuantity.toLocaleString('id-ID')} <span className="text-[10px] sm:text-xs font-normal text-slate-500">Pcs</span></h3>
+            <p className="text-[10px] sm:text-xs font-semibold text-slate-400 dark:text-slate-400 uppercase tracking-wider">Unit Stok</p>
+            <h3 className="text-lg sm:text-2xl font-bold text-slate-900 dark:text-white mt-0.5 sm:mt-1">{totalStockQuantity.toLocaleString('id-ID')} <span className="text-[10px] sm:text-xs font-normal text-slate-500 dark:text-slate-400">Pcs</span></h3>
           </div>
-          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
+          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0">
             <Boxes className="w-4 h-4 sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* Card 3: Low Stock */}
-        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between transition-colors">
           <div>
-            <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Stok Menipis</p>
-            <h3 className="text-lg sm:text-2xl font-bold text-amber-600 mt-0.5 sm:mt-1">{lowStockProducts.length} <span className="text-[10px] sm:text-xs font-normal text-amber-700/80">Item</span></h3>
+            <p className="text-[10px] sm:text-xs font-semibold text-slate-400 dark:text-slate-400 uppercase tracking-wider">Stok Menipis</p>
+            <h3 className="text-lg sm:text-2xl font-bold text-amber-600 dark:text-amber-400 mt-0.5 sm:mt-1">{lowStockProducts.length} <span className="text-[10px] sm:text-xs font-normal text-amber-700/80 dark:text-amber-300/80">Item</span></h3>
           </div>
-          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-amber-50 dark:bg-amber-950/70 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
             <AlertTriangle className="w-4 h-4 sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* Card 4: Valuation */}
-        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between transition-colors">
           <div>
-            <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Nilai Stok</p>
-            <h3 className="text-sm sm:text-xl font-bold text-emerald-600 mt-0.5 sm:mt-1 truncate max-w-[130px] sm:max-w-none">
+            <p className="text-[10px] sm:text-xs font-semibold text-slate-400 dark:text-slate-400 uppercase tracking-wider">Nilai Stok</p>
+            <h3 className="text-sm sm:text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 sm:mt-1 truncate max-w-[130px] sm:max-w-none">
               Rp {totalValuation.toLocaleString('id-ID')}
             </h3>
           </div>
-          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0">
             <TrendingUp className="w-4 h-4 sm:w-6 sm:h-6" />
           </div>
         </div>
@@ -289,40 +289,41 @@ export default function Dashboard({
         {/* Card 5: Estimasi Profit */}
         <div 
           onClick={() => onNavigate('monitoring')}
-          className="bg-emerald-50/70 p-3.5 sm:p-5 rounded-2xl border border-emerald-200 shadow-xs flex items-center justify-between cursor-pointer hover:bg-emerald-100/70 transition group"
+          className="bg-emerald-50/70 dark:bg-emerald-950/40 p-3.5 sm:p-5 rounded-2xl border border-emerald-200 dark:border-emerald-800/60 shadow-xs flex items-center justify-between cursor-pointer hover:bg-emerald-100/70 dark:hover:bg-emerald-900/40 transition group"
           title="Klik untuk membuka rincian monitoring profit cabang"
         >
           <div>
-            <p className="text-[10px] sm:text-xs font-semibold text-emerald-700 uppercase tracking-wider flex items-center gap-1">
+            <p className="text-[10px] sm:text-xs font-semibold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider flex items-center gap-1">
               Profit Bulan Ini <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition" />
             </p>
-            <h3 className="text-sm sm:text-xl font-bold text-emerald-800 mt-0.5 sm:mt-1 truncate max-w-[130px] sm:max-w-none">
+            <h3 className="text-sm sm:text-xl font-bold text-emerald-800 dark:text-emerald-200 mt-0.5 sm:mt-1 truncate max-w-[130px] sm:max-w-none">
               Rp {totalEstimatedProfit.toLocaleString('id-ID')}
             </h3>
           </div>
-          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs group-hover:scale-105 transition">
+          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-emerald-600 dark:bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 shadow-xs group-hover:scale-105 transition">
             <Coins className="w-4 h-4 sm:w-6 sm:h-6" />
           </div>
         </div>
       </div>
 
       {/* Branch Staff Empty Inventory Alert Banner */}
+      {/* Branch Staff Empty Inventory Alert Banner */}
       {isBranchStaff && products.length === 0 && (
-        <div className="bg-amber-50/90 border-2 border-amber-300 p-6 sm:p-8 rounded-2xl text-center space-y-4 shadow-xs">
-          <div className="w-14 h-14 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto">
+        <div className="bg-amber-50/90 dark:bg-amber-950/40 border-2 border-amber-300 dark:border-amber-700/60 p-6 sm:p-8 rounded-2xl text-center space-y-4 shadow-xs">
+          <div className="w-14 h-14 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 rounded-2xl flex items-center justify-center mx-auto">
             <Boxes className="w-7 h-7" />
           </div>
           <div>
-            <h3 className="font-bold text-amber-950 text-base sm:text-lg">
+            <h3 className="font-bold text-amber-950 dark:text-amber-100 text-base sm:text-lg">
               Inventaris Gudang Cabang Belum Aktif
             </h3>
-            <p className="text-xs sm:text-sm text-amber-800 max-w-md mx-auto mt-1">
+            <p className="text-xs sm:text-sm text-amber-800 dark:text-amber-300 max-w-md mx-auto mt-1">
               Cabang <strong>{currentUser?.branchName || 'Cabang'}</strong> belum memiliki inventaris produk yang disetujui. Silakan ajukan inventaris produk dari Katalog Master ke Kantor Pusat agar stok cabang dapat disetujui & aktif.
             </p>
           </div>
 
           {pendingBranchRequests.length > 0 ? (
-            <div className="p-3 bg-white/90 border border-amber-300 rounded-xl text-xs text-amber-900 font-semibold inline-flex items-center gap-2">
+            <div className="p-3 bg-white/90 dark:bg-slate-900/90 border border-amber-300 dark:border-amber-700/60 rounded-xl text-xs text-amber-900 dark:text-amber-200 font-semibold inline-flex items-center gap-2">
               <span>⏳</span>
               <span>Ada <strong>{pendingBranchRequests.length} pengajuan inventaris</strong> yang sedang menunggu persetujuan Admin Pusat.</span>
             </div>
@@ -340,25 +341,25 @@ export default function Dashboard({
 
       {/* TOP SELLING PRODUCTS WIDGET FOR DASHBOARD */}
       {topSellingProducts.length > 0 && (
-        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+        <div className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4 transition-colors">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h3 className="font-bold text-slate-900 text-sm sm:text-base flex items-center gap-2">
+              <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base flex items-center gap-2">
                 <Trophy className="w-5 h-5 text-amber-500" />
                 <span>
                   {isBranchStaff ? `Produk Terlaris di ${currentUser?.branchName || 'Cabang'}` : 'Top Produk Terlaris Bulan Ini'}
                 </span>
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Produk dengan pergerakan transaksi keluar tercepat pada periode <strong className="text-slate-700">{formatMonthLabel(currentMonthKey)}</strong>.
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Produk dengan pergerakan transaksi keluar tercepat pada periode <strong className="text-slate-700 dark:text-slate-300">{formatMonthLabel(currentMonthKey)}</strong>.
               </p>
             </div>
 
             <button
               onClick={() => onNavigate('monitoring')}
-              className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer self-start sm:self-auto shadow-2xs"
+              className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer self-start sm:self-auto shadow-2xs"
             >
-              <Flame className="w-3.5 h-3.5 text-amber-600" />
+              <Flame className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
               <span>{topSellingProducts.reduce((sum, p) => sum + p.totalQty, 0)} Pcs Terjual • Lihat Detail</span>
             </button>
           </div>
@@ -374,30 +375,30 @@ export default function Dashboard({
                   key={item.key} 
                   className={`p-3.5 rounded-xl border transition flex flex-col justify-between gap-2.5 ${
                     isTop1 
-                      ? 'bg-gradient-to-br from-amber-50/80 via-white to-amber-50/20 border-amber-300 shadow-2xs' 
-                      : 'bg-slate-50/60 hover:bg-slate-50 border-slate-200'
+                      ? 'bg-gradient-to-br from-amber-50/80 dark:from-amber-950/40 via-white dark:via-slate-900 to-amber-50/20 dark:to-amber-950/20 border-amber-300 dark:border-amber-700/60 shadow-2xs' 
+                      : 'bg-slate-50/60 dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/80 border-slate-200 dark:border-slate-700/80'
                   }`}
                 >
                   <div>
                     <div className="flex items-center justify-between gap-1 mb-1.5">
                       <span className="text-sm font-black">{medal}</span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800/50">
                         {item.brand}
                       </span>
                     </div>
-                    <h4 className="font-bold text-slate-900 text-xs line-clamp-1" title={item.productName}>
+                    <h4 className="font-bold text-slate-900 dark:text-white text-xs line-clamp-1" title={item.productName}>
                       {item.productName}
                     </h4>
-                    <span className="text-[10px] font-mono text-slate-400 block">{item.sku}</span>
+                    <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 block">{item.sku}</span>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                    <span className="font-black text-slate-900 flex items-center gap-1">
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                    <span className="font-black text-slate-900 dark:text-white flex items-center gap-1">
                       <Flame className="w-3.5 h-3.5 text-rose-500" />
                       <span>{item.totalQty} {item.unit}</span>
                     </span>
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                      isLow ? 'bg-rose-100 text-rose-700' : 'text-emerald-700'
+                      isLow ? 'bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-400'
                     }`}>
                       {isLow ? `Sisa ${item.currentStock}` : `Rp ${item.totalRevenue >= 1000000 ? `${(item.totalRevenue / 1000000).toFixed(1)}M` : item.totalRevenue.toLocaleString('id-ID')}`}
                     </span>
@@ -413,29 +414,29 @@ export default function Dashboard({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         
         {/* Left Column: Low Stock Alerts */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden transition-colors">
+          <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500" />
-              <h3 className="font-bold text-slate-800 text-xs sm:text-sm">Peringatan Stok Menipis</h3>
+              <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Peringatan Stok Menipis</h3>
             </div>
-            <span className="text-[10px] sm:text-xs bg-amber-100 text-amber-800 font-bold px-2.5 py-0.5 rounded-full">
+            <span className="text-[10px] sm:text-xs bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 font-bold px-2.5 py-0.5 rounded-full">
               {lowStockProducts.length} Perlu Restock
             </span>
           </div>
 
           {/* Mobile Card List for Low Stock Alerts */}
-          <div className="block md:hidden divide-y divide-slate-100">
+          <div className="block md:hidden divide-y divide-slate-100 dark:divide-slate-800">
             {lowStockProducts.length === 0 ? (
-              <div className="p-6 text-center text-slate-400 text-xs">
+              <div className="p-6 text-center text-slate-400 dark:text-slate-500 text-xs">
                 🎉 Semua stok dalam kondisi aman di atas batas minimum.
               </div>
             ) : (
               lowStockProducts.map((prod) => (
                 <div key={prod.id} className="p-3.5 flex items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <h5 className="font-bold text-slate-900 text-xs truncate">{prod.name}</h5>
-                    <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                    <h5 className="font-bold text-slate-900 dark:text-white text-xs truncate">{prod.name}</h5>
+                    <div className="flex items-center gap-2 text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
                       <span className="font-mono">{prod.sku}</span>
                       <span>•</span>
                       <span>Min: {prod.minStock} {prod.unit}</span>
@@ -443,12 +444,12 @@ export default function Dashboard({
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded-lg text-xs">
+                    <span className="font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 px-2 py-1 rounded-lg text-xs">
                       {prod.currentStock} {prod.unit}
                     </span>
                     <button
                       onClick={() => onNavigate('stock-in')}
-                      className="px-2.5 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg active:scale-95 transition"
+                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg active:scale-95 transition cursor-pointer"
                     >
                       + Masuk
                     </button>
@@ -461,12 +462,12 @@ export default function Dashboard({
           {/* Desktop Table for Low Stock Alerts */}
           <div className="hidden md:block overflow-x-auto">
             {lowStockProducts.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 text-sm">
+              <div className="p-8 text-center text-slate-400 dark:text-slate-500 text-sm">
                 🎉 Semua stok dalam kondisi aman di atas batas minimum.
               </div>
             ) : (
               <table className="w-full text-left text-sm border-collapse">
-                <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase border-b border-slate-200">
+                <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase border-b border-slate-200 dark:border-slate-800">
                   <tr>
                     <th className="px-6 py-3.5 min-w-[200px]">Produk</th>
                     <th className="px-4 py-3.5 whitespace-nowrap min-w-[140px]">Lokasi / Cabang</th>
@@ -475,28 +476,28 @@ export default function Dashboard({
                     <th className="px-6 py-3.5 text-right whitespace-nowrap min-w-[100px]">Aksi</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {lowStockProducts.map((prod) => (
-                    <tr key={prod.id} className="hover:bg-slate-50/80 transition">
-                      <td className="px-6 py-3.5 font-medium text-slate-900 min-w-[200px]">
-                        <div className="font-bold text-slate-900 leading-snug">{prod.name}</div>
-                        <div className="text-xs text-slate-400 font-mono mt-0.5 whitespace-nowrap">SKU: {prod.sku}</div>
+                    <tr key={prod.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition">
+                      <td className="px-6 py-3.5 font-medium text-slate-900 dark:text-white min-w-[200px]">
+                        <div className="font-bold text-slate-900 dark:text-white leading-snug">{prod.name}</div>
+                        <div className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-0.5 whitespace-nowrap">SKU: {prod.sku}</div>
                       </td>
-                      <td className="px-4 py-3.5 text-slate-600 text-xs whitespace-nowrap font-medium">
+                      <td className="px-4 py-3.5 text-slate-600 dark:text-slate-300 text-xs whitespace-nowrap font-medium">
                         {prod.branchName || (isBranchStaff ? currentUser?.branchName : 'Semua Cabang (Pusat)')}
                       </td>
                       <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                        <span className="inline-block font-bold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-md text-xs border border-rose-200/60 whitespace-nowrap">
+                        <span className="inline-block font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 px-2.5 py-1 rounded-md text-xs border border-rose-200/60 dark:border-rose-800/50 whitespace-nowrap">
                           {prod.currentStock} {prod.unit || 'Pcs'}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-center text-slate-600 text-xs whitespace-nowrap font-semibold">
+                      <td className="px-4 py-3.5 text-center text-slate-600 dark:text-slate-300 text-xs whitespace-nowrap font-semibold">
                         {prod.minStock} {prod.unit || 'Pcs'}
                       </td>
                       <td className="px-6 py-3.5 text-right whitespace-nowrap">
                         <button
                           onClick={() => onNavigate('stock-in')}
-                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-lg transition cursor-pointer whitespace-nowrap"
+                          className="px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold rounded-lg transition cursor-pointer whitespace-nowrap"
                         >
                           Restock
                         </button>
@@ -510,12 +511,12 @@ export default function Dashboard({
         </div>
 
         {/* Right Column: Recent Activity Feed */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 sm:p-6 space-y-3 sm:space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-            <h3 className="font-bold text-slate-800 text-xs sm:text-sm">Aktivitas Terakhir</h3>
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-4 sm:p-6 space-y-3 sm:space-y-4 transition-colors">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+            <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Aktivitas Terakhir</h3>
             <button 
               onClick={() => onNavigate('history')} 
-              className="text-xs text-sky-600 font-semibold hover:underline cursor-pointer flex items-center gap-0.5"
+              className="text-xs text-sky-600 dark:text-sky-400 font-semibold hover:underline cursor-pointer flex items-center gap-0.5"
             >
               <span>Semua</span>
               <ChevronRight className="w-3.5 h-3.5" />
@@ -524,23 +525,27 @@ export default function Dashboard({
 
           <div className="space-y-2.5">
             {recentTransactions.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-4">Belum ada riwayat transaksi.</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-4">Belum ada riwayat transaksi.</p>
             ) : (
               recentTransactions.map((tx) => {
                 const isIn = tx.type === 'IN';
                 return (
-                  <div key={tx.id} className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50/70 border border-slate-100">
-                    <div className={`p-1.5 rounded-xl flex-shrink-0 mt-0.5 ${isIn ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                  <div key={tx.id} className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                    <div className={`p-1.5 rounded-xl flex-shrink-0 mt-0.5 ${
+                      isIn 
+                        ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300' 
+                        : 'bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300'
+                    }`}>
                       {isIn ? <ArrowDownLeft className="w-3.5 h-3.5" /> : <ArrowUpRight className="w-3.5 h-3.5" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-baseline">
-                        <p className="text-xs font-bold text-slate-800 truncate">{tx.productName}</p>
-                        <span className={`text-xs font-bold ${isIn ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{tx.productName}</p>
+                        <span className={`text-xs font-bold ${isIn ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                           {isIn ? '+' : '-'}{tx.qty}
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-400 truncate mt-0.5">{tx.notes || tx.user || 'Sistem'}</p>
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate mt-0.5">{tx.notes || tx.user || 'Sistem'}</p>
                     </div>
                   </div>
                 );

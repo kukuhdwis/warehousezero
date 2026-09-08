@@ -15,7 +15,9 @@ import {
   ExternalLink,
   User,
   LogOut,
-  ChevronDown
+  ChevronDown,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -24,7 +26,9 @@ export default function Navbar({
   onMarkAsRead, 
   onMarkAllAsRead, 
   onNavigate,
-  onLogout
+  onLogout,
+  isDark = true,
+  onToggleDark
 }) {
   const [time, setTime] = useState(new Date());
   const [isNotifOpen, setIsNotifOpen] = useState(false);
@@ -99,7 +103,7 @@ export default function Navbar({
   };
 
   return (
-    <header className="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+    <header className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30 shadow-xs transition-colors">
       <div className="px-4 lg:px-8 py-3 flex items-center justify-between">
         
         {/* Brand / Title */}
@@ -109,33 +113,47 @@ export default function Navbar({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-bold text-slate-900 tracking-tight text-base sm:text-lg leading-tight">
+              <h1 className="font-bold text-slate-900 dark:text-white tracking-tight text-base sm:text-lg leading-tight">
                 NDK Warehouse
               </h1>
               {currentUser?.branchName && (
-                <span className="hidden md:inline-flex px-2 py-0.2 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                <span className="hidden md:inline-flex px-2 py-0.2 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                   {currentUser.branchName}
                 </span>
               )}
             </div>
-            <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
+            <p className="text-[11px] text-slate-400 dark:text-slate-400 font-medium hidden sm:block">
               Warehouse Management System
             </p>
           </div>
         </div>
 
-        {/* Right Section: Notification Center & Clock */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* Right Section: Notification Center, Theme Toggle & Clock */}
+        <div className="flex items-center gap-1.5 sm:gap-3">
           
           {/* E-Katalog Publik Preview Button */}
           <button
             type="button"
             onClick={() => window.open('/catalog', '_blank')}
-            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
             title="Buka Halaman E-Katalog Publik di tab baru"
           >
             <span>🛍️ E-Katalog</span>
             <ExternalLink className="w-3.5 h-3.5 opacity-70" />
+          </button>
+
+          {/* Light / Dark Mode Toggle Button */}
+          <button
+            type="button"
+            onClick={(e) => onToggleDark && onToggleDark(e)}
+            className="p-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 rounded-xl transition cursor-pointer active:scale-95"
+            title={isDark ? "Ganti ke Light Mode" : "Ganti ke Dark Mode"}
+          >
+            {isDark ? (
+              <Sun className="w-5 h-5 text-amber-400 hover:rotate-90 transition-transform duration-300" />
+            ) : (
+              <Moon className="w-5 h-5 text-slate-600 hover:-rotate-12 transition-transform duration-300" />
+            )}
           </button>
           
           {/* Notification Center Bell */}
@@ -143,12 +161,12 @@ export default function Navbar({
             <button
               type="button"
               onClick={() => setIsNotifOpen(!isNotifOpen)}
-              className="relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition cursor-pointer active:scale-95"
+              className="relative p-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 rounded-xl transition cursor-pointer active:scale-95"
               title="Notifikasi & Validasi Alur"
             >
               <Bell className="w-5 h-5" />
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-extrabold rounded-full flex items-center justify-center border-2 border-white animate-pulse">
+                <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-extrabold rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 animate-pulse">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
@@ -156,14 +174,14 @@ export default function Navbar({
 
             {/* Notification Dropdown Panel */}
             {isNotifOpen && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                 
                 {/* Dropdown Header */}
-                <div className="p-3.5 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between">
+                <div className="p-3.5 bg-slate-50/80 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-xs sm:text-sm text-slate-900">Pusat Notifikasi</span>
+                    <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">Pusat Notifikasi</span>
                     {unreadCount > 0 && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400">
                         {unreadCount} Baru
                       </span>
                     )}
@@ -173,7 +191,7 @@ export default function Navbar({
                     <button
                       type="button"
                       onClick={() => onMarkAllAsRead(currentUser)}
-                      className="text-[11px] font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-1 cursor-pointer"
+                      className="text-[11px] font-semibold text-sky-600 dark:text-sky-400 hover:text-sky-700 flex items-center gap-1 cursor-pointer"
                     >
                       <CheckCheck className="w-3.5 h-3.5" />
                       <span>Tandai Semua</span>
@@ -182,10 +200,10 @@ export default function Navbar({
                 </div>
 
                 {/* Notification List */}
-                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
                   {safeNotifications.length === 0 ? (
-                    <div className="p-8 text-center text-slate-400 space-y-1.5">
-                      <Bell className="w-6 h-6 mx-auto text-slate-300 stroke-1" />
+                    <div className="p-8 text-center text-slate-400 dark:text-slate-500 space-y-1.5">
+                      <Bell className="w-6 h-6 mx-auto text-slate-300 dark:text-slate-600 stroke-1" />
                       <p className="text-xs font-medium">Belum ada notifikasi baru.</p>
                     </div>
                   ) : (
@@ -204,26 +222,26 @@ export default function Navbar({
                         <div
                           key={notif.id}
                           onClick={() => handleNotificationClick(notif)}
-                          className={`p-3.5 hover:bg-slate-50 transition cursor-pointer flex items-start gap-3 ${
-                            !notif.isRead ? 'bg-indigo-50/40 border-l-2 border-indigo-500' : ''
+                          className={`p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition cursor-pointer flex items-start gap-3 ${
+                            !notif.isRead ? 'bg-indigo-50/40 dark:bg-indigo-950/30 border-l-2 border-indigo-500' : ''
                           }`}
                         >
                           <div className={`p-2 rounded-xl flex-shrink-0 mt-0.5 ${
                             isStockReq
-                              ? 'bg-indigo-100 text-indigo-700'
+                              ? 'bg-indigo-100 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300'
                               : (isStockIncoming || isStockApproved)
-                                ? 'bg-emerald-100 text-emerald-700'
+                                ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300'
                                 : isStockRejected
-                                  ? 'bg-rose-100 text-rose-700'
+                                  ? 'bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300'
                                   : isStockReceived
-                                    ? 'bg-emerald-100 text-emerald-700'
+                                    ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300'
                                     : isRequest 
-                                      ? 'bg-amber-100 text-amber-700' 
+                                      ? 'bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300' 
                                       : isApproved 
-                                        ? 'bg-emerald-100 text-emerald-700' 
+                                        ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300' 
                                         : isRejected
-                                          ? 'bg-rose-100 text-rose-700'
-                                          : 'bg-sky-100 text-sky-700'
+                                          ? 'bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300'
+                                          : 'bg-sky-100 dark:bg-sky-950/70 text-sky-700 dark:text-sky-300'
                           }`}>
                             {isStockReq && <Package className="w-4 h-4" />}
                             {(isStockIncoming || isStockApproved) && <Truck className="w-4 h-4" />}
@@ -237,17 +255,17 @@ export default function Navbar({
 
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-1">
-                              <h4 className="text-xs font-bold text-slate-900 truncate">
+                              <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
                                 {notif.title || 'Notifikasi'}
                               </h4>
                               {!notif.isRead && (
                                 <span className="w-2 h-2 rounded-full bg-sky-500 flex-shrink-0" />
                               )}
                             </div>
-                            <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed line-clamp-2">
+                            <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed line-clamp-2">
                               {notif.message || ''}
                             </p>
-                            <span className="text-[10px] text-slate-400 block mt-1">
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500 block mt-1">
                               {formatNotifTime(notif.createdAt)}
                             </span>
                           </div>
@@ -259,8 +277,8 @@ export default function Navbar({
 
                 {/* Dropdown Footer */}
                 {notifications.length > 0 && (
-                  <div className="p-2.5 bg-slate-50 border-t border-slate-100 text-center">
-                    <p className="text-[10px] text-slate-400 font-medium">
+                  <div className="p-2.5 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-100 dark:border-slate-800 text-center">
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
                       Monitoring alur persetujuan inventaris & mutasi stok
                     </p>
                   </div>
@@ -271,7 +289,7 @@ export default function Navbar({
           </div>
 
           {/* Right: Real-time Clock (Desktop only) */}
-          <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl text-slate-600 text-xs font-mono">
+          <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-300 text-xs font-mono">
             <Clock className="w-3.5 h-3.5 text-slate-400" />
             <span>{time.toLocaleTimeString('id-ID')} WIB</span>
           </div>
@@ -281,16 +299,16 @@ export default function Navbar({
             <button
               type="button"
               onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="flex items-center gap-2 p-1 pr-2 sm:pr-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-full transition cursor-pointer active:scale-95 shadow-2xs"
+              className="flex items-center gap-2 p-1 pr-2 sm:pr-3 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 rounded-full transition cursor-pointer active:scale-95 shadow-2xs"
             >
               <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-inner">
                 {currentUser?.name?.charAt(0)?.toUpperCase() || 'U'}
               </div>
               <div className="hidden sm:block text-left max-w-[100px]">
-                <p className="text-xs font-bold text-slate-900 truncate leading-tight">
+                <p className="text-xs font-bold text-slate-900 dark:text-white truncate leading-tight">
                   {currentUser?.name || 'User'}
                 </p>
-                <p className="text-[9px] text-slate-500 font-medium truncate leading-tight">
+                <p className="text-[9px] text-slate-500 dark:text-slate-400 font-medium truncate leading-tight">
                   {currentUser?.role === 'ADMIN' ? 'Administrator' : 'Staff'}
                 </p>
               </div>
@@ -299,15 +317,15 @@ export default function Navbar({
 
             {/* Dropdown Menu */}
             {isProfileOpen && (
-              <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                <div className="p-4 bg-slate-50 border-b border-slate-100">
-                  <p className="text-sm font-bold text-slate-900 truncate">
+              <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-800">
+                  <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
                     {currentUser?.name || 'User Name'}
                   </p>
-                  <p className="text-xs text-slate-500 truncate mt-0.5">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
                     {currentUser?.email || 'user@email.com'}
                   </p>
-                  <div className="mt-2 inline-flex px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-sky-100 text-sky-700 border border-sky-200/50 uppercase tracking-wider">
+                  <div className="mt-2 inline-flex px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-sky-100 dark:bg-sky-950/70 text-sky-700 dark:text-sky-300 border border-sky-200/50 dark:border-sky-800/50 uppercase tracking-wider">
                     {currentUser?.role === 'ADMIN' ? 'Lord Admin Pusat' : (currentUser?.role || 'Staff')}
                   </div>
                 </div>
@@ -319,7 +337,7 @@ export default function Navbar({
                       setIsProfileOpen(false);
                       if (onLogout) onLogout();
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer text-sm font-semibold"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl transition cursor-pointer text-sm font-semibold"
                   >
                     <LogOut className="w-4 h-4" />
                     <span>Keluar / Logout</span>

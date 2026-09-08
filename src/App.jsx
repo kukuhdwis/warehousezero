@@ -89,10 +89,35 @@ import LogoutConfirmModal from './components/LogoutConfirmModal';
 import CustomAlertModal from './components/CustomAlertModal';
 import { db } from './services/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { toggleThemeWithClipPath } from './utils/themeAnimation';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(getStoredUser());
   const [forceLogoutAlert, setForceLogoutAlert] = useState(null);
+
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ndk_theme');
+      if (saved) return saved === 'dark';
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('ndk_theme', isDark ? 'dark' : 'light');
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle('dark', isDark);
+    }
+  }, [isDark]);
+
+  const toggleDark = (e) => {
+    toggleThemeWithClipPath(e, () => {
+      const next = !isDark;
+      setIsDark(next);
+      document.documentElement.classList.toggle('dark', next);
+      localStorage.setItem('ndk_theme', next ? 'dark' : 'light');
+    });
+  };
 
   const handleForceLogout = async (reason) => {
     try {
@@ -936,7 +961,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col font-sans antialiased text-slate-800">
+    <div className={`min-h-screen flex flex-col font-sans antialiased transition-colors duration-200 ${
+      isDark ? 'bg-slate-950 text-slate-100 dark' : 'bg-slate-100 text-slate-800'
+    }`}>
       {/* Top Navbar with Real-time Notification Center */}
       <Navbar 
         currentUser={resolvedCurrentUser}
@@ -945,6 +972,8 @@ export default function App() {
         onMarkAllAsRead={handleMarkAllNotificationsRead}
         onNavigate={handleNavigate}
         onLogout={handleLogout}
+        isDark={isDark}
+        onToggleDark={toggleDark}
       />
 
       <div className="flex-1 flex overflow-hidden">
@@ -1104,7 +1133,7 @@ export default function App() {
       {/* SMART QR CODE DETECTED MODAL (WHEN LOGGED-IN STAFF SCANS QR FROM OUTSIDE APP) */}
       {isQrActionSheetOpen && detectedProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200 flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 dark:border-slate-800 animate-in zoom-in-95 duration-200 flex flex-col">
             
             <div className="p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -1125,29 +1154,29 @@ export default function App() {
             </div>
 
             <div className="p-5 space-y-4">
-              <div className="flex items-center gap-3.5 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+              <div className="flex items-center gap-3.5 p-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl">
                 {detectedProduct.imageUrl ? (
                   <img 
                     src={detectedProduct.imageUrl} 
                     alt={detectedProduct.name} 
-                    className="w-16 h-16 rounded-xl object-cover border border-slate-200 shadow-2xs flex-shrink-0 bg-white" 
+                    className="w-16 h-16 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shadow-2xs flex-shrink-0 bg-white" 
                   />
                 ) : (
-                  <div className="w-16 h-16 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 font-bold text-xs flex-shrink-0">
+                  <div className="w-16 h-16 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-xs flex-shrink-0">
                     <Package className="w-7 h-7 opacity-60" />
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="px-2 py-0.2 rounded text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-200">
+                    <span className="px-2 py-0.2 rounded text-[10px] font-black bg-amber-100 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-700">
                       {detectedProduct.engine_type || 'Universal'}
                     </span>
-                    <span className="text-[11px] font-mono text-slate-500 font-bold">
+                    <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 font-bold">
                       {detectedProduct.sku || detectedProduct.code}
                     </span>
                   </div>
-                  <h5 className="font-bold text-slate-900 text-sm mt-0.5 truncate">{detectedProduct.name}</h5>
-                  <p className="text-xs font-bold text-emerald-600 mt-0.5">
+                  <h5 className="font-bold text-slate-900 dark:text-white text-sm mt-0.5 truncate">{detectedProduct.name}</h5>
+                  <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
                     Rp {(Number(detectedProduct.selling_price ?? detectedProduct.price) || 0).toLocaleString('id-ID')}
                   </p>
                 </div>
@@ -1181,12 +1210,12 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => {
-                    setIsCatalogMode(true);
+                    window.open(`/catalog?sku=${encodeURIComponent(detectedProduct.sku || detectedProduct.code || '')}`, '_blank');
                     setIsQrActionSheetOpen(false);
                   }}
-                  className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-2.5 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Eye className="w-4 h-4 text-slate-500" />
+                  <Eye className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                   <span>Lihat Tampilan E-Katalog Publik</span>
                 </button>
               </div>
@@ -1202,6 +1231,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={changeTab}
         onLogout={handleLogout}
+        isDark={isDark}
       />
 
 

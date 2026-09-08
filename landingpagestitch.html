@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+
+<html class="scroll-smooth" lang="id">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>NDK Exhaust × RGN Performance | Precision Exhaust Engineering</title>
+    <!-- Tailwind CSS v3 with Plugins -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <!-- Google Fonts: Oswald & Inter -->
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;family=Oswald:wght@500;600;700&amp;display=swap"
+        rel="stylesheet" />
+    <!-- Tailwind Configuration -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        ink: '#0A0A0A',
+                        paper: '#FFFFFF',
+                        ember: '#D91F2C',
+                        'ember-deep': '#8F1019',
+                        'ember-tint': '#FBEAEA',
+                        smoke: '#F5F5F4',
+                        steel: '#5B5B58'
+                    },
+                    fontFamily: {
+                        display: ['Oswald', 'sans-serif'],
+                        body: ['Inter', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Custom Styles for Technical Motorsport Details -->
+    <style data-purpose="custom-styling">
+        .racing-grid {
+            background-size: 40px 40px;
+            background-image:
+                linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        }
+
+        .carbon-texture {
+            background-color: #0d0d0d;
+            background-image: radial-gradient(rgba(217, 31, 44, 0.15) 1px, transparent 0);
+            background-size: 24px 24px;
+        }
+
+        .weld-pattern {
+            background: repeating-linear-gradient(45deg,
+                    rgba(217, 31, 44, 0.03),
+                    rgba(217, 31, 44, 0.03) 10px,
+                    rgba(0, 0, 0, 0.02) 10px,
+                    rgba(0, 0, 0, 0.02) 20px);
+        }
+
+        @keyframes marqueeScroll {
+            0% {
+                transform: translateX(0);
+            }
+
+            100% {
+                transform: translateX(-50%);
+            }
+        }
+
+        .marquee-track {
+            display: flex;
+            width: max-content;
+            animation: marqueeScroll 38s linear infinite;
+        }
+
+        .marquee-track:hover {
+            animation-play-state: paused;
+        }
+    </style>
+</head>
+
+<body class="bg-paper text-ink font-body antialiased selection:bg-ember selection:text-white">
+    <!-- BEGIN: MinimalistNav (Item 1) -->
+    <header class="sticky top-0 z-50 bg-ink/95 backdrop-blur-md border-b border-zinc-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Logo Lockup: NDK WHITE & RGN PUTIH with clean divider -->
+            <a class="flex items-center gap-3 sm:gap-4 group py-1" href="#beranda">
+                <img alt="NDK Exhaust Logo"
+                    class="h-6 sm:h-7 w-auto object-contain transition-transform group-hover:opacity-90"
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuAcLaFbtcw8MtEUUtmnuw2XOsWK2ZbVE-O7mhGVHKmrrwqBp5aNkAxSn12HyebH65pI_GhOXkqAaodXVTOWgp1qplv7muTWsp9j_jgdBgwor_Oi-g_52k1tpkv-r8cVpy_OV1flkQNK9J9d_luxsuOoOm5II-WtTGTE3eNHdXCf4o1_aQXcCXfa44mAvNzPxoRANX05BCqE6ebmNT0rY-UddzYvNyGfNTTqr6lIGztJdubRe-wtMynSh-o--f-MUn7g1g" />
+                <span class="h-5 w-[1px] bg-zinc-700"></span>
+                <img alt="RGN Performance Logo"
+                    class="h-5 sm:h-6 w-auto object-contain transition-transform group-hover:opacity-90"
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJALA140kLJbkZoKi9c4JMojY2HcqUQuqmgVX3tIosc4cHtXF-_t7aY9TWzUUsSLVhIlZ7U4NAo1QdhlK7-Qn3OWml3UYLLktJ6-Geyj2o_zVvPsUIMgDzN3SvlZ-EctBQNb_fUqjJwmxh_shH0lWqa6BpWGA6yi9mUhOoSDz6_gQUL_lEo3ld0gFKv8tB1fvjSYz_Q35fpLyahbGc-hl_m9bJb-A97Rtu-vY2QsZUpiIQFtldinBEpivNC6Q-22BeJw" />
+            </a>
+            <!-- Navigation Menu (Beranda, Testimoni, Tentang Kami) -->
+            <nav
+                class="hidden md:flex items-center space-x-8 text-xs sm:text-sm font-display uppercase tracking-widest text-zinc-300">
+                <a class="hover:text-ember transition-colors text-white" href="#beranda">Beranda</a>
+                <a class="hover:text-ember transition-colors" href="#testimoni">Testimoni</a>
+                <a class="hover:text-ember transition-colors" href="#workshop">Tentang Kami</a>
+            </nav>
+            <!-- CTA Button: Konsultasi -> (#D91F2C) -->
+            <div class="flex items-center">
+                <a class="bg-ember hover:bg-ember-deep text-white text-xs font-display font-semibold uppercase tracking-wider px-4 sm:px-5 py-2.5 rounded transition-all shadow-md flex items-center gap-2"
+                    href="https://wa.me/6281234567890" rel="noopener noreferrer" target="_blank">
+                    <span>KONSULTASI</span>
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+                        <path d="M14 5l7 7m0 0l-7 7m7-7H3" stroke-linecap="round" stroke-linejoin="round"
+                            stroke-width="2"></path>
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </header>
+    <!-- END: MinimalistNav -->
+    <main id="beranda">
+        <!-- BEGIN: HeroSectionWithCenteredLogoAndAutoScroll -->
+        <section class="relative bg-ink text-paper pt-8 pb-16 lg:pt-12 lg:pb-20 overflow-hidden racing-grid">
+            <!-- Gradient flare in background -->
+            <div
+                class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-ember/20 blur-[130px] rounded-full pointer-events-none">
+            </div>
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+                <!-- CAROUSEL FRAME BERGULIR DENGAN HEADLINE UTAMA -->
+                <div class="relative rounded-2xl border border-zinc-800 bg-black/60 shadow-2xl overflow-hidden mb-8">
+                    <!-- Continuous Auto-Scrolling Marquee Track -->
+                    <div class="relative w-full overflow-hidden h-[460px] sm:h-[520px] lg:h-[560px]">
+                        <div class="marquee-track h-full">
+                            <!-- Slide Item 1: Stainless SUS304 Exhaust Craftsmanship -->
+                            <div
+                                class="relative w-[340px] sm:w-[440px] lg:w-[500px] h-full shrink-0 border-r border-zinc-800/80 group">
+                                <img alt="Precision Stainless Steel Exhaust Pipe"
+                                    class="w-full h-full object-cover filter brightness-[0.4] group-hover:brightness-[0.55] transition-all duration-700 scale-105 group-hover:scale-100"
+                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQL_hzk8XUnFhLUS_Xo6saaeHkT54VNmCZOuyf3rZPKRekCwLzlxXP4imYr9xG6G0AZJUo8KTtgndkzNsaiA8AUlod5NuFcIBlCQpw5xzg8VYlOPjwiMiByg8lVtJ4GlGA_uirf3RagqXA0scBJXc4Hl3djvWRZ50suVJUZEw199AdSDXlxR1U9H4rDdQQQuK9Ywjp13EttVghGDNyVSAdYsD3cav9dwt6MkhVT4aadtkkInV_keGs" />
+                                <div class="absolute bottom-6 left-6 right-6 z-10">
+                                    <span
+                                        class="text-[10px] font-mono uppercase tracking-widest bg-ember/30 text-white px-2 py-0.5 rounded border border-ember/40">SUS304
+                                        TIG Welding</span>
+                                    <p class="font-display text-lg text-white font-bold uppercase mt-1">Stainless Steel
+                                        Craftsmanship</p>
+                                </div>
+                            </div>
+                            <!-- Slide Item 2: Dyno Jet Tuning Simulation -->
+                            <div
+                                class="relative w-[340px] sm:w-[440px] lg:w-[500px] h-full shrink-0 border-r border-zinc-800/80 group">
+                                <img alt="Exhaust Sound Performance &amp; Dyno"
+                                    class="w-full h-full object-cover filter brightness-[0.38] group-hover:brightness-[0.55] transition-all duration-700 scale-105 group-hover:scale-100"
+                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMTlNHy8rzO_cWzR7RuNuTCT8Fd8Vxs5L64A--ruN_7Fe9oG4LMxn3BaY1Xzqfm_LTctHpL1OcBqm2HjJ3QQU5u886WBGPORGWWQeK0aoLotjJuS-pEZ-zil5aksCLfGaD1rnLeQdIma23Y8LuwOAsE1fTTdjhP7PrNufvFIXgnAQdpMVuDdOU6rpBP7OH1ry3NeUvx8Jh1Zx-fSoSaCcmF5fHCtYv9t4fMb027eUw31Xa7AjSrMkI" />
+                                <div class="absolute bottom-6 left-6 right-6 z-10">
+                                    <span
+                                        class="text-[10px] font-mono uppercase tracking-widest bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded border border-zinc-700">Backpressure
+                                        R&amp;D</span>
+                                    <p class="font-display text-lg text-white font-bold uppercase mt-1">Dyno Certified
+                                        Acceleration</p>
+                                </div>
+                            </div>
+                            <!-- Slide Item 3: Argon Welded Header & Downpipe -->
+                            <div
+                                class="relative w-[340px] sm:w-[440px] lg:w-[500px] h-full shrink-0 border-r border-zinc-800/80 group">
+                                <img alt="Sports Car Exhaust System"
+                                    class="w-full h-full object-cover filter brightness-[0.4] group-hover:brightness-[0.55] transition-all duration-700 scale-105 group-hover:scale-100"
+                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDOhU6Fu9-luO2zFupw42D8-t3VkoKq7h17eveoAdwi-X5pnMTj6FTUn0d0I-Jf7U18VrH0tbh4OJ35utnrHRjXZuA1g9Rmqfi9xYxf_QcG05I0mF0g2JBEH_9RrQ2P1bM_PQ20oPP6Tw2InzZ4Nd49LChtTa0Jna1j55nuZvd1_mW7WM0MfT74-bFSOr01WtPuiwJ4X8IaN5zTbNZM4gRtRqRz1DatltAbdg9QzVi2YzFKdV_KzDLD" />
+                                <div class="absolute bottom-6 left-6 right-6 z-10">
+                                    <span
+                                        class="text-[10px] font-mono uppercase tracking-widest bg-ember/30 text-white px-2 py-0.5 rounded border border-ember/40">Laminar
+                                        Gas Flow</span>
+                                    <p class="font-display text-lg text-white font-bold uppercase mt-1">Turbo Downpipe
+                                        &amp; Frontpipe</p>
+                                </div>
+                            </div>
+                            <!-- Slide Item 4: Track Performance Exhaust -->
+                            <div
+                                class="relative w-[340px] sm:w-[440px] lg:w-[500px] h-full shrink-0 border-r border-zinc-800/80 group">
+                                <img alt="Motorsport Engineering"
+                                    class="w-full h-full object-cover filter brightness-[0.35] group-hover:brightness-[0.55] transition-all duration-700 scale-105 group-hover:scale-100"
+                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDZNhgMOPQw6hoSL5tSrKyRL3BBJizGyBa51m6xDbqlPqurWDpBg1RVxkvM62ED9iDSRfvCuo2CifCtHYFf_Xbx5paWcD3ynKs1jZGyL97Wq1qX830kUDOGJyixczJWAVlC7CJYTrFwuUlCgoAyAlLDeVC4VCLTP4Z_8k0xbfGe0kZX-DzXcrOtK4qUiqtLplguxZ8HwFP4UsopUy5mPrXuv5sGcJGuxHjCG1QnE2pYdFUfVpiXuKEq" />
+                                <div class="absolute bottom-6 left-6 right-6 z-10">
+                                    <span
+                                        class="text-[10px] font-mono uppercase tracking-widest bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded border border-zinc-700">Zero
+                                        Drone Tech</span>
+                                    <p class="font-display text-lg text-white font-bold uppercase mt-1">Acoustic
+                                        Harmonics Engineering</p>
+                                </div>
+                            </div>
+                            <!-- Duplicate Set for Seamless Continuous Sliding Loop -->
+                            <div
+                                class="relative w-[340px] sm:w-[440px] lg:w-[500px] h-full shrink-0 border-r border-zinc-800/80 group">
+                                <img alt="Precision Stainless Steel Exhaust Pipe"
+                                    class="w-full h-full object-cover filter brightness-[0.4] group-hover:brightness-[0.55] transition-all duration-700 scale-105 group-hover:scale-100"
+                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJLgvGBhrXtflPZHli1cMz3ojOTHf_Z_d54K8BdcM_ks97DQUTC8JN4Jx4NVe5c0Z68Ih77RtcVaXorZDK-BX2MrMbBWjGUKDsHB-Wrsfr3NyLg5Ch89FujctjTUyiJGzXJngeLxqRz0SoGCgAOsrFuGYN8MqJTTPVlEkJyEtkKUBWU90TMawATtEefX6wwWVtCo4_sQT-jU02AeJmnI6oraFg0Z_1pTPrKoVruVHFWO-YRxXsb4YX" />
+                                <div class="absolute bottom-6 left-6 right-6 z-10">
+                                    <span
+                                        class="text-[10px] font-mono uppercase tracking-widest bg-ember/30 text-white px-2 py-0.5 rounded border border-ember/40">SUS304
+                                        TIG Welding</span>
+                                    <p class="font-display text-lg text-white font-bold uppercase mt-1">Stainless Steel
+                                        Craftsmanship</p>
+                                </div>
+                            </div>
+                            <div
+                                class="relative w-[340px] sm:w-[440px] lg:w-[500px] h-full shrink-0 border-r border-zinc-800/80 group">
+                                <img alt="Exhaust Sound Performance &amp; Dyno"
+                                    class="w-full h-full object-cover filter brightness-[0.38] group-hover:brightness-[0.55] transition-all duration-700 scale-105 group-hover:scale-100"
+                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuBCCQKXB8zaNBid_3o_Im3DUI9q8cs3iXyaLkofWjV1AnqYH_HxyT16j8GPOThPVCEJ0ZgXZ4PyGBhzRo5qT1LQnh4_DNOj1sKaC9F0rAqYldnxILgiDVE6EgWQYcCJdiaUYV8xyl3Qthpsnylj1oOaFzHWuwF_EOB8esqFuRRWzMShoJyMDmo3Pg-yUTovAEUL83boJf6aETDQaFT8pwHp3A73uRU5pOXp3DlMPa7DzKA0MHJS48Q0" />
+                                <div class="absolute bottom-6 left-6 right-6 z-10">
+                                    <span
+                                        class="text-[10px] font-mono uppercase tracking-widest bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded border border-zinc-700">Backpressure
+                                        R&amp;D</span>
+                                    <p class="font-display text-lg text-white font-bold uppercase mt-1">Dyno Certified
+                                        Acceleration</p>
+                                </div>
+                            </div>
+                            <div
+                                class="relative w-[340px] sm:w-[440px] lg:w-[500px] h-full shrink-0 border-r border-zinc-800/80 group">
+                                <img alt="Sports Car Exhaust System"
+                                    class="w-full h-full object-cover filter brightness-[0.4] group-hover:brightness-[0.55] transition-all duration-700 scale-105 group-hover:scale-100"
+                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVHs2e50t7RQX7QoAFYEAiAiXCxAUzC2Ibfieion8Bkne9ElEz8w4AiUJeR-ZbzkHrY2zBkIfSZ0M0xNzqhnrTBv_-DVgyJaFvDhftMZw0qiHinWmZFruPxroFUuO293gRNzOl22IxX-Qxj2jLKvywirTblZ2aNp4XR7S5f3BuwfpNi6-mPoagLnUx-_scL7-Ga4P1zqDQBieKCpnW0ZjtA3p29TsziAOEYOgFN8FfVL7wkWJrMh0J" />
+                                <div class="absolute bottom-6 left-6 right-6 z-10">
+                                    <span
+                                        class="text-[10px] font-mono uppercase tracking-widest bg-ember/30 text-white px-2 py-0.5 rounded border border-ember/40">Laminar
+                                        Gas Flow</span>
+                                    <p class="font-display text-lg text-white font-bold uppercase mt-1">Turbo Downpipe
+                                        &amp; Frontpipe</p>
+                                </div>
+                            </div>
+                            <div
+                                class="relative w-[340px] sm:w-[440px] lg:w-[500px] h-full shrink-0 border-r border-zinc-800/80 group">
+                                <img alt="Motorsport Engineering"
+                                    class="w-full h-full object-cover filter brightness-[0.35] group-hover:brightness-[0.55] transition-all duration-700 scale-105 group-hover:scale-100"
+                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuCb33zgA-uVPrqJtC3DKsd_Kh2T1AUK0E1AsNMWzOOPbcI4Pbyjo5FfeprCSlL3a4uBTv0QgchhsornTzowKoYpclbFpsaZnbMS5SrfvimTLcOYasQtJ2_crmon8A5GM0sjMdNr56TwGQaQiauU2HPvzag0395Mj0FdHvmRiEYp4N0hEcZABH8uhMX6Xxbx-c4B26tnlX8C96tf_jXr4pLgtvimRCijsDalgNkZbBNWjQekMOAsSYme" />
+                                <div class="absolute bottom-6 left-6 right-6 z-10">
+                                    <span
+                                        class="text-[10px] font-mono uppercase tracking-widest bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded border border-zinc-700">Zero
+                                        Drone Tech</span>
+                                    <p class="font-display text-lg text-white font-bold uppercase mt-1">Acoustic
+                                        Harmonics Engineering</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Hero Overlay Content: Headline Utama & Tombol CTA (Items 2, 3, 4, 5) -->
+                    <div
+                        class="absolute inset-0 bg-gradient-to-t from-ink via-ink/65 to-transparent flex flex-col items-center justify-end pb-10 sm:pb-16 px-4 sm:px-8 text-center pointer-events-none">
+                        <div class="pointer-events-auto max-w-4xl mx-auto">
+                            <!-- Impactful Headline -->
+                            <h1
+                                class="font-display text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight uppercase leading-[1.08] mb-6 sm:mb-8 text-white drop-shadow-lg">
+                                WE DON'T BUILD EXHAUST<br class="hidden sm:inline" />
+                                <span
+                                    class="text-transparent bg-clip-text bg-gradient-to-r from-paper via-zinc-200 to-ember">JUST
+                                    TO MAKE SOUND</span>
+                            </h1>
+                            <!-- Single Clean Focused CTA Button -->
+                            <div class="flex items-center justify-center">
+                                <a class="inline-flex items-center justify-center gap-2 bg-ember hover:bg-ember-deep text-white font-display text-sm sm:text-base uppercase tracking-wider px-8 py-3.5 rounded font-semibold shadow-lg shadow-ember/30 transition-all transform hover:-translate-y-0.5"
+                                    href="https://wa.me/6281234567890" rel="noopener noreferrer" target="_blank">
+                                    <span>KONSULTASI SEKARANG</span>
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+                                        <path d="M14 5l7 7m0 0l-7 7m7-7H3" stroke-linecap="round"
+                                            stroke-linejoin="round" stroke-width="2"></path>
+                                    </svg>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Item 5: Clean, elegant industrial divider line -->
+            <div class="w-full border-b border-zinc-800/90 relative">
+                <div class="absolute left-1/2 -translate-x-1/2 -bottom-[1px] w-32 h-[2px] bg-ember"></div>
+            </div>
+        </section>
+        <!-- END: HeroSectionWithCenteredLogoAndAutoScroll -->
+        <!-- Items 6, 7, 8: Statement Breakout Section (kicker, quote, long intro) dihapus sesuai instruksi -->
+        <!-- BEGIN: ThreePrinciplesSection (Item 9) -->
+        <!-- 3 Pilar Rekayasa: Format kartu horizontal modern dengan gambar di sisi kiri penuh & Tagline tegas di kanan -->
+        <section class="py-20 lg:py-24 bg-smoke relative" id="prinsip">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <!-- Section Header -->
+                <div class="text-center max-w-3xl mx-auto mb-14">
+                    <p class="font-mono text-xs uppercase tracking-widest text-ember font-bold mb-2">ENGINEERING
+                        PHILOSOPHY</p>
+                    <h2 class="font-display text-3xl sm:text-5xl font-bold tracking-tight uppercase text-ink">
+                        Tiga Pilar Riset &amp; Manufaktur
+                    </h2>
+                </div>
+                <!-- 3 Re-engineered Cards: Image on left + Headline Tagline on right (no paragraph) -->
+                <div class="space-y-6">
+                    <!-- Pilar 1: Design -->
+                    <div
+                        class="bg-paper rounded-2xl border border-zinc-200 overflow-hidden shadow-sm hover:border-ember transition-all duration-300 grid grid-cols-1 md:grid-cols-12 items-center group">
+                        <div class="md:col-span-6 lg:col-span-5 h-64 md:h-72 w-full overflow-hidden bg-zinc-950">
+                            <img alt="Technical CAD blueprint exhaust header"
+                                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuCTEW03dG2JmkGp0qbTyqvnQUZUIZXaW0s8j47ca68oFvjDJY3Q0eUGtboCeDOWj0r_aLNw9Vetj1WxEB6QWRXfYq6JNgFgloqv7BQkaeuVtUuhIw5obYdNM6ye6y-Y8mRRuSV4FKujtb9TEbw1YiORoBL_5twGEuTtYKgaQp0jX6yP6WWEa75Kwf5jvW90HQior7INu1_l1i5b-VQlMxiNneyGio5T-Xu4qshxYiT6UVkkjcwa3XtD" />
+                        </div>
+                        <div class="md:col-span-6 lg:col-span-7 p-8 sm:p-12">
+                            <span
+                                class="font-mono text-xs uppercase text-ember font-semibold tracking-wider block mb-3">PILAR
+                                01</span>
+                            <h3
+                                class="font-display text-2xl sm:text-4xl lg:text-5xl font-bold uppercase tracking-tight text-ink leading-tight">
+                                SETIAP DESAIN HARUS MEMILIKI ALASAN
+                            </h3>
+                        </div>
+                    </div>
+                    <!-- Pilar 2: Material -->
+                    <div
+                        class="bg-paper rounded-2xl border border-zinc-200 overflow-hidden shadow-sm hover:border-ember transition-all duration-300 grid grid-cols-1 md:grid-cols-12 items-center group">
+                        <div class="md:col-span-6 lg:col-span-5 h-64 md:h-72 w-full overflow-hidden bg-zinc-950">
+                            <img alt="SUS304 stainless steel pipe TIG welding rainbow seam"
+                                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuCw_WHcqYP4UeouevzfYMs1ES_TADDpHkxjvCjIWsAPXIIb4-E8LrE0aScHtMvglwXJwxD4-UMklY5_2V9rOgFr5GFb8qmxcN3M6lSNVJ34TYi9KeFcGxkUhX-9RSCREi3WnVu8oTZV5JxVHydf4417BFIRlIjpZTWXOcvkSRq7kvQXu0GzWQFCs9fV-JNekzjwJ5wyJlqYn7MPWv6DRDEeSUVuoxtMrgYQOXA6ua8ioC21kz6zLr1r" />
+                        </div>
+                        <div class="md:col-span-6 lg:col-span-7 p-8 sm:p-12">
+                            <span
+                                class="font-mono text-xs uppercase text-ember font-semibold tracking-wider block mb-3">PILAR
+                                02</span>
+                            <h3
+                                class="font-display text-2xl sm:text-4xl lg:text-5xl font-bold uppercase tracking-tight text-ink leading-tight">
+                                SETIAP MATERIAL HARUS MEMILIKI FUNGSI
+                            </h3>
+                        </div>
+                    </div>
+                    <!-- Pilar 3: Ukuran -->
+                    <div
+                        class="bg-paper rounded-2xl border border-zinc-200 overflow-hidden shadow-sm hover:border-ember transition-all duration-300 grid grid-cols-1 md:grid-cols-12 items-center group">
+                        <div class="md:col-span-6 lg:col-span-5 h-64 md:h-72 w-full overflow-hidden bg-zinc-950">
+                            <img alt="Micrometer precision measuring &amp; dyno tuning graph"
+                                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuCh6ZlnHLguR9S5gthW4LMv0_nINWtjS-fstQatoIXf71n8gids3At9tEeZU19FQtQwMbsJbrHcyBRgUQa74jCo2rzp2cVSXJBXYzsogpzNnHhzmuN1KM9sG4QMRN-zPdiKfoRcJdk1YLd9vGLOuEBJHxvQ1aaPbUNlVOZ2P36-1lW0zJRGOeGkclO5j_xwhKMI4xiYlPcNS2W2qS5NzSQGvO8rSYoex4NGAb9QTd3xodSEjilmAopx" />
+                        </div>
+                        <div class="md:col-span-6 lg:col-span-7 p-8 sm:p-12">
+                            <span
+                                class="font-mono text-xs uppercase text-ember font-semibold tracking-wider block mb-3">PILAR
+                                03</span>
+                            <h3
+                                class="font-display text-2xl sm:text-4xl lg:text-5xl font-bold uppercase tracking-tight text-ink leading-tight">
+                                SETIAP UKURAN HARUS SUDAH DIPERHITUNGKAN
+                            </h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- END: ThreePrinciplesSection -->
+        <!-- BEGIN: TwoEnginesSpecialitySection (Item 10) -->
+        <!-- Clean, objective, data-driven comparison with official black logos and technical focus -->
+        <section class="py-24 bg-paper border-b border-zinc-200" id="dua-mesin">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <!-- Section Header -->
+                <div class="text-center max-w-3xl mx-auto mb-16">
+                    <p class="font-mono text-xs uppercase tracking-widest text-ember font-bold mb-2">DUAL SPECIALIZATION
+                        DIVISION</p>
+                    <h2 class="font-display text-3xl sm:text-5xl font-bold tracking-tight uppercase text-ink">
+                        TWO ENGINES TWO SPECIALITY
+                    </h2>
+                    <p class="text-steel mt-3 text-base">
+                        Spesialisasi riset terpisah untuk karakteristik mesin bensin dan diesel modern common-rail.
+                    </p>
+                </div>
+                <!-- 2 Side-by-Side Comparison Panels -->
+                <div
+                    class="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-0 lg:divide-x lg:divide-zinc-300 bg-smoke/50 rounded-2xl border border-zinc-200 overflow-hidden shadow-sm">
+                    <!-- LEFT CARD: NDK EXHAUST (Mesin Bensin) -->
+                    <div
+                        class="p-8 sm:p-12 flex flex-col justify-between hover:bg-white transition-colors duration-300">
+                        <div>
+                            <!-- Brand Header with Official NDK BLACK Logo -->
+                            <div class="flex items-center justify-between mb-6 pb-6 border-b border-zinc-200">
+                                <div><img alt="NDK Exhaust Logo" class="h-8 sm:h-9 w-auto object-contain"
+                                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuDctOUJZLctJfa26xVAq1fZ0Twxa6NQTUGsNHG-PzM1RPzXTUKLLhh-2_v992F88aZGDP3nYklnNDxihp6yv8EuNdgFlrIhvHCXw3Z0bCKza7IpQwHk0VcGsSGT65Ps7lmKnUy2DSUAMnyysQyaiIkNgfrVp23-T8fR1R03XdJZW9uujyAMdSI9RQYCbPISuR5IxfxHsOpQGUZ135VFljejf76p7myP9B_E88jD4G1KlGQf6w8C5JJlqUIdi_bMZS9Apg" />
+                                </div>
+                                <span
+                                    class="text-[11px] font-mono uppercase bg-zinc-200 text-zinc-800 px-3 py-1 rounded font-semibold">
+                                    Petrol Division
+                                </span>
+                            </div>
+                            <div
+                                class="inline-block text-xs font-mono font-bold text-ember uppercase tracking-wider mb-3">
+                                SPESIALISASI MESIN BENSIN (NA &amp; TURBOCHARGED)
+                            </div>
+                            <!-- Technical Data-driven Description -->
+                            <p class="text-ink font-normal text-sm sm:text-base leading-relaxed mb-6">
+                                Karakteristik mesin bensin memerlukan kalkulasi scavenging velocity dan resonansi gas
+                                buang presisi. Desain exhaust NDK dikembangkan melalui data uji dyno untuk menjaga
+                                tekanan balik (backpressure) ideal, mempertahankan torsi RPM bawah dan mengoptimalkan
+                                aliran udara pada RPM tinggi.
+                            </p>
+                            <!-- Technical Spec Highlights -->
+                            <div class="space-y-3 pt-4 border-t border-dashed border-zinc-200">
+                                <div class="flex items-start gap-2 text-sm text-steel">
+                                    <svg class="w-5 h-5 text-ember shrink-0 mt-0.5" fill="none" stroke="currentColor"
+                                        viewbox="0 0 24 24">
+                                        <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"
+                                            stroke-width="2"></path>
+                                    </svg>
+                                    <span><strong>Scavenging Effect:</strong> Geometri header 4-1 dan 4-2-1 untuk
+                                        evakuasi gas buang silinder maksimal.</span>
+                                </div>
+                                <div class="flex items-start gap-2 text-sm text-steel">
+                                    <svg class="w-5 h-5 text-ember shrink-0 mt-0.5" fill="none" stroke="currentColor"
+                                        viewbox="0 0 24 24">
+                                        <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"
+                                            stroke-width="2"></path>
+                                    </svg>
+                                    <span><strong>Resonansi Akustik Terukur:</strong> Reduksi frekuensi dengung kabin
+                                        tanpa menghambat kecepatan alir.</span>
+                                </div>
+                                <div class="flex items-start gap-2 text-sm text-steel">
+                                    <svg class="w-5 h-5 text-ember shrink-0 mt-0.5" fill="none" stroke="currentColor"
+                                        viewbox="0 0 24 24">
+                                        <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"
+                                            stroke-width="2"></path>
+                                    </svg>
+                                    <span><strong>Konstruksi Pipa SUS304:</strong> Mandrel bend konsisten untuk mencegah
+                                        turbulensi internal.</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-8 pt-6 border-t border-zinc-200">
+                            <a class="inline-flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wider text-ink hover:text-ember transition-colors"
+                                href="https://wa.me/6281234567890" rel="noopener noreferrer" target="_blank">
+                                <span>Konsultasi Seri Bensin</span>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+                                    <path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"
+                                        stroke-width="2"></path>
+                                </svg>
+                            </a>
+                        </div>
+                    </div>
+                    <!-- RIGHT CARD: RGN PERFORMANCE (Mesin Diesel) -->
+                    <div
+                        class="p-8 sm:p-12 flex flex-col justify-between hover:bg-white transition-colors duration-300">
+                        <div>
+                            <!-- Brand Header with Official RGN HITAM Logo -->
+                            <div class="flex items-center justify-between mb-6 pb-6 border-b border-zinc-200">
+                                <div><img alt="RGN Performance Logo" class="h-8 sm:h-9 w-auto object-contain"
+                                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuAhpc4EDXKrmYhDwJd6L4kFVVHE_vwrI3nJr5mTdmBsvfzVghyB7QFvT41M_vbfDCrAPaNbq73Y0T32n6Wi9i2rwl0VUkUN9BNe95CQuZCl91u9mZSz_g_i9vh2Ed8R47QKZFBEiYF6ddqfJ-zdafaqmM8ZRglfpO8MkQsOrfLzGX9CjiAqEP06xpwmTdRSrEW4VOaID-YOA5_Qj95F5Kc32LYvW91wcDcMRFvgOKtj8uGKX5izPx_EhlDh5IlzNTszMQ" />
+                                </div>
+                                <span
+                                    class="text-[11px] font-mono uppercase bg-ember-tint text-ember px-3 py-1 rounded font-semibold border border-ember/20">
+                                    Diesel Division
+                                </span>
+                            </div>
+                            <div
+                                class="inline-block text-xs font-mono font-bold text-ember uppercase tracking-wider mb-3">
+                                SPESIALISASI MESIN DIESEL MODERN (COMMON RAIL)
+                            </div>
+                            <!-- Technical Data-driven Description -->
+                            <p class="text-ink font-normal text-sm sm:text-base leading-relaxed mb-6">
+                                Karakteristik mesin diesel common rail berturbo berfokus pada efisiensi pelepasan
+                                temperatur gas buang (EGT) dan penurunan resistansi aliran. RGN merekayasa diameter
+                                downpipe dan frontpipe presisi guna meminimalkan turbo lag serta menunjang kinerja
+                                kompresi tinggi secara aman.
+                            </p>
+                            <!-- Technical Spec Highlights -->
+                            <div class="space-y-3 pt-4 border-t border-dashed border-zinc-200">
+                                <div class="flex items-start gap-2 text-sm text-steel">
+                                    <svg class="w-5 h-5 text-ember shrink-0 mt-0.5" fill="none" stroke="currentColor"
+                                        viewbox="0 0 24 24">
+                                        <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"
+                                            stroke-width="2"></path>
+                                    </svg>
+                                    <span><strong>Optimalisasi Spooling Turbo:</strong> Penurunan turbulensi gas buang
+                                        pasca turbine housing.</span>
+                                </div>
+                                <div class="flex items-start gap-2 text-sm text-steel">
+                                    <svg class="w-5 h-5 text-ember shrink-0 mt-0.5" fill="none" stroke="currentColor"
+                                        viewbox="0 0 24 24">
+                                        <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"
+                                            stroke-width="2"></path>
+                                    </svg>
+                                    <span><strong>Peredaman Suhu EGT:</strong> Aliran bebas hambatan menjaga suhu kerja
+                                        mesin tetap aman dan stabil.</span>
+                                </div>
+                                <div class="flex items-start gap-2 text-sm text-steel">
+                                    <svg class="w-5 h-5 text-ember shrink-0 mt-0.5" fill="none" stroke="currentColor"
+                                        viewbox="0 0 24 24">
+                                        <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"
+                                            stroke-width="2"></path>
+                                    </svg>
+                                    <span><strong>Sambungan Flange &amp; TIG Argon:</strong> Konstruksi presisi tahan
+                                        getaran tinggi dan tekanan boost diesel.</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-8 pt-6 border-t border-zinc-200">
+                            <a class="inline-flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wider text-ember hover:text-ember-deep transition-colors"
+                                href="https://wa.me/6281234567890" rel="noopener noreferrer" target="_blank">
+                                <span>Konsultasi Seri Diesel</span>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+                                    <path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"
+                                        stroke-width="2"></path>
+                                </svg>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- END: TwoEnginesSpecialitySection -->
+        <!-- BEGIN: ShowcaseAndTestimonialsSection -->
+        <section class="py-24 bg-smoke" id="testimoni">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <!-- Section Header -->
+                <div class="text-center max-w-3xl mx-auto mb-16">
+                    <p class="font-mono text-xs uppercase tracking-widest text-ember font-bold mb-2">PRECISION MEETS
+                        AESTHETICS</p>
+                    <h2 class="font-display text-3xl sm:text-5xl font-bold tracking-tight uppercase text-ink">
+                        Hasil Karya &amp; Review Pelanggan
+                    </h2>
+                    <p class="text-steel mt-3 text-base">
+                        Kombinasi estetika pengelasan TIG argon kelas motorsport dan kepuasan performa di jalan raya.
+                    </p>
+                </div>
+                <!-- Elegant Product Visual Spotlight -->
+                <div
+                    class="carbon-texture rounded-2xl border border-zinc-800 p-8 sm:p-12 mb-16 relative overflow-hidden shadow-2xl">
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+                        <div class="lg:col-span-6 text-paper z-10">
+                            <span
+                                class="inline-block px-3 py-1 bg-ember/20 text-ember border border-ember/30 rounded text-xs font-mono uppercase mb-4">
+                                Masterpiece Craftsmanship
+                            </span>
+                            <h3 class="font-display text-3xl sm:text-4xl font-bold uppercase tracking-tight mb-4">
+                                Seni Pengelasan Argon TIG &amp; Bahan Baku SUS304
+                            </h3>
+                            <p class="text-zinc-400 text-sm sm:text-base leading-relaxed mb-6 font-normal">
+                                Setiap tabung muffler dan lekukan pipa mandrel bend diproses dengan toleransi milimeter.
+                                Menghasilkan visual 'sisik naga' yang rapat dan tahan terhadap siklus pemuaian suhu
+                                ekstrem tanpa retak.
+                            </p>
+                            <div class="grid grid-cols-2 gap-4 text-xs font-mono">
+                                <div class="p-3 bg-zinc-900/80 rounded border border-zinc-800">
+                                    <span class="text-zinc-500 block">WELD TECHNIQUE</span>
+                                    <span class="text-zinc-200 font-bold">100% Argon Shielded TIG</span>
+                                </div>
+                                <div class="p-3 bg-zinc-900/80 rounded border border-zinc-800">
+                                    <span class="text-zinc-500 block">SOUND SIGNATURE</span>
+                                    <span class="text-ember font-bold">Deep Bass Solid Tone</span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Vector Illustration of Exhaust Tip & Canister -->
+                        <div class="lg:col-span-6 flex justify-center items-center relative">
+                            <div
+                                class="w-full max-w-md bg-gradient-to-tr from-zinc-900 via-zinc-800 to-zinc-900 p-6 rounded-xl border border-zinc-700/60 shadow-inner">
+                                <div
+                                    class="flex justify-between items-center text-[10px] font-mono text-zinc-400 mb-4 pb-2 border-b border-zinc-700">
+                                    <span>SERIAL: NDK-RGN-2025-SPEC</span>
+                                    <span class="text-ember">AUTHENTIC LAB TESTED</span>
+                                </div>
+                                <!-- Muffler Illustration -->
+                                <div class="py-8 flex items-center justify-center">
+                                    <svg class="w-full h-44" fill="none" viewbox="0 0 400 160"
+                                        xmlns="http://www.w3.org/2000/svg">
+                                        <defs>
+                                            <lineargradient id="canisterGrad" x1="0%" x2="0%" y1="0%" y2="100%">
+                                                <stop offset="0%" stop-color="#444444"></stop>
+                                                <stop offset="30%" stop-color="#888888"></stop>
+                                                <stop offset="50%" stop-color="#e0e0e0"></stop>
+                                                <stop offset="70%" stop-color="#888888"></stop>
+                                                <stop offset="100%" stop-color="#222222"></stop>
+                                            </lineargradient>
+                                            <lineargradient id="titaniumBurn" x1="0%" x2="100%" y1="0%" y2="0%">
+                                                <stop offset="0%" stop-color="#0051ba"></stop>
+                                                <stop offset="35%" stop-color="#8e2de2"></stop>
+                                                <stop offset="70%" stop-color="#f00000"></stop>
+                                                <stop offset="100%" stop-color="#f5a623"></stop>
+                                            </lineargradient>
+                                        </defs>
+                                        <rect fill="url(#canisterGrad)" height="30" rx="3" stroke="#111"
+                                            stroke-width="1.5" width="70" x="20" y="65"></rect>
+                                        <rect fill="url(#canisterGrad)" height="100" rx="14" stroke="#111"
+                                            stroke-width="2" width="190" x="90" y="30"></rect>
+                                        <line stroke="#b08d57" stroke-dasharray="2 2" stroke-width="2" x1="120" x2="120"
+                                            y1="30" y2="130"></line>
+                                        <line stroke="#b08d57" stroke-dasharray="2 2" stroke-width="2" x1="250" x2="250"
+                                            y1="30" y2="130"></line>
+                                        <rect fill="#111" height="36" rx="4" stroke="#444" stroke-width="1" width="80"
+                                            x="145" y="62"></rect>
+                                        <text fill="#FFF" font-family="Oswald" font-size="10" font-weight="bold"
+                                            text-anchor="middle" x="185" y="77">NDK × RGN</text>
+                                        <text fill="#D91F2C" font-family="monospace" font-size="7" text-anchor="middle"
+                                            x="185" y="89">HANDCRAFTED ID</text>
+                                        <rect fill="url(#canisterGrad)" height="50" rx="8" stroke="#222"
+                                            stroke-width="1.5" width="85" x="280" y="55"></rect>
+                                        <rect fill="url(#titaniumBurn)" height="50" opacity="0.85" rx="6" width="35"
+                                            x="330" y="55"></rect>
+                                        <ellipse cx="365" cy="80" fill="#0A0A0A" rx="10" ry="25" stroke="#444"
+                                            stroke-width="2"></ellipse>
+                                    </svg>
+                                </div>
+                                <div class="text-center font-mono text-xs text-zinc-400">
+                                    Stainless SUS304 High Flow Canister with Laser Logo Plate
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Customer Testimonials Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <!-- Testi 1 -->
+                    <div
+                        class="bg-paper p-6 sm:p-8 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-1 text-amber-500 mb-4">★★★★★</div>
+                            <p class="text-ink text-sm sm:text-base leading-relaxed italic mb-6">
+                                "Civic FE 1.5 Turbo - Suara bass bulat berwibawa di RPM rendah, pas injak gas RPM tinggi
+                                tenaganya ngisi terus. Tidak ada dengung sama sekali di kabin saat cruising 100 km/jam."
+                            </p>
+                        </div>
+                        <div class="pt-4 border-t border-zinc-100 flex items-center justify-between">
+                            <div>
+                                <p class="font-display text-sm font-bold uppercase text-ink">Rendy P.</p>
+                                <p class="text-xs text-steel">Jakarta · Honda Civic FE</p>
+                            </div>
+                            <span class="text-[10px] font-mono bg-zinc-100 px-2 py-0.5 rounded text-zinc-600">NDK
+                                Street</span>
+                        </div>
+                    </div>
+                    <!-- Testi 2 -->
+                    <div
+                        class="bg-paper p-6 sm:p-8 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-1 text-amber-500 mb-4">★★★★★</div>
+                            <p class="text-ink text-sm sm:text-base leading-relaxed italic mb-6">
+                                "Innova Reborn 2.4 Diesel - Downpipe + Frontpipe RGN tarikan bawahnya terasa jauh lebih
+                                enteng, turbo spooling lebih cepat tanpa asap pekat. Finishing las argon sangat rapi."
+                            </p>
+                        </div>
+                        <div class="pt-4 border-t border-zinc-100 flex items-center justify-between">
+                            <div>
+                                <p class="font-display text-sm font-bold uppercase text-ink">Dimas K.</p>
+                                <p class="text-xs text-steel">Surabaya · Innova Reborn 2GD</p>
+                            </div>
+                            <span
+                                class="text-[10px] font-mono bg-ember-tint px-2 py-0.5 rounded text-ember font-semibold">RGN
+                                Diesel</span>
+                        </div>
+                    </div>
+                    <!-- Testi 3 -->
+                    <div
+                        class="bg-paper p-6 sm:p-8 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-1 text-amber-500 mb-4">★★★★★</div>
+                            <p class="text-ink text-sm sm:text-base leading-relaxed italic mb-6">
+                                "Brio 1.2 Street Tuning - Dyno test sebelum dan sesudah pasang full exhaust system naik
+                                4.8 HP murni tanpa utak-atik ECU. Data riil bukan sugesti, recomended!"
+                            </p>
+                        </div>
+                        <div class="pt-4 border-t border-zinc-100 flex items-center justify-between">
+                            <div>
+                                <p class="font-display text-sm font-bold uppercase text-ink">Fajar M.</p>
+                                <p class="text-xs text-steel">Bandung · Honda Brio 1.2 NA</p>
+                            </div>
+                            <span class="text-[10px] font-mono bg-zinc-100 px-2 py-0.5 rounded text-zinc-600">NDK Full
+                                System</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- END: ShowcaseAndTestimonialsSection -->
+        <!-- BEGIN: QuickCatalogCTA -->
+        <section class="py-16 bg-ink text-paper border-t border-zinc-800" id="katalog">
+            <div
+                class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div>
+                    <h3 class="font-display text-2xl sm:text-3xl font-bold uppercase">Siap Menemukan Karakter Suara
+                        &amp; Tenaga Mobil Anda?</h3>
+                    <p class="text-zinc-400 text-sm mt-1">Konsultasikan tipe kendaraan, konfigurasi mesin, dan
+                        ekspektasi suara bersama tim teknis resmi kami.</p>
+                </div>
+                <div class="flex items-center gap-4 shrink-0">
+                    <a class="bg-ember hover:bg-ember-deep text-white font-display uppercase tracking-wider px-6 py-3 rounded font-semibold text-sm transition-all"
+                        href="https://wa.me/6281234567890" rel="noopener noreferrer" target="_blank">
+                        Chat WhatsApp CS
+                    </a>
+                </div>
+            </div>
+        </section>
+        <!-- END: QuickCatalogCTA -->
+    </main>
+    <!-- BEGIN: MainFooter -->
+    <footer class="bg-ink text-paper pt-16 pb-12 border-t border-zinc-800" id="workshop">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <!-- 4-Column Layout Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 pb-12 border-b border-zinc-800">
+                <!-- Column 1: Brand Info -->
+                <div class="space-y-4">
+                    <div class="flex items-center gap-3">
+                        <img alt="NDK Exhaust" class="h-6 w-auto object-contain"
+                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbMR_ygd2s_pC4HZfms0jzJVFKA1pH-It8Ssct7Av1B0ciITP1y09mX1-au5j3pAjQIFbh65leEhcNSXino5njwa1OcjnjGqgaQdqaN8HxGJPSgvnRCZqiJYVU_cxCf16650KRnm6qwESkbRZlC2ZJlaVBUdZ09lfe62RlsP6aVazWfNDwGd_nlJBa-vywjmWyJ9f01SgRh68n4MW9IrPW1SCZU8wBVP6alfpMGmQ5F_CzSnqOvMGjzX12N-7qvJZkyA" />
+                        <span class="text-zinc-600 text-xs">|</span>
+                        <img alt="RGN Performance" class="h-5 w-auto object-contain"
+                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQ58WlFGmf8Hw1EBxkrkEdllSiL83nBL4JZhGKmBxkWR_RpE8ph_sQuTz2bE-GHkBssp4mh8VC7K4maY49i39orqQZQDig-Cx42SDISZx1uL-e5hzo9fb-3mjLNokitDGhcMYpsnIcRWmS4kz2EXsBJfAiH41g-6fmKJeLNFyaCyAem-NeiLOn1i2SRQaJvJ7Y1ykLrMFbCub5euyj-bvVgnL4bViEUXsDE839m9SXWCozz7DWsrj_7OlZ7FweuDsD-A" />
+                    </div>
+                    <p class="text-zinc-400 text-xs leading-relaxed">
+                        Produsen exhaust system performa teruji riset &amp; dyno untuk kendaraan bensin dan diesel
+                        modern Indonesia. Mengutamakan performa riil, presisi bahan, dan resonansi suara berkelas.
+                    </p>
+                    <div class="text-xs text-zinc-400 pt-2">
+                        <p class="font-semibold text-zinc-300">Alamat Kantor Pusat:</p>
+                        <p class="mt-0.5">Jl. Otomotif Presisi No. 88, Sentra Industri Logam, Indonesia.</p>
+                    </div>
+                </div>
+                <!-- Column 2: Marketplace Resmi -->
+                <div>
+                    <h4
+                        class="font-display text-sm font-semibold uppercase tracking-wider text-white mb-4 flex items-center gap-2">
+                        <span class="w-1.5 h-1.5 bg-ember rounded-full"></span> Marketplace Resmi
+                    </h4>
+                    <ul class="space-y-2.5 text-xs text-zinc-400">
+                        <li>
+                            <a class="hover:text-ember transition-colors flex items-center gap-2"
+                                href="https://tokopedia.com" rel="noopener noreferrer" target="_blank">
+                                <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor"
+                                    viewbox="0 0 24 24">
+                                    <path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" stroke-linecap="round"
+                                        stroke-linejoin="round" stroke-width="2"></path>
+                                </svg>
+                                <span>Tokopedia Official Store <span
+                                        class="bg-emerald-950 text-emerald-400 text-[10px] px-1.5 py-0.2 rounded ml-1">Verified</span></span>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="hover:text-ember transition-colors flex items-center gap-2"
+                                href="https://shopee.co.id" rel="noopener noreferrer" target="_blank">
+                                <svg class="w-4 h-4 text-orange-500" fill="none" stroke="currentColor"
+                                    viewbox="0 0 24 24">
+                                    <path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" stroke-linecap="round"
+                                        stroke-linejoin="round" stroke-width="2"></path>
+                                </svg>
+                                <span>Shopee Official Mall</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="hover:text-ember transition-colors flex items-center gap-2"
+                                href="https://wa.me/6281234567890" rel="noopener noreferrer" target="_blank">
+                                <svg class="w-4 h-4 text-green-500" fill="currentColor" viewbox="0 0 24 24">
+                                    <path
+                                        d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.771-5.764-5.771z">
+                                    </path>
+                                </svg>
+                                <span>WhatsApp Customer Care</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                <!-- Column 3: Media & Video -->
+                <div>
+                    <h4
+                        class="font-display text-sm font-semibold uppercase tracking-wider text-white mb-4 flex items-center gap-2">
+                        <span class="w-1.5 h-1.5 bg-ember rounded-full"></span> Media &amp; Dokumentasi
+                    </h4>
+                    <ul class="space-y-2.5 text-xs text-zinc-400">
+                        <li>
+                            <a class="hover:text-ember transition-colors flex items-center gap-2" href="#">
+                                <span>Instagram: @ndkexhaust &amp; @rgnperformance</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="hover:text-ember transition-colors flex items-center gap-2" href="#">
+                                <span>YouTube: Dyno Test &amp; Soundcheck Archive</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="hover:text-ember transition-colors flex items-center gap-2" href="#">
+                                <span>TikTok Official @ndk_rgn_official</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="hover:text-ember transition-colors flex items-center gap-2" href="#katalog">
+                                <span>E-Katalog Web Resmi</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                <!-- Column 4: Workshop & Dyno Center -->
+                <div>
+                    <h4
+                        class="font-display text-sm font-semibold uppercase tracking-wider text-white mb-4 flex items-center gap-2">
+                        <span class="w-1.5 h-1.5 bg-ember rounded-full"></span> Workshop Resmi
+                    </h4>
+                    <p class="text-xs text-zinc-400 leading-relaxed mb-2">
+                        Pusat Instalasi Presisi, Pengelasan Knalpot, &amp; Dyno Test Center.
+                    </p>
+                    <div class="text-xs text-zinc-300 font-medium mb-4">
+                        <span>Senin - Sabtu: 08.30 - 17.00 WIB</span><br />
+                        <span class="text-zinc-500">Minggu &amp; Hari Libur: Tutup</span>
+                    </div>
+                    <a class="inline-flex items-center gap-2 border border-zinc-700 hover:border-ember bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold py-2 px-3 rounded transition-all"
+                        href="https://maps.google.com" rel="noopener noreferrer" target="_blank">
+                        <svg class="w-4 h-4 text-ember" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+                            <path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                                stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+                            <path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round"
+                                stroke-width="2"></path>
+                        </svg>
+                        <span>Buka Google Maps</span>
+                    </a>
+                </div>
+            </div>
+            <!-- Bottom Bar -->
+            <div class="pt-8 flex flex-col sm:flex-row items-center justify-between text-xs text-zinc-500 gap-4">
+                <div>
+                    © 2025 NDK Exhaust &amp; RGN Performance. All Rights Reserved.
+                </div>
+                <div class="flex items-center gap-6">
+                    <a class="hover:text-zinc-300 transition-colors" href="#">Kebijakan Privasi</a>
+                    <a class="hover:text-zinc-300 transition-colors" href="#">Syarat &amp; Ketentuan</a>
+                    <a class="hover:text-zinc-300 transition-colors" href="#">Garansi Manufaktur</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+    <!-- END: MainFooter -->
+</body>
+
+</html>

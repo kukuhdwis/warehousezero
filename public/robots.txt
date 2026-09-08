@@ -1,4 +1,11 @@
+# Robots.txt for NDK Exhaust & RGN Performance Official Website
 User-agent: *
 Allow: /
+Allow: /catalog
+
+# Protect private internal logistics and login from search indexing
+Disallow: /login
+Disallow: /dashboard
+Disallow: /admin
 
 Sitemap: https://warehousezero.web.app/sitemap.xml
