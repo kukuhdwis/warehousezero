@@ -967,8 +967,8 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen flex flex-col font-sans antialiased transition-colors duration-200 ${
-      isDark ? 'bg-slate-950 text-slate-100 dark' : 'bg-slate-100 text-slate-800'
+    <div className={`min-h-screen flex flex-col font-body antialiased transition-colors duration-200 selection:bg-ember selection:text-white ${
+      isDark ? 'bg-ink text-paper dark' : 'bg-smoke text-ink'
     }`}>
       {/* Top Navbar with Real-time Notification Center */}
       <Navbar 
@@ -997,8 +997,8 @@ export default function App() {
         {/* Main Content Area with Mobile Safe Padding */}
         <main className="flex-1 p-3.5 sm:p-6 lg:p-8 pb-28 lg:pb-8 overflow-y-auto max-w-7xl mx-auto w-full">
           {loading ? (
-            <div className="flex flex-col items-center justify-center min-h-[400px] gap-3 text-slate-400">
-              <div className="w-8 h-8 border-3 border-sky-600 border-t-transparent rounded-full animate-spin" />
+            <div className="flex flex-col items-center justify-center min-h-[400px] gap-3 text-zinc-400">
+              <div className="w-8 h-8 border-3 border-ember border-t-transparent rounded-full animate-spin" />
               <p className="text-sm font-medium">Memuat data inventaris WMS...</p>
             </div>
           ) : (
@@ -1138,50 +1138,50 @@ export default function App() {
 
       {/* SMART QR CODE DETECTED MODAL (WHEN LOGGED-IN STAFF SCANS QR FROM OUTSIDE APP) */}
       {isQrActionSheetOpen && detectedProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 dark:border-slate-800 animate-in zoom-in-95 duration-200 flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-paper dark:bg-zinc-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-zinc-200 dark:border-zinc-800 animate-in zoom-in-95 duration-200 flex flex-col">
             
-            <div className="p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
+            <div className="p-5 bg-gradient-to-r from-zinc-950 via-zinc-900 to-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shadow-xs">
+                <div className="w-10 h-10 rounded-2xl bg-ember/20 border border-ember/30 flex items-center justify-center text-ember shadow-xs">
                   <QrCode className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="font-extrabold text-sm text-white leading-tight">Smart QR Terdeteksi!</h4>
-                  <p className="text-[11px] text-slate-300">Pilih aksi cepat untuk produk ini</p>
+                  <h4 className="font-display uppercase tracking-wider font-extrabold text-sm text-white leading-tight">Smart QR Terdeteksi!</h4>
+                  <p className="text-[11px] text-zinc-400">Pilih aksi cepat untuk produk ini</p>
                 </div>
               </div>
               <button 
                 onClick={() => setIsQrActionSheetOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-full hover:bg-white/10 transition cursor-pointer"
+                className="p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-white/10 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="p-5 space-y-4">
-              <div className="flex items-center gap-3.5 p-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl">
+              <div className="flex items-center gap-3.5 p-3.5 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-2xl">
                 {detectedProduct.imageUrl ? (
                   <img 
                     src={detectedProduct.imageUrl} 
                     alt={detectedProduct.name} 
-                    className="w-16 h-16 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shadow-2xs flex-shrink-0 bg-white" 
+                    className="w-16 h-16 rounded-xl object-cover border border-zinc-200 dark:border-zinc-700 shadow-2xs flex-shrink-0 bg-white" 
                   />
                 ) : (
-                  <div className="w-16 h-16 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-xs flex-shrink-0">
+                  <div className="w-16 h-16 rounded-xl bg-ember/10 border border-ember/20 flex items-center justify-center text-ember font-bold text-xs flex-shrink-0">
                     <Package className="w-7 h-7 opacity-60" />
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="px-2 py-0.2 rounded text-[10px] font-black bg-amber-100 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-700">
+                    <span className="px-2 py-0.2 rounded text-[10px] font-black bg-amber-100 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-700 font-display">
                       {detectedProduct.engine_type || 'Universal'}
                     </span>
-                    <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 font-bold">
+                    <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 font-bold">
                       {detectedProduct.sku || detectedProduct.code}
                     </span>
                   </div>
-                  <h5 className="font-bold text-slate-900 dark:text-white text-sm mt-0.5 truncate">{detectedProduct.name}</h5>
+                  <h5 className="font-bold text-zinc-900 dark:text-white text-sm mt-0.5 truncate">{detectedProduct.name}</h5>
                   <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
                     Rp {(Number(detectedProduct.selling_price ?? detectedProduct.price) || 0).toLocaleString('id-ID')}
                   </p>
@@ -1195,7 +1195,7 @@ export default function App() {
                     setActiveTab('stock-in');
                     setIsQrActionSheetOpen(false);
                   }}
-                  className="w-full py-3 px-4 bg-sky-600 hover:bg-sky-700 text-white rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md shadow-sky-600/20 active:scale-95 cursor-pointer"
+                  className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 active:scale-95 cursor-pointer font-display uppercase tracking-wider"
                 >
                   <ArrowDownLeft className="w-4 h-4" />
                   <span>+ Buka di Barang Masuk (Stock In)</span>
@@ -1207,7 +1207,7 @@ export default function App() {
                     setActiveTab('stock-out');
                     setIsQrActionSheetOpen(false);
                   }}
-                  className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 active:scale-95 cursor-pointer"
+                  className="w-full py-3 px-4 bg-ember hover:bg-ember-deep text-white rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md shadow-ember/20 active:scale-95 cursor-pointer font-display uppercase tracking-wider"
                 >
                   <ArrowUpRight className="w-4 h-4" />
                   <span>+ Buka di Barang Keluar / Kasir (Stock Out)</span>
@@ -1219,9 +1219,9 @@ export default function App() {
                     window.open(`/catalog?sku=${encodeURIComponent(detectedProduct.sku || detectedProduct.code || '')}`, '_blank');
                     setIsQrActionSheetOpen(false);
                   }}
-                  className="w-full py-2.5 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-2.5 px-4 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer font-display uppercase tracking-wider"
                 >
-                  <Eye className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                  <Eye className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
                   <span>Lihat Tampilan E-Katalog Publik</span>
                 </button>
               </div>
@@ -1260,7 +1260,7 @@ export default function App() {
 
       {/* MOBILE BACK BUTTON TOAST */}
       {backToast && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-2xl z-[999] animate-bounce backdrop-blur-sm border border-slate-700">
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-zinc-900/90 text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-2xl z-[999] animate-bounce backdrop-blur-sm border border-zinc-700">
           {backToast}
         </div>
       )}
@@ -1282,26 +1282,26 @@ export default function App() {
             );
             setLiveToastNotif(null);
           }}
-          className="fixed top-5 right-5 z-[9999] max-w-sm w-full bg-slate-900/95 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl border border-amber-400/40 animate-in slide-in-from-top-4 duration-300 cursor-pointer hover:border-amber-400 transition"
+          className="fixed top-5 right-5 z-[9999] max-w-sm w-full bg-zinc-900/95 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl border border-ember/40 animate-in slide-in-from-top-4 duration-300 cursor-pointer hover:border-ember transition"
         >
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center flex-shrink-0 font-bold shadow-md shadow-amber-500/30 animate-bounce">
+            <div className="w-10 h-10 rounded-xl bg-ember text-white flex items-center justify-center flex-shrink-0 font-bold shadow-md shadow-ember/30 animate-bounce">
               <Bell className="w-5 h-5" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-400">Pemberitahuan Baru 🔴</span>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-ember font-display">Pemberitahuan Baru 🔴</span>
                 <button 
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setLiveToastNotif(null); }}
-                  className="text-slate-400 hover:text-white p-0.5 cursor-pointer"
+                  className="text-zinc-400 hover:text-white p-0.5 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
               <h5 className="font-bold text-xs text-white truncate mt-0.5">{liveToastNotif.title}</h5>
-              <p className="text-[11px] text-slate-300 line-clamp-2 mt-0.5 leading-snug">{liveToastNotif.message}</p>
-              <div className="flex items-center gap-1 text-[10px] text-amber-300 font-semibold mt-1.5">
+              <p className="text-[11px] text-zinc-300 line-clamp-2 mt-0.5 leading-snug">{liveToastNotif.message}</p>
+              <div className="flex items-center gap-1 text-[10px] text-ember font-semibold mt-1.5 font-display uppercase tracking-wider">
                 <span>Klik untuk langsung membuka</span>
                 <span>→</span>
               </div>
