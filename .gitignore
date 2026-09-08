@@ -83,4 +83,6 @@ skills-lock.json
 # Root raw video files
 /*.mp4
 
-
+# Raw duplicate asset folders
+NDK asset/
+public/NDK asset/

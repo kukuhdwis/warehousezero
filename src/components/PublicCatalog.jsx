@@ -171,14 +171,14 @@ export default function PublicCatalog({
       setSEO({
         title: `${detailBundle.name} - Paket Bundling Knalpot | NDK Exhaust`,
         description: `Beli paket bundling ${detailBundle.name} ${detailBundle.brand || 'NDK Exhaust'}. Material stainless steel presisi. Harga resmi: Rp ${price.toLocaleString('id-ID')}. Kompatibel: ${detailBundle.car_variant || 'Semua Mobil'}.`,
-        canonical: `https://warehousezero.web.app/catalog?bundle=${encodeURIComponent(detailBundle.id || detailBundle.sku || '')}`,
-        image: detailBundle.imageUrl || 'https://warehousezero.web.app/logos/ndk-black.png',
+        canonical: `https://warehouse.ndkexhaust.com/catalog?bundle=${encodeURIComponent(detailBundle.id || detailBundle.sku || '')}`,
+        image: detailBundle.imageUrl || 'https://warehouse.ndkexhaust.com/logos/ndk-black.png',
         type: 'product',
         schema: {
           "@context": "https://schema.org/",
           "@type": "Product",
           "name": detailBundle.name,
-          "image": detailBundle.imageUrl || "https://warehousezero.web.app/logos/ndk-black.png",
+          "image": detailBundle.imageUrl || "https://warehouse.ndkexhaust.com/logos/ndk-black.png",
           "description": `Paket knalpot mobil ${detailBundle.name} presisi dari NDK Exhaust & RGN Performance Purbalingga.`,
           "sku": detailBundle.sku || detailBundle.id,
           "brand": {
@@ -202,14 +202,14 @@ export default function PublicCatalog({
       setSEO({
         title: `${detailProduct.name} - Knalpot Mobil | NDK Exhaust Official`,
         description: `Beli ${detailProduct.name} original ${detailProduct.brand || 'NDK Exhaust'}. Kategori: ${detailProduct.category_name || 'Knalpot'}. Harga Resmi: Rp ${price.toLocaleString('id-ID')}. Cocok untuk: ${detailProduct.car_variant || 'Mobil Harian & Racing'}.`,
-        canonical: `https://warehousezero.web.app/catalog?sku=${encodeURIComponent(detailProduct.sku || '')}`,
-        image: detailProduct.imageUrl || 'https://warehousezero.web.app/logos/ndk-black.png',
+        canonical: `https://warehouse.ndkexhaust.com/catalog?sku=${encodeURIComponent(detailProduct.sku || '')}`,
+        image: detailProduct.imageUrl || 'https://warehouse.ndkexhaust.com/logos/ndk-black.png',
         type: 'product',
         schema: {
           "@context": "https://schema.org/",
           "@type": "Product",
           "name": detailProduct.name,
-          "image": detailProduct.imageUrl || "https://warehousezero.web.app/logos/ndk-black.png",
+          "image": detailProduct.imageUrl || "https://warehouse.ndkexhaust.com/logos/ndk-black.png",
           "description": detailProduct.description || `Knalpot mobil ${detailProduct.name} berbahan stainless steel presisi dari NDK Exhaust Purbalingga.`,
           "sku": detailProduct.sku,
           "brand": {
@@ -233,15 +233,15 @@ export default function PublicCatalog({
         title: "E-Katalog Resmi NDK Exhaust & RGN Performance | Knalpot Mobil Presisi Purbalingga",
         description: "E-Katalog resmi knalpot mobil NDK Exhaust & RGN Performance. Downpipe, Frontpipe, Centerpipe, Resonator, dan Muffler stainless steel presisi mesin bensin & diesel.",
         keywords: "katalog knalpot, knalpot ndk, rgn performance, knalpot purbalingga, knalpot stainless steel, downpipe brio, downpipe innova diesel, muffler mobil",
-        canonical: "https://warehousezero.web.app/catalog",
-        image: "https://warehousezero.web.app/logos/ndk-black.png",
+        canonical: "https://warehouse.ndkexhaust.com/catalog",
+        image: "https://warehouse.ndkexhaust.com/logos/ndk-black.png",
         type: "website",
         schema: {
           "@context": "https://schema.org",
           "@type": "CollectionPage",
           "name": "E-Katalog Resmi NDK Exhaust & RGN Performance",
           "description": "Katalog knalpot mobil stainless steel presisi untuk mesin bensin dan diesel modern Indonesia.",
-          "url": "https://warehousezero.web.app/catalog",
+          "url": "https://warehouse.ndkexhaust.com/catalog",
           "mainEntity": {
             "@type": "ItemList",
             "itemListElement": (activeProducts.slice(0, 10)).map((p, idx) => ({
@@ -1435,25 +1435,44 @@ export default function PublicCatalog({
               <p className={`font-body text-xs leading-relaxed ${isDark ? 'text-zinc-400' : 'text-steel'}`}>
                 Katalog resmi produk knalpot NDK Exhaust &amp; RGN Performance. Melayani pemesanan, konsultasi spesifikasi mobil, dan pengiriman aman ke seluruh Indonesia.
               </p>
+
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={navigateToLanding}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-display uppercase tracking-wider font-semibold border transition-all cursor-pointer ${
+                    isDark 
+                      ? 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:border-ember hover:text-white' 
+                      : 'bg-white border-zinc-300 text-zinc-700 hover:border-ember hover:text-ink shadow-xs'
+                  }`}
+                >
+                  <ArrowRight className="w-3 h-3 text-ember rotate-180" />
+                  <span>Kembali ke Beranda</span>
+                </button>
+              </div>
             </div>
 
-            {/* Column 2: MARKETPLACE */}
+            {/* Column 2: NDK EXHAUST (Petrol & Universal) */}
             <div className="space-y-3">
-              <h4 className={`font-display text-xs font-bold uppercase tracking-widest ${isDark ? 'text-white' : 'text-ink'}`}>
-                MARKETPLACE
-              </h4>
+              <div className={`flex items-center gap-2 pb-2 border-b ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
+                <div className="relative h-4 w-16 flex items-center">
+                  <img
+                    alt="NDK Exhaust Logo"
+                    className={`absolute inset-0 h-full w-full object-contain ${isDark ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                    src="/logos/ndk-white.png"
+                  />
+                  <img
+                    alt="NDK Exhaust Logo"
+                    className={`absolute inset-0 h-full w-full object-contain ${isDark ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+                    src="/logos/ndk-black.png"
+                  />
+                </div>
+                <span className={`text-[9px] font-mono uppercase px-2 py-0.5 rounded font-semibold ${isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-200 text-zinc-700'}`}>
+                  Petrol Series
+                </span>
+              </div>
+
               <ul className="space-y-2.5 text-xs font-body">
-                <li>
-                  <a
-                    href="https://www.tokopedia.com/ndk-exhaust-id"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:text-ember transition-colors flex items-center gap-2.5 group"
-                  >
-                    <TokopediaIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-                    <span>Tokopedia</span>
-                  </a>
-                </li>
                 <li>
                   <a
                     href="https://shopee.co.id/ndk_exhaust_official"
@@ -1462,29 +1481,20 @@ export default function PublicCatalog({
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
                     <ShopeeIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-                    <span>Shopee</span>
+                    <span>Shopee: ndk_exhaust_official</span>
                   </a>
                 </li>
                 <li>
                   <a
-                    href="https://wa.me/6289502240040?text=Halo%20Admin%20NDK%20Exhaust%2C%20saya%20ingin%20konsultasi%20exhaust%20system."
+                    href="https://www.tokopedia.com/ndk-exhaust-id"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
-                    <WhatsAppIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-                    <span>WhatsApp</span>
+                    <TokopediaIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
+                    <span>Tokopedia: ndk-exhaust-id</span>
                   </a>
                 </li>
-              </ul>
-            </div>
-
-            {/* Column 3: MEDIA & VIDEO */}
-            <div className="space-y-3">
-              <h4 className={`font-display text-xs font-bold uppercase tracking-widest ${isDark ? 'text-white' : 'text-ink'}`}>
-                MEDIA &amp; VIDEO
-              </h4>
-              <ul className="space-y-2.5 text-xs font-body">
                 <li>
                   <a
                     href="https://www.instagram.com/ndkexhaust"
@@ -1493,18 +1503,7 @@ export default function PublicCatalog({
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
                     <InstagramIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-                    <span>Instagram</span>
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="http://bit.ly/Youtube-NDKexhaust"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:text-ember transition-colors flex items-center gap-2.5 group"
-                  >
-                    <YouTubeIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-                    <span>YouTube</span>
+                    <span>Instagram: @ndkexhaust</span>
                   </a>
                 </li>
                 <li>
@@ -1515,16 +1514,108 @@ export default function PublicCatalog({
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
                     <TikTokIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
-                    <span>TikTok</span>
+                    <span>TikTok: @ndkofficial.id</span>
                   </a>
                 </li>
                 <li>
                   <a
-                    href="https://warehousezero.web.app/catalog"
+                    href="http://bit.ly/Youtube-NDKexhaust"
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="hover:text-ember transition-colors flex items-center gap-2.5 group"
                   >
-                    <BookOpen className="w-4 h-4 text-ember shrink-0 transition-transform group-hover:scale-110" />
-                    <span>E-Katalog</span>
+                    <YouTubeIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
+                    <span>YouTube: NDK Exhaust Official</span>
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://wa.me/6289502240040?text=Halo%20Admin%20NDK%20Exhaust%2C%20saya%20ingin%20konsultasi%20exhaust%20system."
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-ember transition-colors flex items-center gap-2.5 group"
+                  >
+                    <WhatsAppIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
+                    <span>WhatsApp NDK CS</span>
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+            {/* Column 3: RGN PERFORMANCE (Diesel Performance) */}
+            <div className="space-y-3">
+              <div className={`flex items-center gap-2 pb-2 border-b ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
+                <div className="relative h-4 w-16 flex items-center">
+                  <img
+                    alt="RGN Performance Logo"
+                    className={`absolute inset-0 h-full w-full object-contain ${isDark ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                    src="/logos/rgn-white.png"
+                  />
+                  <img
+                    alt="RGN Performance Logo"
+                    className={`absolute inset-0 h-full w-full object-contain ${isDark ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+                    src="/logos/rgn-black.png"
+                  />
+                </div>
+                <span className="text-[9px] font-mono uppercase bg-ember/20 text-ember border border-ember/30 px-2 py-0.5 rounded font-semibold">
+                  Diesel Series
+                </span>
+              </div>
+
+              <ul className="space-y-2.5 text-xs font-body">
+                <li>
+                  <a
+                    href="https://shopee.co.id/rgn.performance"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-ember transition-colors flex items-center gap-2.5 group"
+                  >
+                    <ShopeeIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
+                    <span>Shopee: rgn.performance</span>
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://www.instagram.com/rgn.performance"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-ember transition-colors flex items-center gap-2.5 group"
+                  >
+                    <InstagramIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
+                    <span>Instagram: @rgn.performance</span>
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://www.tiktok.com/@rgn.performance"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-ember transition-colors flex items-center gap-2.5 group"
+                  >
+                    <TikTokIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
+                    <span>TikTok: @rgn.performance</span>
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://www.youtube.com/@RGNPerformance"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-ember transition-colors flex items-center gap-2.5 group"
+                  >
+                    <YouTubeIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
+                    <span>YouTube: @RGNPerformance</span>
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://wa.me/6289502240040?text=Halo%20Admin%20RGN%20Performance%2C%20saya%20ingin%20konsultasi%20knalpot%20diesel."
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-ember transition-colors flex items-center gap-2.5 group"
+                  >
+                    <WhatsAppIcon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
+                    <span>WhatsApp RGN CS</span>
                   </a>
                 </li>
               </ul>
@@ -1536,7 +1627,7 @@ export default function PublicCatalog({
                 WORKSHOP RESMI
               </h4>
               <p className={`font-body text-xs leading-relaxed ${isDark ? 'text-zinc-400' : 'text-steel'}`}>
-                RGN Performance Workshop<br />
+                RGN &amp; NDK Performance Workshop<br />
                 Purbalingga, Jawa Tengah, Indonesia<br />
                 Senin - Sabtu: 08.30 - 17.00 WIB
               </p>

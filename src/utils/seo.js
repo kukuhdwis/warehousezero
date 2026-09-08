@@ -58,7 +58,7 @@ export const setSEO = (titleOrOptions, description, image = null) => {
   }
 
   // 4. OpenGraph & Twitter Image
-  const resolvedImage = img || 'https://warehousezero.web.app/logos/ndk-black.png';
+  const resolvedImage = img || 'https://warehouse.ndkexhaust.com/logos/ndk-black.png';
   setMeta('property', 'og:image', resolvedImage);
   setMeta('name', 'twitter:image', resolvedImage);
   setMeta('name', 'twitter:card', 'summary_large_image');
@@ -69,7 +69,7 @@ export const setSEO = (titleOrOptions, description, image = null) => {
   setMeta('property', 'og:site_name', 'NDK Exhaust × RGN Performance');
 
   // 6. Canonical & OG URL
-  const targetUrl = canonical || url || (typeof window !== 'undefined' ? window.location.href : 'https://warehousezero.web.app/');
+  const targetUrl = canonical || url || (typeof window !== 'undefined' ? window.location.href : 'https://warehouse.ndkexhaust.com/');
   setMeta('property', 'og:url', targetUrl);
 
   let canonicalElement = document.querySelector('link[rel="canonical"]');

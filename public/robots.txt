@@ -8,4 +8,4 @@ Disallow: /login
 Disallow: /dashboard
 Disallow: /admin
 
-Sitemap: https://warehousezero.web.app/sitemap.xml
+Sitemap: https://warehouse.ndkexhaust.com/sitemap.xml

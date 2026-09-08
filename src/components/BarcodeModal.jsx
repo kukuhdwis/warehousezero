@@ -8,7 +8,7 @@ export default function BarcodeModal({ product, onClose }) {
 
   const publicUrl = typeof window !== 'undefined' 
     ? `${window.location.origin}/catalog?sku=${encodeURIComponent(product?.sku || product?.code || '')}`
-    : `https://warehousezero.web.app/catalog?sku=${encodeURIComponent(product?.sku || product?.code || '')}`;
+    : `https://warehouse.ndkexhaust.com/catalog?sku=${encodeURIComponent(product?.sku || product?.code || '')}`;
 
   useEffect(() => {
     if (product && canvasRef.current) {
