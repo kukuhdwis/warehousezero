@@ -2,6 +2,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+import { startAnimatedFavicon } from './utils/animatedFavicon';
+
+// Start brand favicon alternating switcher (NDK Exhaust & RGN Performance)
+startAnimatedFavicon(2500);
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
