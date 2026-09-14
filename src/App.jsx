@@ -87,6 +87,7 @@ import BottomNav from './components/BottomNav';
 import GlobalSuccessModal from './components/GlobalSuccessModal';
 import LogoutConfirmModal from './components/LogoutConfirmModal';
 import CustomAlertModal from './components/CustomAlertModal';
+import ChangePasswordModal from './components/ChangePasswordModal';
 import { db } from './services/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { toggleThemeWithClipPath } from './utils/themeAnimation';
@@ -229,6 +230,7 @@ export default function App() {
   const [barcodeProduct, setBarcodeProduct] = useState(null);
   const [globalSuccessPopup, setGlobalSuccessPopup] = useState(null);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [backToast, setBackToast] = useState(null);
   const [liveToastNotif, setLiveToastNotif] = useState(null);
   const prevNotifIdsRef = useRef(new Set());
@@ -978,6 +980,7 @@ export default function App() {
         onMarkAllAsRead={handleMarkAllNotificationsRead}
         onNavigate={handleNavigate}
         onLogout={handleLogout}
+        onChangePassword={() => setIsChangePasswordOpen(true)}
         isDark={isDark}
         onToggleDark={toggleDark}
       />
@@ -1079,6 +1082,7 @@ export default function App() {
                   currentUser={currentUser}
                   transactions={transactions}
                   products={products}
+                  branches={branches}
                   initialSearch={historyInitialSearch}
                   onClearInitialSearch={() => setHistoryInitialSearch('')}
                 />
@@ -1237,6 +1241,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={changeTab}
         onLogout={handleLogout}
+        onChangePassword={() => setIsChangePasswordOpen(true)}
         isDark={isDark}
       />
 
@@ -1256,6 +1261,13 @@ export default function App() {
         isOpen={isLogoutModalOpen}
         onClose={() => setIsLogoutModalOpen(false)}
         onConfirm={handleConfirmLogout}
+      />
+
+      {/* CHANGE PASSWORD MODAL */}
+      <ChangePasswordModal
+        isOpen={isChangePasswordOpen}
+        onClose={() => setIsChangePasswordOpen(false)}
+        currentUser={resolvedCurrentUser || currentUser}
       />
 
       {/* MOBILE BACK BUTTON TOAST */}

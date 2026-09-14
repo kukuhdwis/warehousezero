@@ -589,11 +589,11 @@ const parseScannedSKU = (text) => {
           <ArrowDownLeft className="w-6 h-6" />
         </div>
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
               {isBranchStaff ? 'Penerimaan Stok Cabang (Inbound)' : 'Barang Masuk (Inbound Pusat)'}
             </h2>
-            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+            <span className={`inline-flex items-center whitespace-nowrap flex-shrink-0 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold ${
               isBranchStaff 
                 ? 'bg-amber-100 text-amber-800 border border-amber-200' 
                 : 'bg-emerald-100 text-emerald-800 border border-emerald-200'

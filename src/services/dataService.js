@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import { db, isFirebaseConfigured } from "./firebase";
-import { registerUserInFirebaseAuth } from "./authService";
+import { registerUserInFirebaseAuth, syncUserPasswordInFirebaseAuth } from "./authService";
 import {
   callCreateSystemUser,
   callUpdateSystemUser,
@@ -624,9 +624,9 @@ export const createProduct = async (productData) => {
     engine_type: engineType,
     car_variant: productData.car_variant || productData.carVariant || '-',
     category_name: categoryName,
-    spec_sound: productData.spec_sound || productData.specSound || 'Street (Bass)',
-    spec_resonator: productData.spec_resonator !== undefined ? Boolean(productData.spec_resonator) : true,
-    material_finish: productData.material_finish || productData.materialFinish || 'SS Polos',
+    spec_sound: productData.spec_sound !== undefined && productData.spec_sound !== null ? productData.spec_sound : '-',
+    spec_resonator: productData.spec_resonator === true ? true : (productData.spec_resonator === false ? false : '-'),
+    material_finish: productData.material_finish !== undefined && productData.material_finish !== null ? productData.material_finish : '-',
     reseller_price: resellerPrice,
     selling_price: sellingPrice,
     distributor_price: distributorPrice,
@@ -692,9 +692,9 @@ export const updateProduct = async (id, productData) => {
     engine_type: engineType,
     car_variant: productData.car_variant || productData.carVariant || '-',
     category_name: categoryName,
-    spec_sound: productData.spec_sound || productData.specSound || 'Street (Bass)',
-    spec_resonator: productData.spec_resonator !== undefined ? Boolean(productData.spec_resonator) : true,
-    material_finish: productData.material_finish || productData.materialFinish || 'SS Polos',
+    spec_sound: productData.spec_sound !== undefined && productData.spec_sound !== null ? productData.spec_sound : '-',
+    spec_resonator: productData.spec_resonator === true ? true : (productData.spec_resonator === false ? false : '-'),
+    material_finish: productData.material_finish !== undefined && productData.material_finish !== null ? productData.material_finish : '-',
     reseller_price: resellerPrice,
     selling_price: sellingPrice,
     distributor_price: distributorPrice,
@@ -2431,17 +2431,32 @@ export const updateUser = async (id, userData) => {
     updatedAt: new Date().toISOString()
   };
 
+  // Fetch previous password from Firestore before updating
+  let oldPassword = null;
+  try {
+    const existingDoc = await getDoc(doc(db, "users", id));
+    if (existingDoc.exists()) {
+      oldPassword = existingDoc.data()?.password || null;
+    }
+  } catch (readErr) {
+    console.warn("Could not retrieve old user data for password sync:", readErr);
+  }
+
   // If password was provided on edit, ensure it gets created/synced to Firebase Auth
   if (userData.password && userData.password.trim()) {
     try {
-      await registerUserInFirebaseAuth(updatedData.email, userData.password);
+      await syncUserPasswordInFirebaseAuth(updatedData.email, oldPassword, userData.password.trim());
     } catch (authErr) {
       console.warn("Firebase Auth sync on update warning:", authErr);
     }
   }
 
   try {
-    const result = await callUpdateSystemUser({ targetUid: id, ...updatedData });
+    const result = await callUpdateSystemUser({ 
+      targetUid: id, 
+      newPassword: userData.password ? userData.password.trim() : undefined,
+      ...updatedData 
+    });
     return result.user || { id, ...updatedData };
   } catch (fnErr) {
     console.warn("Cloud function update user fallback to direct Firestore:", fnErr);

@@ -10,6 +10,7 @@ export default function TransactionHistory({
   currentUser, 
   onTransactionUpdate, 
   products = [],
+  branches = [],
   initialSearch = '',
   onClearInitialSearch
 }) {
@@ -48,17 +49,21 @@ export default function TransactionHistory({
   }, [initialSearch]);
 
   // Branch data isolation: Branch Staff only sees their own branch's transactions!
+  // Admin and Staff Pusat see all transactions by default ('ALL'), or can filter by specific branch.
   const scopedTransactions = transactions.filter(tx => {
     if (isBranchStaff && branchId) {
-      return tx.branchId === branchId || tx.targetBranchId === branchId;
+      return (
+        tx.branchId === branchId || 
+        tx.targetBranchId === branchId ||
+        (currentUser?.branchName && tx.branchName && tx.branchName.trim().toLowerCase() === currentUser?.branchName.trim().toLowerCase()) ||
+        tx.user === currentUser?.name
+      );
     }
     if (!isBranchStaff) {
       if (selectedBranchFilter !== 'ALL') {
         return tx.branchId === selectedBranchFilter || tx.targetBranchId === selectedBranchFilter;
-      } else {
-        // Admin default view: Only show Pusat transactions
-        return !tx.branchId || tx.branchId === 'ALL' || tx.branchId === 'PUSAT' || tx.source === 'PUSAT' || tx.targetBranchId === 'PUSAT';
       }
+      return true; // When selectedBranchFilter is 'ALL', show all transactions (Pusat & Cabang)
     }
     return true;
   });
@@ -213,26 +218,26 @@ export default function TransactionHistory({
           <p className="text-xs sm:text-sm text-slate-500">Audit trail pergerakan stok barang masuk (Inbound) & keluar (Outbound).</p>
         </div>
 
-        <div className="flex items-center gap-2 relative">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto relative">
           {/* PURGE BUTTON (ADMIN ONLY) */}
           {currentUser?.role === 'ADMIN' && (
             <button
               onClick={() => setIsPurgeConfirmOpen(true)}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-xl text-sm shadow-xs transition active:scale-98 cursor-pointer"
+              className="flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-xl text-xs sm:text-sm shadow-xs transition active:scale-98 cursor-pointer whitespace-nowrap"
               title="Bersihkan Semua Data Riwayat (Admin Only)"
             >
-              <Trash2 className="w-4 h-4" />
-              <span className="hidden sm:inline">Purge Data</span>
+              <Trash2 className="w-4 h-4 flex-shrink-0" />
+              <span>Purge Data</span>
             </button>
           )}
 
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <button
               onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-semibold text-sm shadow-xs transition active:scale-98 cursor-pointer"
+              className="w-full flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-semibold text-xs sm:text-sm shadow-xs transition active:scale-98 cursor-pointer whitespace-nowrap"
             >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-              <span>Export Rekap Excel</span>
+              <FileSpreadsheet className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              <span>Export Rekap</span>
             </button>
           
             {isExportMenuOpen && (
@@ -392,6 +397,27 @@ export default function TransactionHistory({
             ↩️ Retur / Ditolak
           </button>
         </div>
+
+        {/* Branch Selector for Admin & Staff Pusat */}
+        {!isBranchStaff && branches.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 pt-2 border-t border-slate-100">
+            <span className="text-xs font-bold text-slate-500 whitespace-nowrap">
+              Filter Cabang / Lokasi:
+            </span>
+            <select
+              value={selectedBranchFilter}
+              onChange={(e) => setSelectedBranchFilter(e.target.value)}
+              className="w-full sm:w-auto text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 transition cursor-pointer"
+            >
+              <option value="ALL">🏢 Semua Lokasi (Pusat & Cabang)</option>
+              {branches.map(b => (
+                <option key={b.id} value={b.id}>
+                  {b.isPusat ? '⭐ ' : '📍 '}{b.name} {b.isPusat ? '(Gudang Utama Pusat)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* MOBILE FEED VIEW (Smartphone friendly) */}
@@ -439,6 +465,11 @@ export default function TransactionHistory({
                       <h4 className="font-bold text-slate-900 text-sm leading-snug group-hover:text-sky-700 transition">{tx.productName}</h4>
                       <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                         <p className="text-[11px] font-mono text-slate-400">SKU: {tx.sku}</p>
+                        {tx.branchName && (
+                          <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
+                            {tx.branchName}
+                          </span>
+                        )}
                         {tx.invoiceNumber && (
                           <span className="font-mono text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded border border-slate-200">
                             {tx.invoiceNumber}
@@ -579,6 +610,11 @@ export default function TransactionHistory({
                         <div className="font-semibold text-slate-800 group-hover:text-sky-700 transition leading-snug">{tx.productName}</div>
                         <div className="flex flex-wrap items-center gap-2 mt-0.5">
                           <span className="text-xs text-slate-400 font-mono whitespace-nowrap">SKU: {tx.sku}</span>
+                          {tx.branchName && (
+                            <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                              {tx.branchName}
+                            </span>
+                          )}
                           {tx.invoiceNumber && (
                             <span className="font-mono text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded border border-slate-200">
                               {tx.invoiceNumber}

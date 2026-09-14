@@ -12,14 +12,16 @@ import {
   LogOut,
   ShieldCheck,
   UserCheck,
-  Eye
+  Eye,
+  KeyRound
 } from 'lucide-react';
 
 export default function BottomNav({ 
   currentUser, 
   activeTab, 
   setActiveTab, 
-  onLogout 
+  onLogout,
+  onChangePassword
 }) {
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const isAdmin = currentUser?.role === 'ADMIN';
@@ -168,6 +170,19 @@ export default function BottomNav({
                   </div>
                 </div>
               )}
+
+              {/* Change Password Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMoreMenuOpen(false);
+                  if (onChangePassword) onChangePassword();
+                }}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 font-semibold rounded-2xl text-sm transition cursor-pointer"
+              >
+                <KeyRound className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
+                <span>Ganti Kata Sandi</span>
+              </button>
 
               <button
                 onClick={() => {

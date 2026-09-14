@@ -398,12 +398,12 @@ export default function ProductManagement({
     sku: '',
     name: '',
     brand: 'NDK Exhaust',
-    engine_type: '2KD',
+    engine_type: '-',
     category_name: 'Downpipe',
     car_variant: '',
-    spec_sound: 'Street (Bass)',
-    spec_resonator: true,
-    material_finish: 'SS Polos',
+    spec_sound: '-',
+    spec_resonator: '-',
+    material_finish: '-',
     reseller_price: 0,
     selling_price: 0,
     distributor_price: 0,
@@ -541,17 +541,20 @@ export default function ProductManagement({
   // Machine Category Mapping
   const machineCategoryMap = new Map();
   machineCategories.forEach(mc => {
-    if (mc && mc.name) machineCategoryMap.set(mc.name.toLowerCase(), { id: mc.id || mc.name, name: mc.name });
+    if (mc && mc.name && mc.name !== 'ALL' && mc.name !== '-') {
+      machineCategoryMap.set(mc.name.trim().toLowerCase(), { id: mc.id || mc.name, name: mc.name.trim() });
+    }
   });
   DEFAULT_MACHINE_CATEGORIES.forEach(name => {
-    const lower = name.toLowerCase();
-    if (!machineCategoryMap.has(lower)) machineCategoryMap.set(lower, { id: `cat-${name}`, name });
+    if (!name || name === 'ALL' || name === '-') return;
+    const lower = name.trim().toLowerCase();
+    if (!machineCategoryMap.has(lower)) machineCategoryMap.set(lower, { id: `cat-${name}`, name: name.trim() });
   });
   products.forEach(p => {
-    const pCat = p.machineCategory || p.kategoriMesin;
-    if (pCat) {
-      const lower = pCat.toLowerCase();
-      if (!machineCategoryMap.has(lower)) machineCategoryMap.set(lower, { id: `cat-${pCat}`, name: pCat });
+    const pCat = p.machineCategory || p.kategoriMesin || p.engine_type;
+    if (pCat && pCat !== 'ALL' && pCat !== '-') {
+      const lower = pCat.trim().toLowerCase();
+      if (!machineCategoryMap.has(lower)) machineCategoryMap.set(lower, { id: `cat-${pCat}`, name: pCat.trim() });
     }
   });
   const allMachineCategoriesList = Array.from(machineCategoryMap.values());
@@ -918,12 +921,12 @@ export default function ProductManagement({
       sku: initialSKU,
       name: '',
       brand: allBrandNames[0] || 'NDK Exhaust',
-      engine_type: '2KD',
+      engine_type: '-',
       category_name: 'Downpipe',
       car_variant: '',
-      spec_sound: 'Street (Bass)',
-      spec_resonator: true,
-      material_finish: 'SS Polos',
+      spec_sound: '-',
+      spec_resonator: '-',
+      material_finish: '-',
       reseller_price: 0,
       selling_price: 0,
       distributor_price: 0,
@@ -937,7 +940,7 @@ export default function ProductManagement({
       currentStock: 0,
       unit: 'Pcs',
       status: 'ACTIVE',
-      machineCategory: '2KD'
+      machineCategory: '-'
     });
     setFormError('');
     setIsModalOpen(true);
@@ -957,7 +960,7 @@ export default function ProductManagement({
     const distributorPrice = Number(product.distributor_price ?? product.distributorPrice) || (resellerPrice > 0 ? resellerPrice : sellingPrice);
     const profitAmount = product.profit_amount !== undefined ? Number(product.profit_amount) : (sellingPrice - resellerPrice);
     const profitPercentage = product.profit_percentage !== undefined ? Number(product.profit_percentage) : (resellerPrice > 0 ? ((profitAmount / resellerPrice) * 100) : 0);
-    const engineType = product.engine_type || product.engineType || product.machineCategory || product.kategoriMesin || 'Universal / Semua Mesin';
+    const engineType = product.engine_type || product.engineType || product.machineCategory || product.kategoriMesin || '-';
     const categoryName = product.category_name || product.categoryName || 'Downpipe';
 
     setFormData({
@@ -967,9 +970,9 @@ export default function ProductManagement({
       engine_type: engineType,
       category_name: categoryName,
       car_variant: product.car_variant || product.carVariant || '',
-      spec_sound: product.spec_sound || product.specSound || 'Street (Bass)',
-      spec_resonator: product.spec_resonator !== undefined ? Boolean(product.spec_resonator) : true,
-      material_finish: product.material_finish || product.materialFinish || 'SS Polos',
+      spec_sound: product.spec_sound !== undefined && product.spec_sound !== '' ? product.spec_sound : '-',
+      spec_resonator: product.spec_resonator !== undefined && product.spec_resonator !== '' ? product.spec_resonator : '-',
+      material_finish: product.material_finish !== undefined && product.material_finish !== '' ? product.material_finish : '-',
       reseller_price: resellerPrice,
       selling_price: sellingPrice,
       distributor_price: distributorPrice,
@@ -1000,12 +1003,13 @@ export default function ProductManagement({
       setFormError("Merk / Brand produk wajib diisi.");
       return;
     }
-    if (!formData.name.trim()) {
-      setFormError("Nama produk / komponen knalpot wajib diisi.");
+    let finalEngine = isCreatingNewCategory ? newCategoryInput.trim() : (formData.engine_type || '').trim();
+    if (!finalEngine) {
+      setFormError("Tipe mesin kendaraan wajib dipilih.");
       return;
     }
-    if (!formData.engine_type.trim()) {
-      setFormError("Tipe mesin kendaraan wajib dipilih.");
+    if (!formData.name.trim()) {
+      setFormError("Nama produk / komponen knalpot wajib diisi.");
       return;
     }
 
@@ -1015,9 +1019,9 @@ export default function ProductManagement({
   // Submit Master Product to Database after user confirms in dialog
   const handleExecuteSaveMasterProduct = async () => {
     setFormError('');
-    let finalBrand = isCreatingNewBrand ? newBrandInput.trim() : formData.brand.trim();
-    let finalEngine = formData.engine_type.trim() || 'Universal / Semua Mesin';
-    let finalCategory = formData.category_name.trim() || 'Downpipe';
+    let finalBrand = isCreatingNewBrand ? newBrandInput.trim() : (formData.brand || '-').trim();
+    let finalEngine = isCreatingNewCategory ? newCategoryInput.trim() : (formData.engine_type || '-').trim();
+    let finalCategory = (formData.category_name || '-').trim();
 
     const sellingPrice = Number(formData.selling_price) || Number(formData.price) || 0;
     const resellerPrice = Number(formData.reseller_price) || 0;
@@ -1034,6 +1038,14 @@ export default function ProductManagement({
         }
       }
 
+      if (isCreatingNewCategory && onCreateMachineCategory && newCategoryInput.trim()) {
+        try {
+          await onCreateMachineCategory(finalEngine);
+        } catch (mErr) {
+          console.warn("Machine category already exists:", mErr);
+        }
+      }
+
       const existingSKUs = new Set(products.map(p => (p.sku || '').toLowerCase()));
       const finalSKU = formData.sku.trim() || (editingProduct ? editingProduct.sku : generateSmartSKU(finalEngine, finalCategory, formData.name, existingSKUs, products.length + 1).sku);
 
@@ -1046,9 +1058,9 @@ export default function ProductManagement({
         engine_type: finalEngine,
         category_name: finalCategory,
         car_variant: (formData.car_variant || '').trim() || '-',
-        spec_sound: formData.spec_sound || 'Street (Bass)',
-        spec_resonator: Boolean(formData.spec_resonator),
-        material_finish: formData.material_finish || 'SS Polos',
+        spec_sound: formData.spec_sound || '-',
+        spec_resonator: (formData.spec_resonator === '-' || formData.spec_resonator === undefined || formData.spec_resonator === null) ? '-' : Boolean(formData.spec_resonator),
+        material_finish: formData.material_finish || '-',
         reseller_price: resellerPrice,
         selling_price: sellingPrice,
         distributor_price: distributorPrice,
@@ -1718,11 +1730,11 @@ export default function ProductManagement({
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-xs mb-4">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
               <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
                 {isBranchStaff ? 'Inventaris Produk Cabang' : 'Master Data & Inventaris Produk'}
               </h2>
-              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+              <span className={`inline-flex items-center whitespace-nowrap flex-shrink-0 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold ${
                 isAdmin 
                   ? 'bg-sky-100 text-sky-800 border border-sky-200' 
                   : isStaffPusat
@@ -1941,9 +1953,9 @@ export default function ProductManagement({
                     <FolderOpen className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <h3 className="text-base font-bold text-white flex flex-wrap items-center gap-2">
                       <span>Wadah Inventaris & Produk Antar-Cabang</span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-sky-500/30 text-sky-200 border border-sky-400/30">
+                      <span className="inline-flex items-center whitespace-nowrap flex-shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-sky-500/30 text-sky-200 border border-sky-400/30">
                         {branchContainers.length} Wadah Aktif
                       </span>
                     </h3>
@@ -2475,7 +2487,7 @@ export default function ProductManagement({
                         <Boxes className="w-8 h-8 mx-auto text-slate-300 stroke-1" />
                         <p className="text-sm font-medium">Belum ada inventaris produk di {selectedBranchObject?.name}.</p>
                         <button
-                          onClick={handleOpenBulkRequestModal}
+                          onClick={() => handleOpenRequestModal(selectedBranchObject)}
                           className="mt-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl active:scale-95 transition cursor-pointer"
                         >
                           + Ajukan / Tambah Produk ke Cabang Ini Sekarang
@@ -2758,7 +2770,7 @@ export default function ProductManagement({
                 className="w-full sm:w-44 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-sky-500 focus:outline-none flex-shrink-0"
               >
                 <option value="ALL">Semua Tipe Mesin</option>
-                {DEFAULT_ENGINE_TYPES.map(eName => (
+                {allMachineCategories.filter(e => e !== 'ALL').map(eName => (
                   <option key={eName} value={eName}>{eName}</option>
                 ))}
               </select>
@@ -2916,25 +2928,12 @@ export default function ProductManagement({
                             </div>
                           </div>
 
-                          {/* Product Identity: Photo + Name + Brand + SKU */}
-                          <div className="flex items-start gap-3">
-                            {prod.imageUrl ? (
-                              <img 
-                                src={prod.imageUrl} 
-                                alt={prod.name} 
-                                className="w-13 h-13 rounded-xl object-cover border border-slate-200 shadow-2xs flex-shrink-0 bg-slate-50 mt-0.5" 
-                              />
-                            ) : (
-                              <div className="w-13 h-13 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0 text-slate-400 mt-0.5">
-                                <ImageIcon className="w-5 h-5 opacity-40" />
-                              </div>
-                            )}
-
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <h4 className="font-bold text-slate-900 text-sm leading-snug break-words">
-                                  {prod.name}
-                                </h4>
+                          {/* Product Identity: Name + Brand + SKU */}
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <h4 className="font-bold text-slate-900 text-sm leading-snug break-words">
+                                {prod.name}
+                              </h4>
                                 <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap">
                                   {prod.brand || 'NDK Exhaust'}
                                 </span>
@@ -2946,13 +2945,13 @@ export default function ProductManagement({
 
                               <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
                                 <span className="font-semibold text-slate-700">{prod.category_name || 'Exhaust'}</span>
-                                {prod.material_finish && (
+                                {prod.material_finish && prod.material_finish !== '-' && (
                                   <>
                                     <span>•</span>
                                     <span className="text-sky-700 font-medium">{prod.material_finish}</span>
                                   </>
                                 )}
-                                {prod.spec_sound && (
+                                {prod.spec_sound && prod.spec_sound !== '-' && (
                                   <>
                                     <span>•</span>
                                     <span className="text-amber-700 font-medium">{prod.spec_sound}</span>
@@ -2960,7 +2959,6 @@ export default function ProductManagement({
                                 )}
                               </div>
                             </div>
-                          </div>
 
                           {/* Engine & Compatibility Box */}
                           <div className="p-2.5 bg-amber-50/60 rounded-xl border border-amber-100 text-xs space-y-1">
@@ -3165,38 +3163,24 @@ export default function ProductManagement({
                               </td>
 
                               <td className="px-5 py-3.5 font-medium text-slate-900 min-w-[240px]">
-                                <div className="flex items-start gap-3">
-                                  {/* Clean Image Thumbnail / Placeholder */}
-                                  {prod.imageUrl ? (
-                                    <img 
-                                      src={prod.imageUrl} 
-                                      alt={prod.name} 
-                                      className="w-11 h-11 rounded-xl object-cover border border-slate-200 shadow-2xs flex-shrink-0 bg-slate-50 mt-0.5" 
-                                    />
-                                  ) : (
-                                    <div className="w-11 h-11 rounded-xl bg-slate-100 border border-slate-200/80 flex items-center justify-center flex-shrink-0 text-slate-400 mt-0.5" title="Belum ada foto">
-                                      <ImageIcon className="w-5 h-5 opacity-40" />
-                                    </div>
-                                  )}
-
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
-                                      <span className="font-bold text-slate-900 leading-snug">
-                                        {prod.name}
-                                      </span>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+                                    <span className="font-bold text-slate-900 leading-snug">
+                                      {prod.name}
+                                    </span>
                                       <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap flex-shrink-0">
                                         {prod.brand || 'NDK Exhaust'}
                                       </span>
                                     </div>
                                     <div className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5 flex-wrap">
                                       <span className="font-semibold text-slate-600 whitespace-nowrap">{prod.category_name || 'Exhaust'}</span>
-                                      {prod.material_finish && (
+                                      {prod.material_finish && prod.material_finish !== '-' && (
                                         <>
                                           <span>•</span>
                                           <span className="text-sky-700 font-medium whitespace-nowrap">{prod.material_finish}</span>
                                         </>
                                       )}
-                                      {prod.spec_sound && (
+                                      {prod.spec_sound && prod.spec_sound !== '-' && (
                                         <>
                                           <span>•</span>
                                           <span className="text-amber-700 font-medium whitespace-nowrap">{prod.spec_sound}</span>
@@ -3204,7 +3188,6 @@ export default function ProductManagement({
                                       )}
                                     </div>
                                   </div>
-                                </div>
                               </td>
 
                               <td className="px-4 py-3.5 text-xs text-slate-600 min-w-[170px]">
@@ -4119,7 +4102,7 @@ export default function ProductManagement({
                 className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
               >
                 <option value="ALL">Semua Mesin</option>
-                {DEFAULT_ENGINE_TYPES.filter(t => t !== 'ALL').map(eng => (
+                {allMachineCategories.filter(t => t !== 'ALL').map(eng => (
                   <option key={eng} value={eng}>{eng}</option>
                 ))}
               </select>
@@ -4707,20 +4690,43 @@ export default function ProductManagement({
               {/* Row 2: Tipe Mesin & Kategori Komponen */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Tipe Mesin Kendaraan *
-                  </label>
-                  <div className="flex gap-1.5">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Tipe Mesin Kendaraan *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCreatingNewCategory(!isCreatingNewCategory);
+                        setNewCategoryInput('');
+                      }}
+                      className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                    >
+                      {isCreatingNewCategory ? '← Pilih dari Daftar' : '+ Mesin Baru'}
+                    </button>
+                  </div>
+
+                  {isCreatingNewCategory ? (
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ketik tipe mesin baru (cth: 4D56/4N15)..."
+                      value={newCategoryInput}
+                      onChange={(e) => setNewCategoryInput(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-indigo-50 border border-indigo-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none font-semibold text-indigo-950"
+                    />
+                  ) : (
                     <select
                       value={formData.engine_type}
                       onChange={(e) => setFormData({ ...formData, engine_type: e.target.value, machineCategory: e.target.value })}
-                      className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                     >
-                      {DEFAULT_ENGINE_TYPES.map(eName => (
+                      <option value="-">-</option>
+                      {allMachineCategories.filter(e => e !== 'ALL' && e !== '-').map(eName => (
                         <option key={eName} value={eName}>{eName}</option>
                       ))}
                     </select>
-                  </div>
+                  )}
                 </div>
 
                 <div>
@@ -4732,6 +4738,7 @@ export default function ProductManagement({
                     onChange={(e) => setFormData({ ...formData, category_name: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   >
+                    <option value="-">-</option>
                     {DEFAULT_EXHAUST_CATEGORIES.map(cName => (
                       <option key={cName} value={cName}>{cName}</option>
                     ))}
@@ -4786,6 +4793,7 @@ export default function ProductManagement({
                       onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                     >
+                      <option value="-">-</option>
                       {allBrandNames.map(bName => (
                         <option key={bName} value={bName}>{bName}</option>
                       ))}
@@ -4805,6 +4813,7 @@ export default function ProductManagement({
                     onChange={(e) => setFormData({ ...formData, spec_sound: e.target.value })}
                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   >
+                    <option value="-">-</option>
                     <option value="Street (Bass)">Street (Bass)</option>
                     <option value="Drag (Kering)">Drag (Kering)</option>
                     <option value="Silent">Silent / Senyap</option>
@@ -4817,10 +4826,23 @@ export default function ProductManagement({
                     Opsi Resonator
                   </label>
                   <select
-                    value={formData.spec_resonator ? 'WITH_RESONATOR' : 'NON_RESONATOR'}
-                    onChange={(e) => setFormData({ ...formData, spec_resonator: e.target.value === 'WITH_RESONATOR' })}
+                    value={
+                      formData.spec_resonator === '-' || formData.spec_resonator === '' || formData.spec_resonator === null || formData.spec_resonator === undefined
+                        ? '-'
+                        : formData.spec_resonator === true || formData.spec_resonator === 'WITH_RESONATOR' || formData.spec_resonator === 'true'
+                        ? 'WITH_RESONATOR'
+                        : 'NON_RESONATOR'
+                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFormData({ 
+                        ...formData, 
+                        spec_resonator: val === '-' ? '-' : val === 'WITH_RESONATOR' 
+                      });
+                    }}
                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   >
+                    <option value="-">-</option>
                     <option value="WITH_RESONATOR">Ada Resonator</option>
                     <option value="NON_RESONATOR">Non-Resonator (Plong)</option>
                   </select>
@@ -4835,6 +4857,7 @@ export default function ProductManagement({
                     onChange={(e) => setFormData({ ...formData, material_finish: e.target.value })}
                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   >
+                    <option value="-">-</option>
                     <option value="SS Polos">SS Polos</option>
                     <option value="SS Burntip">SS Burntip (Blue)</option>
                     <option value="SS Look Titanium">SS Look Titanium</option>
@@ -5797,7 +5820,8 @@ export default function ProductManagement({
                     onChange={(e) => setBundleFormData({ ...bundleFormData, engine_type: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-purple-500 focus:outline-none cursor-pointer"
                   >
-                    {DEFAULT_ENGINE_TYPES.filter(t => t !== 'ALL').map(eng => (
+                    <option value="-">-</option>
+                    {allMachineCategories.filter(t => t !== 'ALL' && t !== '-').map(eng => (
                       <option key={eng} value={eng}>{eng}</option>
                     ))}
                   </select>
@@ -5825,6 +5849,7 @@ export default function ProductManagement({
                     onChange={(e) => setBundleFormData({ ...bundleFormData, brand: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-purple-500 focus:outline-none cursor-pointer"
                   >
+                    <option value="-">-</option>
                     {allBrandNames.map(b => (
                       <option key={b} value={b}>{b}</option>
                     ))}

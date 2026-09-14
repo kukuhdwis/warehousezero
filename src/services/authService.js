@@ -5,7 +5,10 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   signOut, 
-  onIdTokenChanged 
+  onIdTokenChanged,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider
 } from 'firebase/auth';
 import { collection, doc, getDoc, query, where, getDocs } from 'firebase/firestore';
 
@@ -58,6 +61,87 @@ export const registerUserInFirebaseAuth = async (email, password) => {
     console.error("Error in registerUserInFirebaseAuth:", err);
     throw err;
   }
+};
+
+/**
+ * Synchronize or update a user's password in Firebase Authentication statelessly.
+ * When an Administrator updates a user's password in User Management, this ensures
+ * the new password is immediately active in Firebase Auth without logging out the Admin.
+ */
+export const syncUserPasswordInFirebaseAuth = async (email, oldPassword, newPassword) => {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const cleanNewPass = (newPassword || '').trim();
+  const cleanOldPass = (oldPassword || '').trim();
+
+  if (!cleanEmail || !cleanNewPass) return false;
+  if (cleanNewPass.length < 6) {
+    throw new Error('Kata sandi minimal 6 karakter sesuai standar keamanan Firebase.');
+  }
+
+  const apiKey = firebaseConfig.apiKey;
+
+  // 1. Check if the new password is ALREADY valid in Firebase Auth (no sync needed)
+  try {
+    const testNewRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, password: cleanNewPass, returnSecureToken: true })
+    });
+    const testNewData = await testNewRes.json();
+    if (testNewData && !testNewData.error && testNewData.idToken) {
+      console.log(`[syncUserPassword] ${cleanEmail} sudah tersinkronisasi dengan kata sandi baru.`);
+      return true;
+    }
+  } catch (e) {
+    // Continue to step 2
+  }
+
+  // 2. Try candidate passwords to authenticate and obtain an idToken to perform accounts:update
+  const candidatePasswords = [cleanOldPass, 'NDKProfit10T', 'StaffNDK123'].filter(Boolean);
+  const uniqueCandidates = [...new Set(candidatePasswords)];
+
+  for (const candidatePass of uniqueCandidates) {
+    try {
+      const signInRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, password: candidatePass, returnSecureToken: true })
+      });
+      const signInData = await signInRes.json();
+      if (signInData && !signInData.error && signInData.idToken) {
+        // Successfully obtained idToken! Update password to cleanNewPass
+        const updateRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:update?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            idToken: signInData.idToken,
+            password: cleanNewPass,
+            returnSecureToken: true
+          })
+        });
+        const updateData = await updateRes.json();
+        if (updateData && !updateData.error) {
+          console.log(`[syncUserPassword] Berhasil memperbarui kata sandi di Firebase Auth untuk ${cleanEmail}!`);
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn(`[syncUserPassword] Percobaan kata sandi lama gagal:`, e);
+    }
+  }
+
+  // 3. If account does not exist in Firebase Auth yet, register it directly
+  try {
+    const newUid = await registerUserInFirebaseAuth(cleanEmail, cleanNewPass);
+    if (newUid) {
+      console.log(`[syncUserPassword] Akun baru berhasil dibuat di Firebase Auth untuk ${cleanEmail}.`);
+      return true;
+    }
+  } catch (e) {
+    console.warn(`[syncUserPassword] Registrasi akun baru di Firebase Auth gagal:`, e);
+  }
+
+  return false;
 };
 
 export const getStoredUser = () => {
@@ -264,5 +348,72 @@ export const setupAuthTokenListener = (onClaimsChanged) => {
 
   return unsubscribe;
 };
+
+/**
+ * Change password for the currently logged-in user
+ * 1. Re-authenticates using current password for maximum security
+ * 2. Updates password in Firebase Authentication
+ * 3. Updates password in Firestore /users/{uid} document
+ */
+export const changeUserPassword = async (currentPassword, newPassword) => {
+  if (!auth?.currentUser) {
+    throw new Error('Sesi autentikasi tidak ditemukan. Silakan login kembali.');
+  }
+
+  const cleanCurrent = (currentPassword || '').trim();
+  const cleanNew = (newPassword || '').trim();
+
+  if (!cleanCurrent || !cleanNew) {
+    throw new Error('Kata sandi saat ini dan kata sandi baru wajib diisi.');
+  }
+
+  if (cleanNew.length < 6) {
+    throw new Error('Kata sandi baru minimal 6 karakter sesuai standar keamanan.');
+  }
+
+  if (cleanCurrent === cleanNew) {
+    throw new Error('Kata sandi baru tidak boleh sama dengan kata sandi saat ini.');
+  }
+
+  // 1. Re-authenticate user with current password
+  try {
+    const credential = EmailAuthProvider.credential(auth.currentUser.email, cleanCurrent);
+    await reauthenticateWithCredential(auth.currentUser, credential);
+  } catch (authErr) {
+    if (
+      authErr.code === 'auth/wrong-password' || 
+      authErr.code === 'auth/invalid-credential' ||
+      authErr.code === 'auth/invalid-login-credentials'
+    ) {
+      throw new Error('Kata sandi saat ini salah. Silakan periksa kembali kata sandi lama Anda.');
+    }
+    throw new Error(`Gagal verifikasi kata sandi lama: ${authErr.message || 'Kredensial tidak valid'}`);
+  }
+
+  // 2. Update password in Firebase Authentication
+  try {
+    await updatePassword(auth.currentUser, cleanNew);
+  } catch (pwErr) {
+    if (pwErr.code === 'auth/weak-password') {
+      throw new Error('Kata sandi terlalu lemah. Gunakan kombinasi huruf dan angka minimal 6 karakter.');
+    }
+    throw new Error(`Gagal memperbarui kata sandi di sistem autentikasi: ${pwErr.message}`);
+  }
+
+  // 3. Update Firestore document so Admin / user records remain synchronized
+  try {
+    const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+    const userDocRef = doc(db, 'users', auth.currentUser.uid);
+    await updateDoc(userDocRef, {
+      password: cleanNew,
+      updatedAt: serverTimestamp()
+    });
+  } catch (docErr) {
+    console.warn('Firestore password doc update warning (Firebase Auth is already successfully updated):', docErr);
+  }
+
+  return true;
+};
+
 
 

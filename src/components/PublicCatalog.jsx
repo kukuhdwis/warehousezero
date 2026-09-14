@@ -1792,7 +1792,7 @@ export default function PublicCatalog({
                     <strong className={`font-display text-xs sm:text-sm font-semibold uppercase tracking-tight truncate block mt-0.5 ${isDark ? 'text-zinc-100' : 'text-ink'}`}>{detailProduct.spec_sound || '-'}</strong>
                   </div>
 
-                  {detailProduct.spec_resonator !== undefined && (
+                  {detailProduct.spec_resonator !== undefined && detailProduct.spec_resonator !== '-' && (
                     <div className={`p-3 rounded-xl border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
                       }`}>
                       <span className={`font-mono text-[9px] block font-bold uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-steel'}`}>Tabung Resonator</span>

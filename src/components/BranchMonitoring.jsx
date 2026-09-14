@@ -2768,14 +2768,14 @@ export default function BranchMonitoring({
         </div>
         <div 
           onClick={() => setShowProfitDetails(true)}
-          className="bg-emerald-50/50 p-3.5 sm:p-5 rounded-2xl border border-emerald-200 shadow-xs cursor-pointer hover:bg-emerald-100/60 transition group"
+          className="bg-emerald-50/40 dark:bg-zinc-950 p-3.5 sm:p-5 rounded-2xl border border-emerald-200 dark:border-emerald-500/30 shadow-xs cursor-pointer hover:bg-emerald-100/60 dark:hover:bg-zinc-900 transition group"
           title="Klik untuk melihat rincian & kalkulasi estimasi profit"
         >
-          <p className="text-[11px] font-semibold text-emerald-600 uppercase flex items-center justify-between">
-            <span>Estimasi Profit <span className="text-[10px] font-normal lowercase">({selectedMonth === 'ALL' ? 'semua' : (selectedMonth === getCurrentMonthKey() ? 'bulan ini' : formatMonthLabel(selectedMonth))})</span></span>
-            <Info className="w-3.5 h-3.5 text-emerald-600 group-hover:text-emerald-800" />
+          <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 uppercase flex items-center justify-between">
+            <span>Estimasi Profit <span className="text-[10px] font-normal lowercase text-emerald-600/80 dark:text-emerald-400/80">({selectedMonth === 'ALL' ? 'semua' : (selectedMonth === getCurrentMonthKey() ? 'bulan ini' : formatMonthLabel(selectedMonth))})</span></span>
+            <Info className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300" />
           </p>
-          <h3 className="text-sm sm:text-xl font-bold text-emerald-700 mt-1 truncate">
+          <h3 className="text-sm sm:text-xl font-bold text-emerald-700 dark:text-emerald-400 mt-1 truncate">
             Rp {transactions.filter(t => isTxInSelectedMonth(t, selectedMonth)).reduce((acc, tx) => {
               if (tx.type === 'OUT') {
                 const { txProfit } = calculateTxProfit(tx, products, branchInventories);

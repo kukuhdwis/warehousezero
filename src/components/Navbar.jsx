@@ -17,7 +17,8 @@ import {
   LogOut,
   ChevronDown,
   Sun,
-  Moon
+  Moon,
+  KeyRound
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -27,6 +28,7 @@ export default function Navbar({
   onMarkAllAsRead, 
   onNavigate,
   onLogout,
+  onChangePassword,
   isDark = true,
   onToggleDark
 }) {
@@ -369,7 +371,19 @@ export default function Navbar({
                   </div>
                 </div>
                 
-                <div className="p-2">
+                <div className="p-2 space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      if (onChangePassword) onChangePassword();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition cursor-pointer text-sm font-semibold"
+                  >
+                    <KeyRound className="w-4 h-4 text-zinc-400" />
+                    <span>Ganti Kata Sandi</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => {
