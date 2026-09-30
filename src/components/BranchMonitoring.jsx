@@ -58,7 +58,7 @@ import {
   Award
 } from 'lucide-react';
 import { exportToCSV, exportToExcel, exportMultiSheetExcel, purgeTransactions } from '../services/dataService';
-import { matchesSearch } from '../utils/searchUtils';
+import { matchesSearch, sortWithStockFirst } from '../utils/searchUtils';
 import ConfirmationModal from './ConfirmationModal';
 import TransactionDetailModal from './TransactionDetailModal';
 
@@ -494,9 +494,9 @@ export default function BranchMonitoring({
     return Array.from(bSet).filter(Boolean);
   }, [branchInventoryItems]);
 
-  // Filter items by search, brand & stock status
+  // Filter items by search, brand & stock status (prioritizing available stock)
   const filteredInventories = React.useMemo(() => {
-    return branchInventoryItems.filter(item => {
+    const filtered = branchInventoryItems.filter(item => {
       const matchesSearchTerm = matchesSearch(searchTerm, item.productName, item.name, item.sku, item.brand, item.machineCategory);
       const matchesBrand = brandFilter === 'ALL' || item.brand === brandFilter;
 
@@ -508,6 +508,7 @@ export default function BranchMonitoring({
 
       return matchesSearchTerm && matchesBrand && matchesStock;
     });
+    return sortWithStockFirst(filtered, item => Number(item.stockQuantity ?? item.currentStock ?? 0));
   }, [branchInventoryItems, searchTerm, brandFilter, stockFilter]);
 
   const branchTransactions = transactions.filter(t => {

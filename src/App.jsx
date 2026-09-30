@@ -91,6 +91,7 @@ import ChangePasswordModal from './components/ChangePasswordModal';
 import { db } from './services/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { toggleThemeWithClipPath } from './utils/themeAnimation';
+import { sortWithStockFirst } from './utils/searchUtils';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(getStoredUser());
@@ -860,45 +861,48 @@ export default function App() {
 
   // Compute products available for Dashboard and Outbound for the current branch:
   // If Staff Cabang: ONLY map approved branchInventories for their specific branchId!
-  const effectiveOutboundProducts = (currentUser?.role === 'STAFF_BRANCH')
-    ? branchInventories
-        .filter(bi => {
-          const userBranchId = (currentUser.branchId || '').toLowerCase();
-          const userBranchName = (currentUser.branchName || '').toLowerCase();
-          const itemBranchId = (bi.branchId || '').toLowerCase();
-          const itemBranchName = (bi.branchName || '').toLowerCase();
+  const effectiveOutboundProducts = sortWithStockFirst(
+    (currentUser?.role === 'STAFF_BRANCH')
+      ? branchInventories
+          .filter(bi => {
+            const userBranchId = (currentUser.branchId || '').toLowerCase();
+            const userBranchName = (currentUser.branchName || '').toLowerCase();
+            const itemBranchId = (bi.branchId || '').toLowerCase();
+            const itemBranchName = (bi.branchName || '').toLowerCase();
 
-          const matchesBranch = (
-            (userBranchId && (itemBranchId === userBranchId || itemBranchName === userBranchId)) ||
-            (userBranchName && (itemBranchName === userBranchName || itemBranchId === userBranchName))
-          );
-          return matchesBranch && bi.status === 'APPROVED';
-        })
-        .map(bi => {
-          const masterP = products.find(p => p.id === bi.productId || p.sku === bi.sku);
-          const masterCost = Number(masterP?.reseller_price ?? masterP?.resellerPrice ?? masterP?.cost_price ?? masterP?.costPrice ?? 0);
-          const branchCost = Number(bi.costPrice ?? bi.reseller_price ?? bi.resellerPrice ?? 0);
-          return {
-            id: bi.productId,
-            branchInventoryId: bi.id,
-            productId: bi.productId,
-            sku: bi.sku,
-            name: bi.productName,
-            brand: bi.brand || masterP?.brand || 'Generic',
-            machineCategory: masterP?.machineCategory || masterP?.kategoriMesin || 'Universal',
-            price: Number(bi.price ?? masterP?.selling_price ?? masterP?.price ?? 0),
-            unit: bi.unit || masterP?.unit || 'Pcs',
-            currentStock: Number(bi.stockQuantity) || 0,
-            minStock: Number(bi.minStock) || 5,
-            costPrice: masterCost > 0 ? masterCost : (branchCost > 0 ? branchCost : 0),
-            branchId: bi.branchId,
-            branchName: bi.branchName || currentUser?.branchName || 'Cabang'
-          };
-        })
-    : products.map(p => ({
-        ...p,
-        costPrice: Number(p.costPrice ?? p.reseller_price ?? p.resellerPrice ?? p.cost_price ?? 0)
-      }));
+            const matchesBranch = (
+              (userBranchId && (itemBranchId === userBranchId || itemBranchName === userBranchId)) ||
+              (userBranchName && (itemBranchName === userBranchName || itemBranchId === userBranchName))
+            );
+            return matchesBranch && bi.status === 'APPROVED';
+          })
+          .map(bi => {
+            const masterP = products.find(p => p.id === bi.productId || p.sku === bi.sku);
+            const masterCost = Number(masterP?.reseller_price ?? masterP?.resellerPrice ?? masterP?.cost_price ?? masterP?.costPrice ?? 0);
+            const branchCost = Number(bi.costPrice ?? bi.reseller_price ?? bi.resellerPrice ?? 0);
+            return {
+              id: bi.productId,
+              branchInventoryId: bi.id,
+              productId: bi.productId,
+              sku: bi.sku,
+              name: bi.productName,
+              brand: bi.brand || masterP?.brand || 'Generic',
+              machineCategory: masterP?.machineCategory || masterP?.kategoriMesin || 'Universal',
+              price: Number(bi.price ?? masterP?.selling_price ?? masterP?.price ?? 0),
+              unit: bi.unit || masterP?.unit || 'Pcs',
+              currentStock: Number(bi.stockQuantity) || 0,
+              minStock: Number(bi.minStock) || 5,
+              costPrice: masterCost > 0 ? masterCost : (branchCost > 0 ? branchCost : 0),
+              branchId: bi.branchId,
+              branchName: bi.branchName || currentUser?.branchName || 'Cabang'
+            };
+          })
+      : products.map(p => ({
+          ...p,
+          costPrice: Number(p.costPrice ?? p.reseller_price ?? p.resellerPrice ?? p.cost_price ?? 0)
+        })),
+    p => Number(p.currentStock ?? p.stockQuantity ?? p.stock ?? 0)
+  );
 
   const handleNavigate = (tab, contextData = null) => {
     if (tab === 'products') {

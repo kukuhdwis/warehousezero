@@ -379,6 +379,18 @@ export default function PublicCatalog({
     });
 
     return list.sort((a, b) => {
+      const stockA = Number(a.currentStock ?? a.stockQuantity ?? a.stock ?? 0);
+      const stockB = Number(b.currentStock ?? b.stockQuantity ?? b.stock ?? 0);
+      const hasStockA = stockA > 0;
+      const hasStockB = stockB > 0;
+
+      if (sortBy === 'POPULAR') {
+        if (hasStockA && !hasStockB) return -1;
+        if (!hasStockA && hasStockB) return 1;
+        if (hasStockA && hasStockB && stockB !== stockA) return stockB - stockA;
+        return (a.name || '').localeCompare(b.name || '');
+      }
+
       const priceA = Number(a.selling_price ?? a.price) || 0;
       const priceB = Number(b.selling_price ?? b.price) || 0;
 

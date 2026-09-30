@@ -61,7 +61,7 @@ import CustomAlertModal from './CustomAlertModal';
 import ConfirmationModal from './ConfirmationModal';
 import SpreadsheetImportModal from './SpreadsheetImportModal';
 import { db } from '../services/firebase';
-import { matchesSearch } from '../utils/searchUtils';
+import { matchesSearch, sortWithStockFirst } from '../utils/searchUtils';
 import { 
   downloadExhaustTemplate, 
   downloadBundleTemplate, 
@@ -633,8 +633,8 @@ export default function ProductManagement({
     return Object.values(groups);
   }, [pendingApprovals]);
 
-  // Filtered Master Products (Automotive Exhaust System Support)
-  const filteredProducts = products.filter(p => {
+  // Filtered Master Products (Automotive Exhaust System Support) - Stok > 0 diutamakan di atas
+  const filteredProducts = sortWithStockFirst(products.filter(p => {
     const pBrand = p.brand || 'NDK Exhaust';
     const pEngine = p.engine_type || p.engineType || p.machineCategory || p.kategoriMesin || 'Universal / Semua Mesin';
     const pCategory = p.category_name || p.categoryName || 'Downpipe';
@@ -650,10 +650,10 @@ export default function ProductManagement({
     const matchesMachineCat = machineCategoryFilter === 'ALL' || pEngine === machineCategoryFilter;
 
     return matchesSearchTerm && matchesBrand && matchesEngine && matchesCategory && matchesMachineCat;
-  });
+  }), p => Number(p.currentStock ?? p.stock ?? 0));
 
-  // Filtered Branch Inventories
-  const myBranchInventories = branchInventories.filter(bi => {
+  // Filtered Branch Inventories - Stok > 0 diutamakan di atas
+  const myBranchInventories = sortWithStockFirst(branchInventories.filter(bi => {
     const userBranchId = (currentUser?.branchId || '').toLowerCase();
     const userBranchName = (currentUser?.branchName || '').toLowerCase();
     const itemBranchId = (bi.branchId || '').toLowerCase();
@@ -672,19 +672,19 @@ export default function ProductManagement({
     const matchesStatus = statusFilter === 'ALL' || bi.status === statusFilter;
     const matchesSearchTerm = matchesSearch(searchTerm, bi.productName, bi.name, bi.sku, bi.brand, bi.branchName);
     return matchesBranch && matchesStatus && matchesSearchTerm;
-  });
+  }), bi => Number(bi.stockQuantity ?? bi.currentStock ?? bi.stock ?? 0));
 
   // Filtered Branch Inventories specifically for the active branch container
   const activeBranchItems = selectedBranchObject && !selectedBranchObject.isPusat
     ? branchInventories.filter(bi => bi.branchId === selectedBranchObject.id || bi.branchName === selectedBranchObject.name)
     : [];
 
-  const filteredActiveBranchItems = activeBranchItems.filter(bi => {
+  const filteredActiveBranchItems = sortWithStockFirst(activeBranchItems.filter(bi => {
     const matchesStatus = statusFilter === 'ALL' || bi.status === statusFilter;
     const matchesBrand = brandFilter === 'ALL' || bi.brand === brandFilter;
     const matchesSearchTerm = matchesSearch(searchTerm, bi.productName, bi.name, bi.sku, bi.brand);
     return matchesStatus && matchesBrand && matchesSearchTerm;
-  });
+  }), bi => Number(bi.stockQuantity ?? bi.currentStock ?? bi.stock ?? 0));
 
   // Paginated Master Products
   const totalCatalogPages = catalogPageSize === 0 ? 1 : Math.max(1, Math.ceil(filteredProducts.length / catalogPageSize));
@@ -1509,9 +1509,9 @@ export default function ProductManagement({
   };
 
   const handleToggleAllFilteredInRequest = () => {
-    const filteredProducts = products.filter(p => 
+    const filteredProducts = sortWithStockFirst(products.filter(p => 
       p.status !== 'INACTIVE' && matchesSearch(requestSearchTerm, p.name, p.sku, p.brand)
-    );
+    ), p => Number(p.currentStock ?? p.stock ?? 0));
 
     const allSelected = filteredProducts.every(prod => requestItems.some(item => item.productId === prod.id));
 
@@ -4125,11 +4125,22 @@ export default function ProductManagement({
 
           {/* Bundles Table */}
           {(() => {
-            const filteredBundles = bundles.filter(b => {
+            const filteredBundles = sortWithStockFirst(bundles.filter(b => {
               const matchesQuery = matchesSearch(bundleSearchTerm, b.name, b.code, b.brand, b.engine_type, b.car_variant, b.rawIsi);
               const matchesEng = bundleEngineFilter === 'ALL' || (b.engine_type || '').toUpperCase().includes(bundleEngineFilter.toUpperCase());
               const matchesBr = bundleBrandFilter === 'ALL' || (b.brand || '').toLowerCase() === bundleBrandFilter.toLowerCase();
               return matchesQuery && matchesEng && matchesBr;
+            }), b => {
+              if (!b.items || !Array.isArray(b.items) || b.items.length === 0) return 0;
+              let minAvail = Infinity;
+              for (const comp of b.items) {
+                const reqQty = Number(comp.qty) || 1;
+                const p = products.find(prod => prod.id === comp.productId || (comp.sku && prod.sku && prod.sku.toLowerCase() === comp.sku.toLowerCase()));
+                const pStock = Number(p?.currentStock ?? p?.stock ?? 0);
+                const count = Math.floor(pStock / reqQty);
+                if (count < minAvail) minAvail = count;
+              }
+              return minAvail === Infinity ? 0 : minAvail;
             });
 
             const totalBundles = filteredBundles.length;
@@ -4637,10 +4648,12 @@ export default function ProductManagement({
                 </div>
 
                 <div className="max-h-44 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
-                  {products
-                    .filter(p => 
+                  {sortWithStockFirst(
+                    products.filter(p => 
                       p.status !== 'INACTIVE' && matchesSearch(requestSearchTerm, p.name, p.sku, p.brand)
-                    )
+                    ),
+                    p => Number(p.currentStock ?? p.stock ?? 0)
+                  )
                     .map(prod => {
                       const isSelected = requestItems.some(item => item.productId === prod.id);
                       return (

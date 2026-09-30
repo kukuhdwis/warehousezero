@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Boxes, Check, X, Layers, Sparkles } from 'lucide-react';
-import { matchesSearch } from '../utils/searchUtils';
+import { matchesSearch, sortWithStockFirst } from '../utils/searchUtils';
 
 export default function BundleSearchPicker({
   bundles = [],
@@ -30,9 +30,9 @@ export default function BundleSearchPicker({
     return ['ALL', ...Array.from(set)];
   }, [safeBundles]);
 
-  // Filter bundles based on search term and engine category
+  // Filter bundles based on search term and engine category, prioritizing stock
   const filteredBundles = useMemo(() => {
-    return safeBundles.filter(b => {
+    const filtered = safeBundles.filter(b => {
       const eng = b.engine_type || b.engine || b.machineCategory || b.kategoriMesin || '';
       const matchesEngine = selectedEngine === 'ALL' || eng === selectedEngine;
       const matchesTerm = matchesSearch(
@@ -47,6 +47,7 @@ export default function BundleSearchPicker({
       );
       return matchesEngine && matchesTerm;
     });
+    return sortWithStockFirst(filtered, b => Number(b.availableStock ?? b.stock ?? 0));
   }, [safeBundles, searchTerm, selectedEngine]);
 
   const selectedBundle = safeBundles.find(b => b.id === selectedBundleId);

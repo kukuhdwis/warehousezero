@@ -21,3 +21,33 @@ export const matchesSearch = (searchTerm, ...fields) => {
     });
   });
 };
+
+/**
+ * Prioritizes items that have physical stock (stock > 0) at the top of the list,
+ * sorted descending by stock quantity, followed by zero-stock items sorted alphabetically.
+ *
+ * @param {Array} items - List of product or inventory items
+ * @param {Function} [getStockFn] - Optional custom getter function to extract stock number
+ * @returns {Array} - New sorted array with in-stock items first
+ */
+export const sortWithStockFirst = (items, getStockFn) => {
+  if (!Array.isArray(items)) return [];
+  return [...items].sort((a, b) => {
+    const stockA = Number(getStockFn ? getStockFn(a) : (a.currentStock ?? a.stockQuantity ?? a.stock ?? 0)) || 0;
+    const stockB = Number(getStockFn ? getStockFn(b) : (b.currentStock ?? b.stockQuantity ?? b.stock ?? 0)) || 0;
+
+    // Items with stock (>0) always precede items with 0 stock
+    if (stockA > 0 && stockB <= 0) return -1;
+    if (stockB > 0 && stockA <= 0) return 1;
+
+    // Both have stock: higher stock first
+    if (stockA > 0 && stockB > 0 && stockA !== stockB) {
+      return stockB - stockA;
+    }
+
+    // Secondary sort: alphabetical by name/productName
+    const nameA = String(a.name || a.productName || a.sku || '').toLowerCase();
+    const nameB = String(b.name || b.productName || b.sku || '').toLowerCase();
+    return nameA.localeCompare(nameB, 'id');
+  });
+};

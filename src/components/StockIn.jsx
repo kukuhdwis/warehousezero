@@ -27,7 +27,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { db } from '../services/firebase';
-import { matchesSearch } from '../utils/searchUtils';
+import { matchesSearch, sortWithStockFirst } from '../utils/searchUtils';
 import ScannerModal from './ScannerModal';
 import TransactionSuccessModal from './TransactionSuccessModal';
 import GlobalSuccessModal from './GlobalSuccessModal';
@@ -467,8 +467,11 @@ const parseScannedSKU = (text) => {
   };
 
   const handleToggleAllFilteredInRequest = () => {
-    const filteredProducts = safeProducts.filter(p => 
-      p.status !== 'INACTIVE' && matchesSearch(requestSearchTerm, p.name, p.sku, p.brand)
+    const filteredProducts = sortWithStockFirst(
+      safeProducts.filter(p => 
+        p.status !== 'INACTIVE' && matchesSearch(requestSearchTerm, p.name, p.sku, p.brand)
+      ),
+      p => Number(p.currentStock ?? p.stockQuantity ?? p.stock ?? 0)
     );
 
     const allSelected = filteredProducts.every(prod => requestItems.some(item => item.productId === prod.id));
@@ -1290,10 +1293,12 @@ const parseScannedSKU = (text) => {
                 </div>
 
                 <div className="max-h-44 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
-                  {safeProducts
-                    .filter(p => 
+                  {sortWithStockFirst(
+                    safeProducts.filter(p => 
                       p.status !== 'INACTIVE' && matchesSearch(requestSearchTerm, p.name, p.sku, p.brand)
-                    )
+                    ),
+                    p => Number(p.currentStock ?? p.stockQuantity ?? p.stock ?? 0)
+                  )
                     .map(prod => {
                       const isSelected = requestItems.some(item => item.productId === prod.id);
                       return (

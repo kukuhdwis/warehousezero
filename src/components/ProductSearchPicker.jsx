@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Tag, Boxes, Check, X, ChevronDown, Layers } from 'lucide-react';
-import { matchesSearch } from '../utils/searchUtils';
+import { matchesSearch, sortWithStockFirst } from '../utils/searchUtils';
 
 export default function ProductSearchPicker({ 
   products = [], 
@@ -26,14 +26,15 @@ export default function ProductSearchPicker({
     return ['ALL', ...Array.from(set)];
   }, [safeProducts]);
 
-  // Filter products by search term and selected category
+  // Filter products by search term and selected category, prioritizing available stock
   const filteredProducts = useMemo(() => {
-    return safeProducts.filter(p => {
+    const filtered = safeProducts.filter(p => {
       const cat = p.machineCategory || p.kategoriMesin || 'Universal';
       const matchesCat = selectedCategory === 'ALL' || cat === selectedCategory;
       const matchesTerm = matchesSearch(searchTerm, p.name, p.sku, p.brand, cat);
       return matchesCat && matchesTerm;
     });
+    return sortWithStockFirst(filtered, p => Number(p.currentStock ?? p.stockQuantity ?? p.stock ?? 0));
   }, [safeProducts, searchTerm, selectedCategory]);
 
   const selectedProduct = safeProducts.find(p => p.id === selectedProductId || p.sku === selectedProductId);
