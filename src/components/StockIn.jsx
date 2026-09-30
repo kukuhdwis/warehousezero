@@ -299,6 +299,14 @@ const parseScannedSKU = (text) => {
         sku: 'BATCH-INBOUND',
         type: 'IN',
         qty: totalQty,
+        items: items.map(item => ({
+          productId: item.productId,
+          sku: item.sku || '-',
+          productName: item.productName || item.name || '-',
+          qty: Math.max(1, Number(item.qty_in) || 1),
+          unit: item.unit || 'Pcs',
+          notes: item.notes || item.supplier || '-'
+        })),
         notes: noteText && noteText.trim() ? noteText.trim() : '',
         deliveryNote: deliveryNote,
         user: userName
@@ -570,7 +578,17 @@ const parseScannedSKU = (text) => {
 
     try {
       await onRecordMovement(txPayload);
-      setSuccessModalData(txPayload);
+      setSuccessModalData({
+        ...txPayload,
+        items: [{
+          productId: txPayload.productId,
+          sku: txPayload.sku || '-',
+          productName: txPayload.productName || '-',
+          qty: txPayload.qty,
+          unit: txPayload.unit || 'Pcs',
+          notes: txPayload.notes || '-'
+        }]
+      });
       setQty(1);
       setDeliveryNoteNumber('');
       setNotes('');

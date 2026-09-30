@@ -4168,8 +4168,196 @@ export default function ProductManagement({
                 )}
 
                 <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs">
+                  {/* MOBILE FEED VIEW (Smartphone Optimized - Full info, no horizontal scroll) */}
+                  <div className="block md:hidden divide-y divide-slate-100 p-2.5 sm:p-3 space-y-3 bg-slate-50/50">
+                    {paginatedBundles.length === 0 ? (
+                      <div className="p-8 text-center text-slate-400">
+                        <Boxes className="w-10 h-10 mx-auto text-slate-300 mb-2 stroke-1" />
+                        <p className="font-bold text-slate-700">Belum ada paket bundling yang terdaftar.</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Klik "+ Buat Paket Baru" atau "Import Excel Bundling" untuk menambahkan.</p>
+                      </div>
+                    ) : (
+                      paginatedBundles.map((b, idx) => {
+                        const rowNumber = startIdx + idx + 1;
+                        const isInactive = b.status === 'INACTIVE';
+                        const isSelected = selectedBundleIds.has(b.id);
+                        const selling = Number(b.selling_price ?? b.price) || 0;
+                        const reseller = Number(b.reseller_price) || 0;
+                        const distributor = Number(b.distributor_price) || reseller;
+
+                        return (
+                          <div
+                            key={b.id || idx}
+                            className={`bg-white rounded-2xl border transition p-3.5 space-y-3 ${
+                              isSelected
+                                ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/20'
+                                : isInactive
+                                  ? 'opacity-70 bg-slate-50/70 border-slate-200 border-dashed'
+                                  : 'border-slate-200/90 hover:border-slate-300'
+                            }`}
+                          >
+                            {/* Header: Select Checkbox, Number Badge, Status & Code */}
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                {canManageProducts && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleSelectBundle(b.id)}
+                                    className="p-1 text-slate-400 hover:text-indigo-600 transition cursor-pointer"
+                                    title={isSelected ? "Batal pilih" : "Pilih paket ini"}
+                                  >
+                                    {isSelected ? (
+                                      <CheckSquare className="w-5 h-5 text-indigo-600" />
+                                    ) : (
+                                      <Square className="w-5 h-5 text-slate-300" />
+                                    )}
+                                  </button>
+                                )}
+                                <span className="px-2 py-0.5 rounded-lg text-xs font-black bg-slate-100 text-slate-700 border border-slate-200">
+                                  #{rowNumber}
+                                </span>
+                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border" style={{
+                                  backgroundColor: isInactive ? '#fff1f2' : '#ecfdf5',
+                                  borderColor: isInactive ? '#fecdd3' : '#a7f3d0',
+                                  color: isInactive ? '#be123c' : '#047857'
+                                }}>
+                                  <span className={`w-2 h-2 rounded-full ${isInactive ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+                                  <span>{isInactive ? 'Non-Aktif' : 'Aktif'}</span>
+                                </div>
+                              </div>
+
+                              <span className="font-mono font-extrabold text-xs text-purple-900 bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-200/80">
+                                {b.code || '-'}
+                              </span>
+                            </div>
+
+                            {/* Bundle Identity: Name + Brand + Engine */}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <h4 className="font-bold text-slate-900 text-sm leading-snug break-words">
+                                  {b.name}
+                                </h4>
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap">
+                                  {b.brand || 'NDK Exhaust'}
+                                </span>
+                              </div>
+
+                              <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-1 flex-wrap">
+                                <span className="font-semibold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                  {b.engine_type || 'Universal'}
+                                </span>
+                                {b.car_variant && b.car_variant !== '-' && (
+                                  <span className="text-slate-600 font-medium break-words">• {b.car_variant}</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Komponen Isi Details (Mobile Friendly Cards/Pills) */}
+                            <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/70 space-y-1.5 text-xs">
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="font-bold text-slate-700 flex items-center gap-1">
+                                  <Boxes className="w-3.5 h-3.5 text-purple-600" />
+                                  <span>Rincian Komponen Isi ({Array.isArray(b.items) ? b.items.length : 0})</span>
+                                </span>
+                              </div>
+                              {Array.isArray(b.items) && b.items.length > 0 ? (
+                                <div className="space-y-1">
+                                  {b.items.map((it, iIdx) => (
+                                    <div
+                                      key={iIdx}
+                                      className="p-2 bg-white rounded-lg border border-slate-200/80 shadow-2xs flex items-center justify-between gap-2 text-[11px]"
+                                    >
+                                      <div className="min-w-0 flex-1">
+                                        <div className="font-bold text-slate-800 break-words leading-tight">
+                                          {it.productName || it.cleanName || it.name || it.sku}
+                                        </div>
+                                        <div className="text-[10px] text-slate-400 font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                          {it.sku && <span>SKU: {it.sku}</span>}
+                                          {it.engine_type && (
+                                            <span className="px-1 py-0.2 bg-amber-50 text-amber-800 rounded font-bold border border-amber-200">
+                                              {it.engine_type}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <span className="px-2 py-0.5 bg-purple-100 text-purple-900 rounded font-black text-xs shrink-0">
+                                        x{it.qty || 1}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 text-xs italic block">
+                                  {b.rawIsi || 'Tidak ada rincian komponen'}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Pricing Grid */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+                              <div>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Harga Jual</span>
+                                <span className="text-sm font-black text-slate-900">
+                                  Rp {selling.toLocaleString('id-ID')}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Harga Reseller</span>
+                                <span className="text-xs font-semibold text-slate-600">
+                                  {reseller > 0 ? `Rp ${reseller.toLocaleString('id-ID')}` : '-'}
+                                </span>
+                              </div>
+                              {distributor > 0 && (
+                                <div className="col-span-2 sm:col-span-1">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Harga Distributor</span>
+                                  <span className="text-xs font-semibold text-sky-700">
+                                    Rp {distributor.toLocaleString('id-ID')}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Action Buttons */}
+                            {canManageProducts && (
+                              <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditBundleModal(b)}
+                                  className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                  <span>Edit Bundle</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleBundleStatus(b)}
+                                  className={`p-2 rounded-xl border transition cursor-pointer ${
+                                    b.status === 'INACTIVE'
+                                      ? 'text-emerald-600 border-emerald-200 bg-emerald-50 hover:bg-emerald-100'
+                                      : 'text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100'
+                                  }`}
+                                  title={b.status === 'INACTIVE' ? 'Aktifkan Paket' : 'Non-aktifkan Paket'}
+                                >
+                                  {b.status === 'INACTIVE' ? <Check className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteConfirmBundle(b)}
+                                  className="p-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-xl transition cursor-pointer"
+                                  title="Hapus Paket Bundling"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
                   {/* Top Horizontal Scrollbar Slider */}
-                  <div className="overflow-x-auto" style={{ transform: 'rotateX(180deg)' }}>
+                  <div className="hidden md:block overflow-x-auto" style={{ transform: 'rotateX(180deg)' }}>
                     <table className="w-full text-left text-xs border-collapse" style={{ transform: 'rotateX(180deg)' }}>
                       <thead className="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
                         <tr>

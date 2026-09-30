@@ -80,32 +80,88 @@ body {
   animation-play-state: paused;
 }
 
-/* Custom Print Styles for Barcode printing */
+/* Custom Print Styles for Barcode / Label printing */
 @media print {
   @page {
-    margin: 10mm;
+    size: auto;
+    margin: 5mm;
   }
+
   html, body {
     height: auto !important;
     min-height: auto !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
   }
-  body * {
-    visibility: hidden;
+
+  /* Completely remove background app flow when printing barcode modal */
+  body.barcode-modal-open #root,
+  body:has(#barcode-modal-portal) #root {
+    display: none !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    overflow: hidden !important;
   }
-  #printable-barcode-area, #printable-barcode-area *,
-  .print-only-modal, .print-only-modal * {
-    visibility: visible !important;
-  }
-  #printable-barcode-area, .print-only-modal {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0;
+
+  /* Reset portal container for print */
+  #barcode-modal-portal {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
     box-shadow: none !important;
     border: none !important;
   }
+
+  #barcode-modal-portal .modal-content-card {
+    position: static !important;
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    width: auto !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+
+  /* Printable barcode area card */
+  #printable-barcode-area {
+    display: block !important;
+    position: static !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    max-width: 85mm !important;
+    width: 100% !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-before: avoid !important;
+    break-before: avoid !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  #printable-barcode-area > div {
+    background: #ffffff !important;
+    border: 1.5pt dashed #6366f1 !important;
+    border-radius: 12px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin: 0 auto !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* General elements marked as no-print */
   .no-print, .no-print * {
     display: none !important;
   }

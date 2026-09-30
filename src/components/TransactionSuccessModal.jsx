@@ -104,7 +104,20 @@ export default function TransactionSuccessModal({
         let totalQty = 0;
         let totalAmount = 0;
 
-        (transaction.items || []).forEach((item, index) => {
+        const rawItems = (transaction.items && transaction.items.length > 0)
+          ? transaction.items
+          : (transaction.productName || transaction.sku)
+            ? [{
+                sku: transaction.sku || '-',
+                productName: transaction.productName || 'Produk',
+                qty: Number(transaction.qty || 1),
+                unit: transaction.unit || (isBundling ? 'Paket' : 'Pcs'),
+                price: Number(transaction.price || transaction.totalPrice || 0),
+                notes: transaction.notes || '-'
+              }]
+            : [];
+
+        rawItems.forEach((item, index) => {
           let itemPrice = Number(item.totalPrice || item.subtotal || 0);
           if (!itemPrice && item.price) {
              itemPrice = Number(item.price) * (Number(item.qty) || 1);

@@ -1,14 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import bwipjs from 'bwip-js';
 import { X, Printer, Download, QrCode, Barcode as BarcodeIcon, Sparkles, ExternalLink } from 'lucide-react';
 
 export default function BarcodeModal({ product, onClose }) {
   const canvasRef = useRef(null);
   const [codeType, setCodeType] = useState('QRCODE'); // 'QRCODE' | 'BARCODE1D'
+  const [qrDataUrl, setQrDataUrl] = useState('');
 
   const publicUrl = typeof window !== 'undefined' 
     ? `${window.location.origin}/catalog?sku=${encodeURIComponent(product?.sku || product?.code || '')}`
     : `https://warehouse.ndkexhaust.com/catalog?sku=${encodeURIComponent(product?.sku || product?.code || '')}`;
+
+  useEffect(() => {
+    if (!product) return;
+    document.body.classList.add('barcode-modal-open');
+    return () => {
+      document.body.classList.remove('barcode-modal-open');
+    };
+  }, [product]);
 
   useEffect(() => {
     if (product && canvasRef.current) {
@@ -34,6 +44,13 @@ export default function BarcodeModal({ product, onClose }) {
             textsize: 11,
           });
         }
+
+        try {
+          const dataUrl = canvasRef.current.toDataURL('image/png');
+          setQrDataUrl(dataUrl);
+        } catch (err) {
+          console.warn("Could not extract canvas dataURL:", err);
+        }
       } catch (e) {
         console.error("Barcode/QR generation error:", e);
       }
@@ -43,7 +60,15 @@ export default function BarcodeModal({ product, onClose }) {
   if (!product) return null;
 
   const handlePrint = () => {
-    window.print();
+    if (canvasRef.current) {
+      try {
+        const dataUrl = canvasRef.current.toDataURL('image/png');
+        setQrDataUrl(dataUrl);
+      } catch (err) {}
+    }
+    setTimeout(() => {
+      window.print();
+    }, 60);
   };
 
   const handleDownload = () => {
@@ -59,12 +84,15 @@ export default function BarcodeModal({ product, onClose }) {
   const sellingPrice = Number(product.selling_price ?? product.price) || 0;
   const engineName = product.engine_type || product.machineCategory || 'Universal';
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200 flex flex-col">
+  const modalContent = (
+    <div 
+      id="barcode-modal-portal"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+    >
+      <div className="modal-content-card bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200 flex flex-col">
         
         {/* Modal Header */}
-        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/70">
+        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/70 no-print">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
               <QrCode className="w-4 h-4" />
@@ -83,7 +111,7 @@ export default function BarcodeModal({ product, onClose }) {
         </div>
 
         {/* Code Type Switcher Tabs */}
-        <div className="flex border-b border-slate-100 px-6 pt-3 bg-slate-50/40 text-xs">
+        <div className="flex border-b border-slate-100 px-6 pt-3 bg-slate-50/40 text-xs no-print">
           <button
             type="button"
             onClick={() => setCodeType('QRCODE')}
@@ -135,9 +163,16 @@ export default function BarcodeModal({ product, onClose }) {
               </div>
             </div>
 
-            {/* Canvas Target */}
+            {/* Canvas Target for Screen & Image for Print */}
             <div className="p-3 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col items-center">
-              <canvas ref={canvasRef} className="max-w-full rounded-lg" />
+              <canvas ref={canvasRef} className="max-w-full rounded-lg print:hidden" />
+              {qrDataUrl && (
+                <img 
+                  src={qrDataUrl} 
+                  alt={product.sku || 'Barcode'} 
+                  className="hidden print:block max-w-[180px] w-auto h-auto rounded-lg mx-auto" 
+                />
+              )}
               {codeType === 'QRCODE' && (
                 <span className="text-[10px] font-mono text-slate-500 font-bold mt-2">
                   {product.sku || product.code}
@@ -161,7 +196,7 @@ export default function BarcodeModal({ product, onClose }) {
         </div>
 
         {/* Modal Footer Actions */}
-        <div className="flex gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/70">
+        <div className="flex gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/70 no-print">
           <button
             type="button"
             onClick={handleDownload}
@@ -183,4 +218,6 @@ export default function BarcodeModal({ product, onClose }) {
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 }

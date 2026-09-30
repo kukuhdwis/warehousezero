@@ -21,7 +21,7 @@ export const drawPdfBrandHeader = (doc, {
   try {
     // 1. Logo NDK Exhaust (Kiri)
     // Rasio asli: 1854 x 710 (~2.61:1) -> w: 23.5mm, h: 9mm
-    doc.addImage(NDK_LOGO_BASE64, 'PNG', 14, 10.5, 23.5, 9);
+    doc.addImage(NDK_LOGO_BASE64, 'PNG', 14, 10.5, 23.5, 9, undefined, 'FAST');
 
     // 2. Pemisah Vertikal Halus
     doc.setDrawColor(210, 215, 222);
@@ -30,7 +30,7 @@ export const drawPdfBrandHeader = (doc, {
 
     // 3. Logo RGN Performance (Kanan dari NDK)
     // Rasio asli: 4720 x 932 (~5.06:1) -> w: 38mm, h: 7.5mm
-    doc.addImage(RGN_LOGO_BASE64, 'PNG', 43, 11.3, 38, 7.5);
+    doc.addImage(RGN_LOGO_BASE64, 'PNG', 43, 11.3, 38, 7.5, undefined, 'FAST');
   } catch (err) {
     console.warn("Logo PDF fallback to text:", err);
     doc.setFontSize(13);

@@ -1846,43 +1846,49 @@ export default function PublicCatalog({
       {/* 8. BUNDLE DETAIL MODAL (LANDING PAGE MOTORSPORT DESIGN TOKENS)             */}
       {/* ========================================================================= */}
       {detailBundle && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
-          <div className={`rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden border my-auto animate-in zoom-in-95 duration-150 flex flex-col max-h-[90vh] ${isDark ? 'bg-zinc-900 border-zinc-800 text-paper' : 'bg-paper border-zinc-200 text-ink'
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-xs p-0 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className={`rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden border border-b-0 sm:border my-0 sm:my-auto animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200 flex flex-col max-h-[92vh] sm:max-h-[90vh] ${isDark ? 'bg-zinc-900 border-zinc-800 text-paper' : 'bg-paper border-zinc-200 text-ink'
             }`}>
 
+            {/* Mobile Drag Indicator Bar */}
+            <div className="sm:hidden pt-2.5 pb-1 flex justify-center flex-shrink-0">
+              <span className={`w-10 h-1 rounded-full ${isDark ? 'bg-zinc-700' : 'bg-zinc-300'}`} />
+            </div>
+
             {/* Modal Header */}
-            <div className={`p-3.5 sm:p-4 border-b flex items-center justify-between flex-shrink-0 ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke border-zinc-200'
+            <div className={`p-3 sm:p-4 border-b flex items-center justify-between gap-2 flex-shrink-0 ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke border-zinc-200'
               }`}>
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded font-mono text-[10px] font-bold uppercase tracking-widest bg-ember text-white flex items-center gap-1">
+              <div className="flex items-center gap-1.5 flex-wrap min-w-0 pr-1">
+                <span className="px-2 sm:px-2.5 py-0.5 rounded font-mono text-[9px] sm:text-[10px] font-bold uppercase tracking-widest bg-ember text-white flex items-center gap-1 shrink-0">
                   <Layers className="w-3 h-3" />
                   <span>PAKET BUNDLING</span>
                 </span>
                 {detailBundle.engine_type && (
-                  <span className={`px-2.5 py-0.5 rounded font-mono text-[10px] font-bold uppercase tracking-widest ${isDark ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-white'
+                  <span className={`px-2 sm:px-2.5 py-0.5 rounded font-mono text-[9px] sm:text-[10px] font-bold uppercase tracking-widest shrink-0 ${isDark ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-white'
                     }`}>
                     {detailBundle.engine_type}
                   </span>
                 )}
-                <span className={`text-xs font-mono font-bold uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-steel'}`}>
+                <span className={`text-[11px] sm:text-xs font-mono font-bold uppercase tracking-widest truncate ${isDark ? 'text-zinc-400' : 'text-steel'}`}>
                   {detailBundle.code || '-'}
                 </span>
               </div>
               <button
                 type="button"
                 onClick={() => setDetailBundle(null)}
-                className={`p-1.5 rounded-lg border transition cursor-pointer ${isDark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800 border-zinc-800' : 'text-zinc-500 hover:text-ink hover:bg-zinc-200 border-zinc-300'
+                className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer shrink-0 ${isDark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800 border-zinc-800' : 'text-zinc-500 hover:text-ink hover:bg-zinc-200 border-zinc-300'
                   }`}
+                aria-label="Tutup detail bundle"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+            <div className="p-3.5 sm:p-6 space-y-3.5 sm:space-y-4 overflow-y-auto flex-1 overscroll-contain">
 
               {/* Product Photo or Bundle Graphic Frame */}
-              <div className={`aspect-16/9 rounded-xl border overflow-hidden flex items-center justify-center relative bg-zinc-950 ${isDark ? 'border-zinc-800' : 'border-zinc-200'
+              <div className={`aspect-16/9 max-h-[190px] sm:max-h-[260px] rounded-xl border overflow-hidden flex items-center justify-center relative bg-zinc-950 ${isDark ? 'border-zinc-800' : 'border-zinc-200'
                 }`}>
                 {detailBundle.imageUrl ? (
                   <img
@@ -1891,19 +1897,19 @@ export default function PublicCatalog({
                     className="w-full h-full object-contain bg-transparent"
                   />
                 ) : (
-                  <div className="flex flex-col items-center justify-center text-zinc-400 gap-2 p-4 text-center">
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border ${isDark ? 'bg-zinc-900 text-rose-400 border-zinc-800' : 'bg-smoke text-ember border-zinc-200'
+                  <div className="flex flex-col items-center justify-center text-zinc-400 gap-2 p-3 sm:p-4 text-center">
+                    <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center border ${isDark ? 'bg-zinc-900 text-rose-400 border-zinc-800' : 'bg-smoke text-ember border-zinc-200'
                       }`}>
-                      <Layers className="w-7 h-7" />
+                      <Layers className="w-6 h-6 sm:w-7 sm:h-7" />
                     </div>
-                    <span className="font-mono text-xs font-bold uppercase tracking-widest text-zinc-400">
+                    <span className="font-mono text-[10px] sm:text-xs font-bold uppercase tracking-widest text-zinc-400">
                       {detailBundle.brand || 'NDK EXHAUST'} • PAKET BUNDLE RESMI
                     </span>
                   </div>
                 )}
 
                 <div className="absolute top-2.5 left-2.5">
-                  <span className="px-2.5 py-1 rounded font-display text-xs font-semibold uppercase tracking-wider bg-ember text-white shadow-sm">
+                  <span className="px-2.5 py-1 rounded font-display text-[10px] sm:text-xs font-semibold uppercase tracking-wider bg-ember text-white shadow-sm">
                     {detailBundle.brand || 'NDK EXHAUST'}
                   </span>
                 </div>
@@ -1911,15 +1917,15 @@ export default function PublicCatalog({
 
               {/* Title & Official Price */}
               <div className="space-y-1">
-                <h3 className={`font-display text-lg sm:text-2xl font-bold uppercase tracking-tight leading-snug ${isDark ? 'text-white' : 'text-ink'}`}>
+                <h3 className={`font-display text-base sm:text-2xl font-bold uppercase tracking-tight leading-snug break-words ${isDark ? 'text-white' : 'text-ink'}`}>
                   {formatBundleDisplayName(detailBundle)}
                 </h3>
-                <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
+                <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
                   <div>
-                    <span className={`font-mono text-[10px] block uppercase font-bold tracking-widest ${isDark ? 'text-zinc-500' : 'text-steel'}`}>
+                    <span className={`font-mono text-[9px] sm:text-[10px] block uppercase font-bold tracking-widest ${isDark ? 'text-zinc-500' : 'text-steel'}`}>
                       HARGA RESMI PAKET
                     </span>
-                    <span className="font-display text-2xl sm:text-3xl font-bold text-ember">
+                    <span className="font-display text-xl sm:text-3xl font-bold text-ember">
                       Rp {(Number(detailBundle.selling_price ?? detailBundle.price) || 0).toLocaleString('id-ID')}
                     </span>
                   </div>
@@ -1927,7 +1933,7 @@ export default function PublicCatalog({
                   <button
                     type="button"
                     onClick={() => handleShareProduct(detailBundle)}
-                    className={`px-3.5 py-2 rounded-lg text-xs font-display uppercase tracking-wider font-semibold transition flex items-center gap-1.5 cursor-pointer border ${isDark
+                    className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-xs font-display uppercase tracking-wider font-semibold transition flex items-center gap-1.5 cursor-pointer border shrink-0 ${isDark
                         ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700 hover:border-ember'
                         : 'bg-smoke hover:bg-zinc-200 text-zinc-800 border-zinc-300 hover:border-ember'
                       }`}
@@ -1949,27 +1955,36 @@ export default function PublicCatalog({
 
               {/* Specifications: Mesin & Mobil */}
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className={`p-3 rounded-xl border ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
+                <div className={`p-2.5 sm:p-3 rounded-xl border ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
                   }`}>
                   <span className={`font-mono text-[9px] block font-bold uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-steel'}`}>Tipe Mesin</span>
-                  <strong className={`font-display text-xs sm:text-sm font-semibold uppercase tracking-tight truncate block mt-0.5 ${isDark ? 'text-zinc-100' : 'text-ink'}`}>{detailBundle.engine_type || '-'}</strong>
+                  <strong className={`font-display text-xs sm:text-sm font-semibold uppercase tracking-tight break-words block mt-0.5 leading-snug ${isDark ? 'text-zinc-100' : 'text-ink'}`}>
+                    {detailBundle.engine_type || '-'}
+                  </strong>
                 </div>
 
-                <div className={`p-3 rounded-xl border ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
+                <div className={`p-2.5 sm:p-3 rounded-xl border ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
                   }`}>
                   <span className={`font-mono text-[9px] block font-bold uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-steel'}`}>Varian Mobil</span>
-                  <strong className={`font-display text-xs sm:text-sm font-semibold uppercase tracking-tight truncate block mt-0.5 ${isDark ? 'text-zinc-100' : 'text-ink'}`}>{detailBundle.car_variant || '-'}</strong>
+                  <strong className={`font-display text-xs sm:text-sm font-semibold uppercase tracking-tight break-words block mt-0.5 leading-snug ${isDark ? 'text-zinc-100' : 'text-ink'}`}>
+                    {detailBundle.car_variant || '-'}
+                  </strong>
                 </div>
               </div>
 
               {/* RINCIAN KOMPONEN ISI PAKET */}
-              <div className={`border rounded-xl p-4 space-y-3 ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
+              <div className={`border rounded-xl p-3 sm:p-4 space-y-2.5 sm:space-y-3 ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
                 }`}>
-                <h4 className={`font-display text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${isDark ? 'text-zinc-200' : 'text-zinc-800'
-                  }`}>
-                  <Layers className="w-3.5 h-3.5 text-ember" />
-                  <span>Rincian Komponen Isi Paket</span>
-                </h4>
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className={`font-display text-xs sm:text-sm font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? 'text-zinc-200' : 'text-zinc-800'
+                    }`}>
+                    <Layers className="w-3.5 h-3.5 text-ember shrink-0" />
+                    <span>Rincian Komponen Isi Paket</span>
+                  </h4>
+                  <span className="text-[10px] sm:text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-ember/10 text-ember border border-ember/20 shrink-0">
+                    {(detailBundle.items || []).length || (detailBundle.rawIsi ? detailBundle.rawIsi.split('+').length : 0)} Komponen
+                  </span>
+                </div>
 
                 {Array.isArray(detailBundle.items) && detailBundle.items.length > 0 ? (
                   <div className="space-y-2">
@@ -1983,49 +1998,81 @@ export default function PublicCatalog({
                       const mainName = matchedProd?.name || bItem.productName || bItem.cleanName || bItem.rawName || 'Komponen Produk';
                       const hasDifferentDetail = itemDetail && itemDetail !== mainName;
                       const displayEngine = (itemEngine && itemEngine !== '-' && itemEngine.toLowerCase() !== 'all') ? itemEngine : '';
+                      const itemImage = matchedProd?.imageUrl || bItem.imageUrl;
 
                       return (
-                        <div key={idx} className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border shadow-xs gap-2 text-xs ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
+                        <div key={idx} className={`p-2.5 sm:p-3 rounded-xl border shadow-2xs transition flex gap-2.5 sm:gap-3 items-start text-xs ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
                           }`}>
-                          <div className="flex items-start gap-2.5 min-w-0">
-                            <span className="font-mono text-xs font-bold w-6 h-6 rounded flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 bg-ember/15 text-ember border border-ember/20">
+                          {/* Visual Thumbnail or Qty Badge Icon */}
+                          <div className="relative shrink-0">
+                            {itemImage ? (
+                              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-lg bg-zinc-950 border border-zinc-800 overflow-hidden flex items-center justify-center p-0.5">
+                                <img
+                                  src={itemImage}
+                                  alt={mainName}
+                                  className="w-full h-full object-contain"
+                                  loading="lazy"
+                                />
+                              </div>
+                            ) : (
+                              <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-lg border flex flex-col items-center justify-center gap-0.5 ${isDark ? 'bg-zinc-950 border-zinc-800 text-zinc-400' : 'bg-smoke border-zinc-200 text-zinc-600'
+                                }`}>
+                                <Package className="w-5 h-5 text-ember" />
+                                <span className="text-[9px] font-mono font-bold leading-none text-zinc-500">#{idx + 1}</span>
+                              </div>
+                            )}
+                            {/* Qty Floating Badge */}
+                            <span className="absolute -bottom-1 -right-1 font-mono text-[10px] font-black px-1.5 py-0.2 rounded-md bg-ember text-white shadow-xs border border-white/20">
                               {bItem.qty || 1}x
                             </span>
-                            <div className="space-y-1 min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className={`font-display font-bold text-xs sm:text-sm uppercase tracking-tight break-words ${isDark ? 'text-white' : 'text-ink'}`}>{mainName}</span>
-                                {displayEngine && (
-                                  <span className={`px-2 py-0.5 rounded font-mono text-[9px] uppercase tracking-widest font-semibold whitespace-nowrap ${isDark ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-white'
-                                    }`}>
-                                    {displayEngine}
-                                  </span>
-                                )}
-                                {(matchedProd?.brand || bItem.brand) && (
-                                  <span className={`px-2 py-0.5 rounded text-[9px] font-display uppercase tracking-wider font-semibold whitespace-nowrap border ${isDark ? 'bg-zinc-900/90 text-zinc-300 border-zinc-700' : 'bg-smoke text-zinc-800 border-zinc-300'
-                                    }`}>
-                                    {matchedProd?.brand || bItem.brand}
-                                  </span>
-                                )}
-                              </div>
-                              {hasDifferentDetail && (
-                                <div className={`font-body text-[11px] break-words ${isDark ? 'text-zinc-400' : 'text-steel'}`}>
-                                  Detail Isi: <span className={isDark ? 'text-zinc-200' : 'text-zinc-800'}>{itemDetail}</span>
-                                </div>
-                              )}
-                              {(matchedProd?.car_variant || bItem.car_variant) && (
-                                <div className={`font-body text-[10px] flex items-center gap-1 flex-wrap ${isDark ? 'text-zinc-500' : 'text-steel'}`}>
-                                  <Car className="w-3 h-3 shrink-0 text-ember" />
-                                  <span>{matchedProd?.car_variant || bItem.car_variant}</span>
-                                </div>
+                          </div>
+
+                          {/* Component Details */}
+                          <div className="min-w-0 flex-1 space-y-1">
+                            {/* Name & SKU Line */}
+                            <div className="flex items-start justify-between gap-1.5">
+                              <span className={`font-display font-bold text-xs sm:text-sm uppercase tracking-tight break-words leading-snug ${isDark ? 'text-white' : 'text-ink'
+                                }`}>
+                                {mainName}
+                              </span>
+                              {(matchedProd?.sku || bItem.sku) && (
+                                <span className={`font-mono text-[9px] sm:text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0 font-medium ${isDark ? 'text-zinc-400 bg-zinc-950 border-zinc-800' : 'text-zinc-600 bg-smoke border-zinc-200'
+                                  }`}>
+                                  {matchedProd?.sku || bItem.sku}
+                                </span>
                               )}
                             </div>
+
+                            {/* Badges Line: Engine, Brand, Car Variant */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {displayEngine && (
+                                <span className={`px-1.5 py-0.5 rounded font-mono text-[9px] uppercase tracking-widest font-bold whitespace-nowrap ${isDark ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-white'
+                                  }`}>
+                                  {displayEngine}
+                                </span>
+                              )}
+                              {(matchedProd?.brand || bItem.brand) && (
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-display uppercase tracking-wider font-semibold whitespace-nowrap border ${isDark ? 'bg-zinc-900/90 text-zinc-300 border-zinc-700' : 'bg-smoke text-zinc-800 border-zinc-300'
+                                  }`}>
+                                  {matchedProd?.brand || bItem.brand}
+                                </span>
+                              )}
+                              {(matchedProd?.car_variant || bItem.car_variant) && (
+                                <span className="font-body text-[10px] inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-medium break-words">
+                                  <Car className="w-3 h-3 shrink-0" />
+                                  <span>{matchedProd?.car_variant || bItem.car_variant}</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Different / Clean detail note */}
+                            {hasDifferentDetail && (
+                              <div className={`font-body text-[11px] leading-tight break-words pt-0.5 ${isDark ? 'text-zinc-400' : 'text-steel'
+                                }`}>
+                                Detail: <span className={isDark ? 'text-zinc-200 font-medium' : 'text-zinc-800 font-medium'}>{itemDetail}</span>
+                              </div>
+                            )}
                           </div>
-                          {(matchedProd?.sku || bItem.sku) && (
-                            <span className={`font-mono text-[10px] uppercase tracking-widest px-2 py-1 rounded border shrink-0 self-start sm:self-center ${isDark ? 'text-zinc-400 bg-zinc-950 border-zinc-800' : 'text-zinc-500 bg-smoke border-zinc-200'
-                              }`}>
-                              {matchedProd?.sku || bItem.sku}
-                            </span>
-                          )}
                         </div>
                       );
                     })}
@@ -2036,16 +2083,19 @@ export default function PublicCatalog({
                       const cleanItemStr = itemStr.trim();
                       const fallbackEngine = (detailBundle.engine_type && detailBundle.engine_type !== '-' && detailBundle.engine_type.toLowerCase() !== 'all') ? detailBundle.engine_type : '';
                       return (
-                        <div key={idx} className={`flex items-center justify-between p-3 rounded-xl border text-xs ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
+                        <div key={idx} className={`p-2.5 sm:p-3 rounded-xl border shadow-2xs flex items-center justify-between gap-2.5 text-xs ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-paper border-zinc-200'
                           }`}>
-                          <div className="flex items-center gap-2">
-                            <span className="w-5 h-5 rounded font-mono font-bold text-[10px] flex items-center justify-center bg-ember/15 text-ember border border-ember/20">
-                              ✓
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="w-6 h-6 rounded-md font-mono font-bold text-[10px] flex items-center justify-center bg-ember/15 text-ember border border-ember/20 shrink-0">
+                              {idx + 1}
                             </span>
-                            <span className={`font-display font-bold uppercase tracking-tight text-xs sm:text-sm ${isDark ? 'text-white' : 'text-ink'}`}>{cleanItemStr}</span>
+                            <span className={`font-display font-bold uppercase tracking-tight text-xs sm:text-sm break-words ${isDark ? 'text-white' : 'text-ink'
+                              }`}>
+                              {cleanItemStr}
+                            </span>
                           </div>
                           {fallbackEngine && (
-                            <span className={`px-2 py-0.5 rounded font-mono text-[9px] uppercase tracking-widest font-semibold ${isDark ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-white'
+                            <span className={`px-2 py-0.5 rounded font-mono text-[9px] uppercase tracking-widest font-semibold shrink-0 ${isDark ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-white'
                               }`}>
                               {fallbackEngine}
                             </span>
@@ -2061,7 +2111,7 @@ export default function PublicCatalog({
 
               {/* Keterangan / Deskripsi Publik Paket */}
               {(detailBundle.description || detailBundle.keterangan) && (
-                <div className={`border rounded-xl p-4 space-y-2 ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
+                <div className={`border rounded-xl p-3.5 sm:p-4 space-y-2 ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/60 border-zinc-200'
                   }`}>
                   <h4 className={`font-display text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? 'text-zinc-300' : 'text-zinc-700'
                     }`}>
@@ -2074,19 +2124,30 @@ export default function PublicCatalog({
                 </div>
               )}
 
-              {/* Direct Order Call To Action */}
-              <div className="pt-2">
-                <a
-                  href={getWhatsAppBundleOrderUrl(detailBundle)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-3.5 px-5 bg-ember hover:bg-ember-deep text-white rounded-xl font-display text-xs sm:text-sm font-semibold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg shadow-ember/20 active:scale-98 cursor-pointer"
-                >
-                  <MessageCircle className="w-4 h-4 text-white" />
-                  <span>Pesan Paket via WhatsApp (+62 895-0224-0040)</span>
-                </a>
+            </div>
+
+            {/* Direct Order Call To Action - Fixed / Sticky Bottom Bar */}
+            <div className={`p-3 sm:p-4 border-t flex-shrink-0 flex items-center justify-between gap-3 ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-smoke/90 border-zinc-200'
+              }`}>
+              <div className="min-w-0">
+                <span className={`block font-mono text-[9px] uppercase font-bold tracking-widest ${isDark ? 'text-zinc-500' : 'text-steel'
+                  }`}>
+                  Harga Paket
+                </span>
+                <span className="font-display font-bold text-base sm:text-xl text-ember truncate block leading-tight">
+                  Rp {(Number(detailBundle.selling_price ?? detailBundle.price) || 0).toLocaleString('id-ID')}
+                </span>
               </div>
 
+              <a
+                href={getWhatsAppBundleOrderUrl(detailBundle)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 max-w-[260px] sm:max-w-none py-3 px-3.5 sm:px-4 bg-ember hover:bg-ember-deep text-white rounded-xl font-display text-xs sm:text-sm font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md shadow-ember/20 active:scale-98 cursor-pointer text-center"
+              >
+                <WhatsAppIcon className="w-4 h-4 fill-current text-white shrink-0" />
+                <span className="truncate">Pesan via WhatsApp</span>
+              </a>
             </div>
 
           </div>
