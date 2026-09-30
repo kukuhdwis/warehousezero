@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import bwipjs from 'bwip-js';
-import { X, Printer, Download, QrCode, Barcode as BarcodeIcon, Sparkles, ExternalLink } from 'lucide-react';
+import jsPDF from 'jspdf';
+import { X, Printer, Download, QrCode, Barcode as BarcodeIcon, Sparkles, ExternalLink, FileText } from 'lucide-react';
 
 export default function BarcodeModal({ product, onClose }) {
   const canvasRef = useRef(null);
@@ -58,6 +59,158 @@ export default function BarcodeModal({ product, onClose }) {
   }, [product, codeType, publicUrl]);
 
   if (!product) return null;
+
+  const handleDownloadPDF = () => {
+    try {
+      let imgData = qrDataUrl;
+      if (!imgData && canvasRef.current) {
+        imgData = canvasRef.current.toDataURL('image/png');
+      }
+      if (!imgData) {
+        alert("Gagal memproses gambar barcode/QR. Silakan coba lagi.");
+        return;
+      }
+
+      const isQr = codeType === 'QRCODE';
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [85, isQr ? 120 : 105]
+      });
+
+      const pageWidth = 85;
+      const pageHeight = isQr ? 120 : 105;
+
+      // Background soft tint
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(4, 4, pageWidth - 8, pageHeight - 8, 4, 4, 'F');
+
+      // Outer dashed border
+      doc.setDrawColor(99, 102, 241);
+      doc.setLineWidth(0.4);
+      doc.setLineDashPattern([2, 2], 0);
+      doc.roundedRect(4, 4, pageWidth - 8, pageHeight - 8, 4, 4, 'S');
+      doc.setLineDashPattern([], 0);
+
+      // Brand Badge
+      const brand = String(product.brand || 'NDK EXHAUST').toUpperCase();
+      doc.setFillColor(15, 23, 42);
+      const brandBadgeWidth = Math.min(60, Math.max(36, brand.length * 3.4));
+      doc.roundedRect((pageWidth - brandBadgeWidth) / 2, 7.5, brandBadgeWidth, 5.5, 2.75, 2.75, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(255, 255, 255);
+      doc.text(brand, pageWidth / 2, 11.3, { align: 'center' });
+
+      // Product Title
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      const splitTitle = doc.splitTextToSize(product.name || 'Produk', pageWidth - 14);
+      doc.text(splitTitle, pageWidth / 2, 17.5, { align: 'center' });
+
+      let curY = 17.5 + (splitTitle.length * 3.8);
+
+      // Tags: Mesin & Category
+      doc.setFontSize(6.5);
+      const engineText = `Mesin ${engineName}`;
+      const catText = product.category_name ? String(product.category_name) : '';
+      
+      if (catText) {
+        // Tag 1 (Engine)
+        doc.setFillColor(254, 243, 199);
+        doc.setDrawColor(251, 191, 36);
+        doc.setLineWidth(0.2);
+        doc.roundedRect(pageWidth / 2 - 29, curY, 28, 4.5, 1.5, 1.5, 'FD');
+        doc.setTextColor(146, 64, 14);
+        doc.text(engineText, pageWidth / 2 - 15, curY + 3.2, { align: 'center' });
+
+        // Tag 2 (Category)
+        doc.setFillColor(224, 242, 254);
+        doc.setDrawColor(56, 189, 248);
+        doc.roundedRect(pageWidth / 2 + 1, curY, 28, 4.5, 1.5, 1.5, 'FD');
+        doc.setTextColor(7, 89, 133);
+        doc.text(catText, pageWidth / 2 + 15, curY + 3.2, { align: 'center' });
+      } else {
+        // Single Engine Tag centered
+        doc.setFillColor(254, 243, 199);
+        doc.setDrawColor(251, 191, 36);
+        doc.setLineWidth(0.2);
+        doc.roundedRect((pageWidth - 34) / 2, curY, 34, 4.5, 1.5, 1.5, 'FD');
+        doc.setTextColor(146, 64, 14);
+        doc.text(engineText, pageWidth / 2, curY + 3.2, { align: 'center' });
+      }
+
+      curY += 7.5;
+
+      if (isQr) {
+        // QR Code Box
+        const qrBoxSize = 46;
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.3);
+        doc.roundedRect((pageWidth - qrBoxSize) / 2, curY, qrBoxSize, qrBoxSize + 6, 3, 3, 'FD');
+
+        // QR Code Image
+        doc.addImage(imgData, 'PNG', (pageWidth - 38) / 2, curY + 2.5, 38, 38, undefined, 'FAST');
+
+        // SKU below QR
+        doc.setFont('courier', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(71, 85, 105);
+        doc.text(product.sku || product.code || '-', pageWidth / 2, curY + 44.5, { align: 'center' });
+
+        curY += qrBoxSize + 10;
+      } else {
+        // Barcode 1D Box
+        const bcBoxW = 62;
+        const bcBoxH = 26;
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.3);
+        doc.roundedRect((pageWidth - bcBoxW) / 2, curY, bcBoxW, bcBoxH, 3, 3, 'FD');
+
+        // Barcode Image
+        doc.addImage(imgData, 'PNG', (pageWidth - 54) / 2, curY + 3, 54, 20, undefined, 'FAST');
+
+        curY += bcBoxH + 5;
+      }
+
+      // Price
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text('Harga Resmi: ', pageWidth / 2 - 12, curY, { align: 'right' });
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(5, 150, 105);
+      doc.text(`Rp ${sellingPrice.toLocaleString('id-ID')}`, pageWidth / 2 - 10, curY, { align: 'left' });
+
+      curY += 4.5;
+
+      // Scan Directive
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6.5);
+      doc.setTextColor(79, 70, 229);
+      const directiveText = isQr 
+        ? 'Scan dengan Kamera HP untuk membuka E-Katalog Produk' 
+        : 'Scan Barcode dengan scanner gudang';
+      doc.text(directiveText, pageWidth / 2, curY, { align: 'center' });
+
+      // Save PDF with official naming convention
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+      const cleanSku = String(product.sku || product.code || 'PRODUCT').replace(/[/\\?%*:|"<>]/g, '-').trim();
+      const filename = `${dateStr}_LABEL-${cleanSku}.pdf`;
+
+      doc.save(filename);
+    } catch (err) {
+      console.error("Gagal membuat PDF label:", err);
+      alert("Gagal mendownload PDF: " + err.message);
+    }
+  };
 
   const handlePrint = () => {
     if (canvasRef.current) {
@@ -196,22 +349,32 @@ export default function BarcodeModal({ product, onClose }) {
         </div>
 
         {/* Modal Footer Actions */}
-        <div className="flex gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/70 no-print">
+        <div className="flex gap-2.5 px-6 py-4 border-t border-slate-100 bg-slate-50/70 no-print">
           <button
             type="button"
             onClick={handleDownload}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer shadow-2xs"
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer shadow-2xs"
+            title="Download gambar PNG resolusi tinggi"
           >
             <Download className="w-4 h-4" /> 
             <span>Download PNG</span>
           </button>
           <button
             type="button"
-            onClick={handlePrint}
+            onClick={handleDownloadPDF}
             className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition shadow-md shadow-indigo-600/30 cursor-pointer active:scale-95"
+            title="Download file PDF label langsung siap cetak"
           >
-            <Printer className="w-4 h-4" /> 
-            <span>Cetak Label</span>
+            <FileText className="w-4 h-4" /> 
+            <span>Cetak as PDF</span>
+          </button>
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition cursor-pointer"
+            title="Buka dialog printer (Cetak langsung via printer fisik)"
+          >
+            <Printer className="w-4 h-4" />
           </button>
         </div>
 
