@@ -275,40 +275,44 @@ const parseScannedSKU = (text) => {
 
     try {
       const { items, deliveryNote, totalQty, notes: noteText, user: userName } = pendingConfirmBatchInbound;
-      const summaryText = items.map(item => `${item.qty_in}x ${item.productName}`).join(' + ');
-      
-      for (const item of items) {
-        const itemNotes = noteText && noteText.trim() ? noteText.trim() : '';
+      const finalNotes = noteText && noteText.trim() ? noteText.trim() : '';
 
-        await onRecordMovement({
-          productId: item.productId,
-          sku: item.sku,
-          productName: item.productName,
-          type: 'IN',
-          qty: Math.max(1, Number(item.qty_in) || 1),
-          unit: 'Pcs',
-          notes: itemNotes,
-          source: item.supplier || 'PABRIK_PRODUKSI_PUSAT',
-          deliveryNote: item.invoiceNo || deliveryNote,
-          user: userName
-        });
-      }
+      const manifestItems = items.map(item => ({
+        productId: item.productId,
+        sku: item.sku || '-',
+        productName: item.productName || item.name || '-',
+        qty: Math.max(1, Number(item.qty_in) || 1),
+        unit: item.unit || 'Pcs',
+        notes: item.notes || item.supplier || '-',
+        price: Number(item.price || item.selling_price || 0),
+        costPrice: Number(item.costPrice || item.cost_price || item.reseller_price || 0)
+      }));
+
+      await onRecordMovement({
+        productId: manifestItems.length === 1 ? manifestItems[0].productId : 'MULTI-ITEM-INBOUND',
+        sku: manifestItems.length === 1 ? manifestItems[0].sku : 'MULTI-ITEM',
+        productName: manifestItems.length === 1 ? manifestItems[0].productName : `${manifestItems.length} Macam Barang Inbound`,
+        type: 'IN',
+        qty: totalQty,
+        unit: 'Pcs',
+        notes: finalNotes,
+        source: items[0]?.supplier || 'PABRIK_PRODUKSI_PUSAT',
+        deliveryNote: deliveryNote,
+        invoiceNumber: deliveryNote,
+        user: userName,
+        isMultiItem: true,
+        items: manifestItems
+      });
 
       setSuccessModalData({
         productName: `${items.length} Jenis Produk Inbound`,
         sku: 'BATCH-INBOUND',
         type: 'IN',
         qty: totalQty,
-        items: items.map(item => ({
-          productId: item.productId,
-          sku: item.sku || '-',
-          productName: item.productName || item.name || '-',
-          qty: Math.max(1, Number(item.qty_in) || 1),
-          unit: item.unit || 'Pcs',
-          notes: item.notes || item.supplier || '-'
-        })),
-        notes: noteText && noteText.trim() ? noteText.trim() : '',
+        items: manifestItems,
+        notes: finalNotes,
         deliveryNote: deliveryNote,
+        invoiceNumber: deliveryNote,
         user: userName
       });
 

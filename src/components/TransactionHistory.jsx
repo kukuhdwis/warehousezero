@@ -68,30 +68,155 @@ export default function TransactionHistory({
     return true;
   });
 
-  const filteredTransactions = scopedTransactions.filter(tx => {
-    const matchesSearchTerm = matchesSearch(
-      searchTerm, 
-      tx.productName, 
-      tx.sku, 
-      tx.notes, 
-      tx.user, 
-      tx.branchName,
-      tx.deliveryNote,
-      tx.rejectionReason,
-      tx.invoiceNumber
-    );
-    
-    const isRetur = tx.transactionType === 'TRANSFER_REJECTED_RETURN' || tx.status === 'REJECTED_RETURN' || tx.transferStatus === 'REJECTED';
-    const isIn = tx.type === 'IN' && !isRetur;
-    const isOut = !isIn && !isRetur;
+  // Group and consolidate multi-item transactions sharing the same invoice / delivery note
+  const consolidatedTransactions = React.useMemo(() => {
+    const groups = new Map();
+    const result = [];
 
-    let matchesType = true;
-    if (typeFilter === 'IN') matchesType = isIn;
-    else if (typeFilter === 'OUT') matchesType = isOut;
-    else if (typeFilter === 'RETUR') matchesType = isRetur;
+    (scopedTransactions || []).forEach(tx => {
+      if (!tx) return;
 
-    return matchesSearchTerm && matchesType;
-  });
+      const rawInvoice = typeof tx.invoiceNumber === 'string' ? tx.invoiceNumber.trim() : '';
+      const rawDelivery = typeof tx.deliveryNote === 'string' ? tx.deliveryNote.trim() : '';
+      
+      const invoiceKey = (rawInvoice && rawInvoice !== '-' && rawInvoice !== 'null') 
+        ? rawInvoice.toUpperCase() 
+        : null;
+      const deliveryKey = (rawDelivery && rawDelivery !== '-' && rawDelivery !== 'null') 
+        ? rawDelivery.toUpperCase() 
+        : null;
+
+      // Group key: requires matching type (IN vs OUT) + document number (invoice or deliveryNote)
+      let groupKey = null;
+      if (invoiceKey) {
+        groupKey = `${tx.type || 'TX'}_${tx.branchId || 'HQ'}_INV_${invoiceKey}`;
+      } else if (deliveryKey) {
+        groupKey = `${tx.type || 'TX'}_${tx.branchId || 'HQ'}_DLV_${deliveryKey}`;
+      }
+
+      // If no valid document number, treat as individual transaction
+      if (!groupKey) {
+        result.push({
+          ...tx,
+          items: (tx.items && Array.isArray(tx.items) && tx.items.length > 0)
+            ? tx.items
+            : [{
+                productId: tx.productId,
+                sku: tx.sku || '-',
+                productName: tx.productName || tx.name || 'Produk',
+                brand: tx.brand,
+                qty: Number(tx.qty) || 1,
+                unit: tx.unit || 'Pcs',
+                price: Number(tx.price || (tx.totalPrice && tx.qty ? tx.totalPrice / tx.qty : 0)),
+                costPrice: Number(tx.costPrice || 0),
+                notes: tx.notes || '-'
+              }]
+        });
+        return;
+      }
+
+      if (!groups.has(groupKey)) {
+        const initialItems = (tx.items && Array.isArray(tx.items) && tx.items.length > 0)
+          ? tx.items.map(it => ({ ...it, qty: Number(it.qty) || 1 }))
+          : [{
+              productId: tx.productId,
+              sku: tx.sku || '-',
+              productName: tx.productName || tx.name || 'Produk',
+              brand: tx.brand,
+              qty: Number(tx.qty) || 1,
+              unit: tx.unit || 'Pcs',
+              price: Number(tx.price || (tx.totalPrice && tx.qty ? tx.totalPrice / tx.qty : 0)),
+              costPrice: Number(tx.costPrice || 0),
+              notes: tx.notes || '-'
+            }];
+
+        const consolidated = {
+          ...tx,
+          _isGrouped: true,
+          _rawTransactionIds: [tx.id],
+          items: initialItems,
+          totalQty: Number(tx.qty) || 1,
+          qty: Number(tx.qty) || 1,
+          totalPrice: Number(tx.totalPrice || 0)
+        };
+        groups.set(groupKey, consolidated);
+        result.push(consolidated);
+      } else {
+        const existing = groups.get(groupKey);
+        existing._rawTransactionIds.push(tx.id);
+
+        const newItems = (tx.items && Array.isArray(tx.items) && tx.items.length > 0)
+          ? tx.items
+          : [{
+              productId: tx.productId,
+              sku: tx.sku || '-',
+              productName: tx.productName || tx.name || 'Produk',
+              brand: tx.brand,
+              qty: Number(tx.qty) || 1,
+              unit: tx.unit || 'Pcs',
+              price: Number(tx.price || (tx.totalPrice && tx.qty ? tx.totalPrice / tx.qty : 0)),
+              costPrice: Number(tx.costPrice || 0),
+              notes: tx.notes || '-'
+            }];
+
+        for (const newItem of newItems) {
+          const matchIdx = existing.items.findIndex(it => 
+            (newItem.productId && it.productId === newItem.productId) || 
+            (newItem.sku && it.sku !== '-' && it.sku === newItem.sku)
+          );
+          if (matchIdx >= 0) {
+            existing.items[matchIdx].qty += (Number(newItem.qty) || 1);
+          } else {
+            existing.items.push({ ...newItem, qty: Number(newItem.qty) || 1 });
+          }
+        }
+
+        existing.totalQty += (Number(tx.qty) || 1);
+        existing.qty = existing.totalQty;
+        existing.totalPrice += Number(tx.totalPrice || 0);
+
+        if (!existing.branchName && tx.branchName) existing.branchName = tx.branchName;
+        if (!existing.customerName && tx.customerName) existing.customerName = tx.customerName;
+        if (existing.productName && !existing.productName.includes('Barang') && !existing.productName.includes('Produk')) {
+          existing.productName = `${existing.items.length} Jenis Barang`;
+        }
+      }
+    });
+
+    return result;
+  }, [scopedTransactions]);
+
+  const filteredTransactions = React.useMemo(() => {
+    return consolidatedTransactions.filter(tx => {
+      const itemMatch = tx.items && tx.items.some(it => 
+        matchesSearch(searchTerm, it.productName, it.name, it.sku, it.brand, it.notes)
+      );
+
+      const matchesSearchTerm = itemMatch || matchesSearch(
+        searchTerm, 
+        tx.productName, 
+        tx.sku, 
+        tx.notes, 
+        tx.user, 
+        tx.branchName,
+        tx.deliveryNote,
+        tx.rejectionReason,
+        tx.invoiceNumber,
+        tx.customerName
+      );
+      
+      const isRetur = tx.transactionType === 'TRANSFER_REJECTED_RETURN' || tx.status === 'REJECTED_RETURN' || tx.transferStatus === 'REJECTED';
+      const isIn = tx.type === 'IN' && !isRetur;
+      const isOut = !isIn && !isRetur;
+
+      let matchesType = true;
+      if (typeFilter === 'IN') matchesType = isIn;
+      else if (typeFilter === 'OUT') matchesType = isOut;
+      else if (typeFilter === 'RETUR') matchesType = isRetur;
+
+      return matchesSearchTerm && matchesType;
+    });
+  }, [consolidatedTransactions, searchTerm, typeFilter]);
 
   const handleExport = (exportType = 'ALL', chosenFormat = exportFormat) => {
     const formattedData = [];
@@ -461,10 +586,36 @@ export default function TransactionHistory({
                         <ArrowUpRight className="w-5 h-5" />
                       )}
                     </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900 text-sm leading-snug group-hover:text-sky-700 transition">{tx.productName}</h4>
-                      <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                        <p className="text-[11px] font-mono text-slate-400">SKU: {tx.sku}</p>
+                    <div className="min-w-0 flex-1">
+                      {tx.items && tx.items.length > 1 ? (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h4 className="font-bold text-slate-900 text-sm leading-snug group-hover:text-sky-700 transition">
+                              {tx.items.length} Macam Barang
+                            </h4>
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              Multi-Item
+                            </span>
+                          </div>
+                          <div className="bg-slate-50/90 rounded-lg p-2 border border-slate-200/60 space-y-1 mt-1">
+                            {tx.items.map((it, idx) => (
+                              <div key={idx} className="flex items-center justify-between text-[11px] gap-2">
+                                <span className="font-semibold text-slate-800 truncate">• {it.productName || it.name}</span>
+                                <span className="font-bold text-emerald-800 bg-white px-1.5 py-0.2 rounded border border-slate-200 text-[10px] whitespace-nowrap">
+                                  {it.qty} {it.unit || 'Pcs'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <h4 className="font-bold text-slate-900 text-sm leading-snug group-hover:text-sky-700 transition">{tx.productName}</h4>
+                          <p className="text-[11px] font-mono text-slate-400">SKU: {tx.sku}</p>
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                         {tx.branchName && (
                           <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
                             {tx.branchName}
@@ -512,6 +663,11 @@ export default function TransactionHistory({
                     }`}>
                       {isRejectedReturn ? `+${tx.qty}` : isIn ? `+${tx.qty}` : `-${tx.qty}`}
                     </span>
+                    {tx.items && tx.items.length > 1 && (
+                      <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                        {tx.items.length} macam
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -606,26 +762,74 @@ export default function TransactionHistory({
                           </span>
                         )}
                       </td>
-                      <td className="px-5 py-4 min-w-[200px]">
-                        <div className="font-semibold text-slate-800 group-hover:text-sky-700 transition leading-snug">{tx.productName}</div>
-                        <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                          <span className="text-xs text-slate-400 font-mono whitespace-nowrap">SKU: {tx.sku}</span>
-                          {tx.branchName && (
-                            <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                              {tx.branchName}
-                            </span>
-                          )}
-                          {tx.invoiceNumber && (
-                            <span className="font-mono text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded border border-slate-200">
-                              {tx.invoiceNumber}
-                            </span>
-                          )}
-                          {tx.deliveryNote && (
-                            <span className="font-mono text-[10px] bg-sky-50 text-sky-700 px-1.5 py-0.2 rounded border border-sky-200 font-semibold">
-                              {tx.deliveryNote}
-                            </span>
-                          )}
-                        </div>
+                      <td className="px-5 py-4 min-w-[240px]">
+                        {tx.items && tx.items.length > 1 ? (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-slate-900 text-sm group-hover:text-sky-700 transition">
+                                {tx.items.length} Macam Barang Sekaligus
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                {tx.items.length} Produk
+                              </span>
+                            </div>
+                            <div className="bg-slate-50/90 rounded-xl p-2.5 border border-slate-200/70 space-y-1">
+                              {tx.items.map((it, idx) => (
+                                <div key={idx} className="flex items-center justify-between gap-3 text-xs">
+                                  <div className="min-w-0 flex items-center gap-1.5">
+                                    <span className="text-slate-400 font-mono text-[10px]">{idx + 1}.</span>
+                                    <span className="font-semibold text-slate-800 truncate">{it.productName || it.name}</span>
+                                    {it.sku && it.sku !== '-' && (
+                                      <span className="text-slate-400 font-mono text-[10px]">({it.sku})</span>
+                                    )}
+                                  </div>
+                                  <span className="font-bold text-emerald-800 bg-white px-2 py-0.5 rounded border border-slate-200 text-[11px] whitespace-nowrap">
+                                    {it.qty} {it.unit || 'Pcs'}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                              {tx.branchName && (
+                                <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                  {tx.branchName}
+                                </span>
+                              )}
+                              {tx.invoiceNumber && (
+                                <span className="font-mono text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded border border-slate-200">
+                                  {tx.invoiceNumber}
+                                </span>
+                              )}
+                              {tx.deliveryNote && (
+                                <span className="font-mono text-[10px] bg-sky-50 text-sky-700 px-1.5 py-0.2 rounded border border-sky-200 font-semibold">
+                                  {tx.deliveryNote}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="font-semibold text-slate-800 group-hover:text-sky-700 transition leading-snug">{tx.productName}</div>
+                            <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                              <span className="text-xs text-slate-400 font-mono whitespace-nowrap">SKU: {tx.sku}</span>
+                              {tx.branchName && (
+                                <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                  {tx.branchName}
+                                </span>
+                              )}
+                              {tx.invoiceNumber && (
+                                <span className="font-mono text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded border border-slate-200">
+                                  {tx.invoiceNumber}
+                                </span>
+                              )}
+                              {tx.deliveryNote && (
+                                <span className="font-mono text-[10px] bg-sky-50 text-sky-700 px-1.5 py-0.2 rounded border border-sky-200 font-semibold">
+                                  {tx.deliveryNote}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
                         {tx.rejectionReason && (
                           <div className="text-[11px] text-rose-700 font-bold mt-1 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1">
                             <span>⚠️</span>
@@ -637,15 +841,22 @@ export default function TransactionHistory({
                         )}
                       </td>
                       <td className="px-4 py-4 text-center font-extrabold text-slate-900 whitespace-nowrap">
-                        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${
-                          isRejectedReturn
-                            ? 'bg-amber-100 text-amber-900 border border-amber-200'
-                            : isIn
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'bg-rose-50 text-rose-700'
-                        }`}>
-                          {isRejectedReturn ? `+${tx.qty}` : isIn ? `+${tx.qty}` : `-${tx.qty}`}
-                        </span>
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className={`px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${
+                            isRejectedReturn
+                              ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                              : isIn
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : 'bg-rose-50 text-rose-700'
+                          }`}>
+                            {isRejectedReturn ? `+${tx.qty}` : isIn ? `+${tx.qty}` : `-${tx.qty}`}
+                          </span>
+                          {tx.items && tx.items.length > 1 && (
+                            <span className="text-[10px] text-slate-400 font-medium">
+                              ({tx.items.length} macam)
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-4 text-slate-600 text-xs min-w-[160px] break-words">
                         {tx.notes || '-'}

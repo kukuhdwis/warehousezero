@@ -976,19 +976,34 @@ const parseScannedSKU = (text) => {
         }, currentUser?.uid || 'admin');
 
         // 3. Catat di Audit Log Frontend (onRecordMovement)
-        for (const item of items) {
-          await onRecordMovement({
-            ...item,
-            type: 'OUT',
-            transactionType: 'STOCK_TRANSFER_TO_BRANCH',
-            targetBranchId: pendingConfirm.targetBranchId,
-            targetBranchName: pendingConfirm.targetBranchName,
-            deliveryNote: deliveryNote,
-            notes: pendingConfirm.notes,
-            user: pendingConfirm.user,
-            skipMasterProductUpdate: isBranchStaff
-          });
-        }
+        const transferItems = items.map(i => ({
+          productId: i.productId,
+          productName: i.productName || i.name || 'Produk',
+          sku: i.sku || '-',
+          qty: Number(i.qty) || 1,
+          unit: i.unit || 'Pcs',
+          price: Number(i.price || 0),
+          costPrice: Number(i.costPrice || 0)
+        }));
+
+        await onRecordMovement({
+          productId: transferItems.length === 1 ? transferItems[0].productId : 'BATCH-TRANSFER',
+          sku: transferItems.length === 1 ? transferItems[0].sku : 'MULTI-TRANSFER',
+          productName: transferItems.length === 1 ? transferItems[0].productName : `${transferItems.length} Macam Produk Transfer`,
+          type: 'OUT',
+          transactionType: 'STOCK_TRANSFER_TO_BRANCH',
+          targetBranchId: pendingConfirm.targetBranchId,
+          targetBranchName: pendingConfirm.targetBranchName,
+          deliveryNote: deliveryNote,
+          invoiceNumber: deliveryNote,
+          notes: pendingConfirm.notes,
+          user: pendingConfirm.user,
+          qty: transferItems.reduce((acc, i) => acc + i.qty, 0),
+          unit: 'Pcs',
+          isMultiItem: true,
+          items: transferItems,
+          skipMasterProductUpdate: isBranchStaff
+        });
         if (isBatch) setTransferCart([]);
       } else if (pendingConfirm.isMultiItem && pendingConfirm.items) {
         await onRecordMovement({

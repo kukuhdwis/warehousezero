@@ -2080,7 +2080,7 @@ export const recordStockMovement = async (movementData) => {
           if (item.productId) {
             const prodRef = doc(db, "products", item.productId);
             await updateDoc(prodRef, {
-              currentStock: increment(-Number(item.qty || 1)),
+              currentStock: increment(isIncrement ? Number(item.qty || 1) : -Number(item.qty || 1)),
               updatedAt: new Date().toISOString()
             });
           }
@@ -2102,7 +2102,7 @@ export const recordStockMovement = async (movementData) => {
             const snap = await getDocs(q);
             if (!snap.empty) {
               await updateDoc(snap.docs[0].ref, {
-                stockQuantity: increment(-Number(item.qty || 1)),
+                stockQuantity: increment(isIncrement ? Number(item.qty || 1) : -Number(item.qty || 1)),
                 updatedAt: new Date().toISOString()
               });
             }
