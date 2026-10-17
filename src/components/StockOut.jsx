@@ -74,6 +74,12 @@ export default function StockOut({
   const [paymentMethod, setPaymentMethod] = useState('CASH'); // 'CASH' | 'TRANSFER' | 'QRIS' | 'MARKETPLACE'
   const [notes, setNotes] = useState('');
   const [user, setUser] = useState(currentUser?.name || (isBranchStaff ? 'Staff Kasir Cabang' : 'Staff Toko/Gudang Pusat'));
+
+  React.useEffect(() => {
+    if (currentUser?.name) {
+      setUser(currentUser.name);
+    }
+  }, [currentUser]);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   
@@ -2721,6 +2727,7 @@ const parseScannedSKU = (text) => {
       <TransactionSuccessModal
         isOpen={Boolean(successModalData)}
         transaction={successModalData}
+        currentUser={currentUser}
         onClose={() => setSuccessModalData(null)}
       />
 

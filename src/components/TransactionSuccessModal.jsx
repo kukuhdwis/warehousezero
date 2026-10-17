@@ -24,9 +24,24 @@ export default function TransactionSuccessModal({
   isOpen, 
   onClose, 
   transaction, 
+  currentUser,
   onNewTransaction 
 }) {
   if (!isOpen || !transaction) return null;
+
+  // Resolve active operator name according to logged-in user account
+  const activeOperator = currentUser?.name 
+    || currentUser?.displayName 
+    || (currentUser?.email ? currentUser.email.split('@')[0] : '')
+    || (typeof window !== 'undefined' && (() => {
+        try {
+          const u = JSON.parse(localStorage.getItem('wms_user') || '{}');
+          return u?.name || u?.displayName || (u?.email ? u.email.split('@')[0] : '');
+        } catch (e) { return ''; }
+      })())
+    || transaction?.user 
+    || transaction?.performerName 
+    || 'Operator';
 
   const isInbound = transaction.type === 'IN';
   const isBundling = Boolean(transaction.isBundling || transaction.transactionType === 'CUSTOM_BUNDLING');
@@ -75,7 +90,7 @@ export default function TransactionSuccessModal({
             doc.text(`Gudang: NDK Warehouse`, 14, 38);
         }
 
-        // Right Header: Invoice Info
+        // Right Header: Invoice Info & Operator Info
         const invoiceNo = transaction.invoiceNumber || transaction.deliveryNote || `#TRX-${Date.now().toString().slice(-6)}`;
         let txDate = new Date().toLocaleDateString('id-ID');
         if (transaction.timestamp) {
@@ -90,12 +105,12 @@ export default function TransactionSuccessModal({
         doc.setFont("helvetica", "bold");
         doc.text("No. Dokumen", pageWidth - 70, 33);
         doc.text("Tanggal", pageWidth - 70, 39);
-        doc.text("Petugas", pageWidth - 70, 45);
+        doc.text("Petugas / Kasir", pageWidth - 70, 45);
         
         doc.setFont("helvetica", "normal");
         doc.text(`: ${invoiceNo}`, pageWidth - 45, 33);
         doc.text(`: ${txDate}`, pageWidth - 45, 39);
-        doc.text(`: ${transaction.performerName || transaction.callerUid || 'Admin'}`, pageWidth - 45, 45);
+        doc.text(`: ${activeOperator}`, pageWidth - 45, 45);
 
         // --- TABLE ---
         const tableColumn = ["No", "SKU", "Nama Barang", "Qty", "Jumlah (Rp)", "Keterangan"];
@@ -180,7 +195,7 @@ export default function TransactionSuccessModal({
         doc.setFontSize(7.5);
         doc.setFont("helvetica", "italic");
         doc.setTextColor(110, 110, 110);
-        doc.text(`Dicetak pada: ${printTimeStr}`, 14, finalY + 11.5);
+        doc.text(`Dicetak pada: ${printTimeStr} oleh operator: ${activeOperator}`, 14, finalY + 11.5);
         doc.setTextColor(0, 0, 0);
 
         doc.setLineWidth(0.4);
@@ -194,12 +209,20 @@ export default function TransactionSuccessModal({
         doc.setFontSize(9);
         doc.text("Penerima / Pembeli", 35, finalY + 36, { align: 'center' });
         doc.text("Bagian Pengiriman", pageWidth / 2, finalY + 36, { align: 'center' });
-        doc.text("Petugas Gudang", pageWidth - 35, finalY + 36, { align: 'center' });
+        doc.text(isSale ? "Kasir / Sales" : isTransfer ? "Petugas Pengirim" : "Petugas Penerima", pageWidth - 35, finalY + 36, { align: 'center' });
         
         doc.setLineWidth(0.3);
         doc.line(14, finalY + 56, 56, finalY + 56);
         doc.line(pageWidth / 2 - 20, finalY + 56, pageWidth / 2 + 20, finalY + 56);
         doc.line(pageWidth - 56, finalY + 56, pageWidth - 14, finalY + 56);
+
+        // Signer Names underneath signature lines
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.text(`( ${transaction.customerName || '.....................'} )`, 35, finalY + 61, { align: 'center' });
+        doc.text(`( ..................... )`, pageWidth / 2, finalY + 61, { align: 'center' });
+        doc.setFont("helvetica", "bold");
+        doc.text(`( ${activeOperator} )`, pageWidth - 35, finalY + 61, { align: 'center' });
 
         // --- SAVE (Format: YYYY-MM-DD_[NOMOR_DOKUMEN].pdf) ---
         let txDateObj = new Date();
@@ -349,9 +372,9 @@ export default function TransactionSuccessModal({
               </div>
 
               <div>
-                <span className="text-[10px] text-slate-400 block font-bold uppercase">Petugas Pelaksana</span>
+                <span className="text-[10px] text-slate-400 block font-bold uppercase">Petugas / Operator</span>
                 <span className="font-bold text-slate-800 truncate block mt-0.5">
-                  {transaction.user || 'Staff Gudang'}
+                  {activeOperator}
                 </span>
               </div>
             </div>

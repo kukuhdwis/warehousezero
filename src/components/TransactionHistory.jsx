@@ -928,6 +928,7 @@ export default function TransactionHistory({
       <TransactionDetailModal
         isOpen={Boolean(selectedDetailTx)}
         transaction={selectedDetailTx}
+        currentUser={currentUser}
         onClose={() => setSelectedDetailTx(null)}
         products={products}
       />

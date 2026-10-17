@@ -72,142 +72,107 @@ export default function BarcodeModal({ product, onClose }) {
       }
 
       const isQr = codeType === 'QRCODE';
+      // Standard 50 x 30 mm Thermal Label format
       const doc = new jsPDF({
-        orientation: 'portrait',
+        orientation: 'landscape',
         unit: 'mm',
-        format: [85, isQr ? 120 : 105]
+        format: [50, 30]
       });
 
-      const pageWidth = 85;
-      const pageHeight = isQr ? 120 : 105;
-
-      // Background soft tint
-      doc.setFillColor(248, 250, 252);
-      doc.roundedRect(4, 4, pageWidth - 8, pageHeight - 8, 4, 4, 'F');
-
-      // Outer dashed border
-      doc.setDrawColor(99, 102, 241);
-      doc.setLineWidth(0.4);
-      doc.setLineDashPattern([2, 2], 0);
-      doc.roundedRect(4, 4, pageWidth - 8, pageHeight - 8, 4, 4, 'S');
-      doc.setLineDashPattern([], 0);
-
-      // Brand Badge
       const brand = String(product.brand || 'NDK EXHAUST').toUpperCase();
-      doc.setFillColor(15, 23, 42);
-      const brandBadgeWidth = Math.min(60, Math.max(36, brand.length * 3.4));
-      doc.roundedRect((pageWidth - brandBadgeWidth) / 2, 7.5, brandBadgeWidth, 5.5, 2.75, 2.75, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
-      doc.setTextColor(255, 255, 255);
-      doc.text(brand, pageWidth / 2, 11.3, { align: 'center' });
-
-      // Product Title
-      doc.setTextColor(15, 23, 42);
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      const splitTitle = doc.splitTextToSize(product.name || 'Produk', pageWidth - 14);
-      doc.text(splitTitle, pageWidth / 2, 17.5, { align: 'center' });
-
-      let curY = 17.5 + (splitTitle.length * 3.8);
-
-      // Tags: Mesin & Category
-      doc.setFontSize(6.5);
+      const cleanSku = String(product.sku || product.code || 'PRODUCT').trim();
       const engineText = `Mesin ${engineName}`;
-      const catText = product.category_name ? String(product.category_name) : '';
-      
-      if (catText) {
-        // Tag 1 (Engine)
-        doc.setFillColor(254, 243, 199);
-        doc.setDrawColor(251, 191, 36);
-        doc.setLineWidth(0.2);
-        doc.roundedRect(pageWidth / 2 - 29, curY, 28, 4.5, 1.5, 1.5, 'FD');
-        doc.setTextColor(146, 64, 14);
-        doc.text(engineText, pageWidth / 2 - 15, curY + 3.2, { align: 'center' });
-
-        // Tag 2 (Category)
-        doc.setFillColor(224, 242, 254);
-        doc.setDrawColor(56, 189, 248);
-        doc.roundedRect(pageWidth / 2 + 1, curY, 28, 4.5, 1.5, 1.5, 'FD');
-        doc.setTextColor(7, 89, 133);
-        doc.text(catText, pageWidth / 2 + 15, curY + 3.2, { align: 'center' });
-      } else {
-        // Single Engine Tag centered
-        doc.setFillColor(254, 243, 199);
-        doc.setDrawColor(251, 191, 36);
-        doc.setLineWidth(0.2);
-        doc.roundedRect((pageWidth - 34) / 2, curY, 34, 4.5, 1.5, 1.5, 'FD');
-        doc.setTextColor(146, 64, 14);
-        doc.text(engineText, pageWidth / 2, curY + 3.2, { align: 'center' });
-      }
-
-      curY += 7.5;
 
       if (isQr) {
-        // QR Code Box
-        const qrBoxSize = 46;
-        doc.setFillColor(255, 255, 255);
-        doc.setDrawColor(226, 232, 240);
-        doc.setLineWidth(0.3);
-        doc.roundedRect((pageWidth - qrBoxSize) / 2, curY, qrBoxSize, qrBoxSize + 6, 3, 3, 'FD');
+        // --- 50 x 30 mm QR CODE LAYOUT ---
+        // Left Side: QR Code (20.5mm x 20.5mm) + SKU text underneath
+        doc.addImage(imgData, 'PNG', 2.5, 2.5, 20.5, 20.5, undefined, 'FAST');
 
-        // QR Code Image
-        doc.addImage(imgData, 'PNG', (pageWidth - 38) / 2, curY + 2.5, 38, 38, undefined, 'FAST');
-
-        // SKU below QR
         doc.setFont('courier', 'bold');
-        doc.setFontSize(8);
-        doc.setTextColor(71, 85, 105);
-        doc.text(product.sku || product.code || '-', pageWidth / 2, curY + 44.5, { align: 'center' });
+        doc.setFontSize(5.5);
+        doc.setTextColor(30, 41, 59);
+        doc.text(cleanSku, 12.75, 26.5, { align: 'center' });
 
-        curY += qrBoxSize + 10;
+        // Right Side: Brand, Product Name, Specs, Price, Directive
+        // Brand Badge
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(6);
+        doc.setTextColor(15, 23, 42);
+        doc.text(brand, 25, 5.5);
+
+        // Product Name (wrapped to 23mm, max 2 lines)
+        doc.setFontSize(6.5);
+        doc.setTextColor(15, 23, 42);
+        const nameLines = doc.splitTextToSize(product.name || 'Produk', 23);
+        const displayLines = nameLines.slice(0, 2);
+        doc.text(displayLines, 25, 9.5);
+
+        let curY = 9.5 + (displayLines.length * 3.2);
+
+        // Engine & Category
+        doc.setFontSize(5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139);
+        const specText = product.category_name ? `${engineText} • ${product.category_name}` : engineText;
+        const specLines = doc.splitTextToSize(specText, 23);
+        doc.text(specLines[0], 25, curY);
+
+        curY += 3.8;
+
+        // Price
+        doc.setFontSize(5);
+        doc.setTextColor(100, 116, 139);
+        doc.text('Harga Resmi:', 25, curY);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7);
+        doc.setTextColor(5, 150, 105);
+        doc.text(`Rp ${sellingPrice.toLocaleString('id-ID')}`, 25, curY + 3.5);
+
+        // Scan directive
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(4.5);
+        doc.setTextColor(79, 70, 229);
+        doc.text('Scan utk E-Katalog', 25, 27.5);
       } else {
-        // Barcode 1D Box
-        const bcBoxW = 62;
-        const bcBoxH = 26;
-        doc.setFillColor(255, 255, 255);
-        doc.setDrawColor(226, 232, 240);
-        doc.setLineWidth(0.3);
-        doc.roundedRect((pageWidth - bcBoxW) / 2, curY, bcBoxW, bcBoxH, 3, 3, 'FD');
+        // --- 50 x 30 mm BARCODE 1D LAYOUT ---
+        // Header
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(6);
+        doc.setTextColor(15, 23, 42);
+        doc.text(brand, 25, 4.5, { align: 'center' });
 
-        // Barcode Image
-        doc.addImage(imgData, 'PNG', (pageWidth - 54) / 2, curY + 3, 54, 20, undefined, 'FAST');
+        doc.setFontSize(6.5);
+        const nameLines = doc.splitTextToSize(product.name || 'Produk', 46);
+        doc.text(nameLines[0], 25, 8, { align: 'center' });
 
-        curY += bcBoxH + 5;
+        doc.setFontSize(5.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(71, 85, 105);
+        doc.text(`${engineText}  |  Rp ${sellingPrice.toLocaleString('id-ID')}`, 25, 11.5, { align: 'center' });
+
+        // Barcode 1D Image
+        doc.addImage(imgData, 'PNG', 3, 13, 44, 10.5, undefined, 'FAST');
+
+        // SKU Centered beneath
+        doc.setFont('courier', 'bold');
+        doc.setFontSize(6.5);
+        doc.setTextColor(30, 41, 59);
+        doc.text(cleanSku, 25, 27, { align: 'center' });
       }
 
-      // Price
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.5);
-      doc.setTextColor(100, 116, 139);
-      doc.text('Harga Resmi: ', pageWidth / 2 - 12, curY, { align: 'right' });
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(5, 150, 105);
-      doc.text(`Rp ${sellingPrice.toLocaleString('id-ID')}`, pageWidth / 2 - 10, curY, { align: 'left' });
-
-      curY += 4.5;
-
-      // Scan Directive
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6.5);
-      doc.setTextColor(79, 70, 229);
-      const directiveText = isQr 
-        ? 'Scan dengan Kamera HP untuk membuka E-Katalog Produk' 
-        : 'Scan Barcode dengan scanner gudang';
-      doc.text(directiveText, pageWidth / 2, curY, { align: 'center' });
-
-      // Save PDF with official naming convention
+      // Save PDF with official naming convention including 50x30
       const now = new Date();
       const year = now.getFullYear();
       const month = String(now.getMonth() + 1).padStart(2, '0');
       const day = String(now.getDate()).padStart(2, '0');
       const dateStr = `${year}-${month}-${day}`;
-      const cleanSku = String(product.sku || product.code || 'PRODUCT').replace(/[/\\?%*:|"<>]/g, '-').trim();
-      const filename = `${dateStr}_LABEL-${cleanSku}.pdf`;
+      const safeSku = cleanSku.replace(/[/\\?%*:|"<>]/g, '-').trim();
+      const filename = `${dateStr}_LABEL-50x30-${safeSku}.pdf`;
 
       doc.save(filename);
     } catch (err) {
-      console.error("Gagal membuat PDF label:", err);
+      console.error("Gagal membuat PDF label 50x30mm:", err);
       alert("Gagal mendownload PDF: " + err.message);
     }
   };
@@ -229,7 +194,7 @@ export default function BarcodeModal({ product, onClose }) {
       const url = canvasRef.current.toDataURL('image/png');
       const a = document.createElement('a');
       a.href = url;
-      a.download = `SmartQR-${product.sku}.png`;
+      a.download = `SmartQR-50x30mm-${product.sku || product.code}.png`;
       a.click();
     }
   };
@@ -251,8 +216,8 @@ export default function BarcodeModal({ product, onClose }) {
               <QrCode className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-800 text-base leading-tight">Smart QR Code & Label</h3>
-              <p className="text-[11px] text-slate-400">Universal QR untuk Customer & Scanner Staff</p>
+              <h3 className="font-bold text-slate-800 text-base leading-tight">Smart QR & Barcode (50 x 30 mm)</h3>
+              <p className="text-[11px] text-slate-400">Ukuran Standar Thermal Label 50x30 mm untuk Scanner & Customer</p>
             </div>
           </div>
           <button 
@@ -275,7 +240,7 @@ export default function BarcodeModal({ product, onClose }) {
             }`}
           >
             <QrCode className="w-4 h-4" />
-            <span>Smart QR Code (Dual-Purpose)</span>
+            <span>Smart QR Code (50x30)</span>
           </button>
 
           <button
@@ -288,64 +253,107 @@ export default function BarcodeModal({ product, onClose }) {
             }`}
           >
             <BarcodeIcon className="w-4 h-4" />
-            <span>Barcode 1D (Gudang)</span>
+            <span>Barcode 1D (50x30)</span>
           </button>
         </div>
 
-        {/* Modal Printable Content */}
-        <div className="p-6 text-center" id="printable-barcode-area">
-          <div className="bg-gradient-to-b from-slate-50 to-indigo-50/30 p-5 rounded-2xl border-2 border-dashed border-indigo-200 flex flex-col items-center justify-center space-y-3">
+        {/* Modal Printable Content calibrated to 50 x 30 mm */}
+        <div className="p-6 text-center flex flex-col items-center justify-center bg-slate-50/50" id="printable-barcode-area">
+          <div className="w-full max-w-[340px] aspect-[5/3] bg-white rounded-2xl border-2 border-dashed border-indigo-300 p-3 shadow-md flex flex-col justify-between text-left overflow-hidden relative">
             
-            {/* Header Badge */}
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-900 text-white rounded-full text-[10px] font-black tracking-widest uppercase">
-              <span>{product.brand || 'NDK EXHAUST'}</span>
-            </div>
-
-            {/* Product Title & Compatibility */}
-            <div>
-              <h4 className="font-extrabold text-slate-900 text-base leading-snug">{product.name}</h4>
-              <div className="flex items-center justify-center gap-1.5 mt-1">
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
-                  Mesin {engineName}
-                </span>
-                {product.category_name && (
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-900 border border-sky-200">
-                    {product.category_name}
+            {codeType === 'QRCODE' ? (
+              <div className="flex h-full gap-2.5 items-center">
+                {/* Left Column: QR Code + SKU */}
+                <div className="flex flex-col items-center justify-center w-[105px] flex-shrink-0 bg-slate-50/80 p-1.5 rounded-xl border border-slate-200/80">
+                  <canvas ref={canvasRef} className="w-[80px] h-[80px] object-contain rounded-md print:hidden" />
+                  {qrDataUrl && (
+                    <img 
+                      src={qrDataUrl} 
+                      alt={product.sku || 'QR Code'} 
+                      className="hidden print:block w-[80px] h-[80px] object-contain mx-auto" 
+                    />
+                  )}
+                  <span className="text-[9px] font-mono font-bold text-slate-700 mt-1 truncate max-w-full">
+                    {product.sku || product.code}
                   </span>
-                )}
-              </div>
-            </div>
+                </div>
 
-            {/* Canvas Target for Screen & Image for Print */}
-            <div className="p-3 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col items-center">
-              <canvas ref={canvasRef} className="max-w-full rounded-lg print:hidden" />
-              {qrDataUrl && (
-                <img 
-                  src={qrDataUrl} 
-                  alt={product.sku || 'Barcode'} 
-                  className="hidden print:block max-w-[180px] w-auto h-auto rounded-lg mx-auto" 
-                />
-              )}
-              {codeType === 'QRCODE' && (
-                <span className="text-[10px] font-mono text-slate-500 font-bold mt-2">
-                  {product.sku || product.code}
-                </span>
-              )}
-            </div>
+                {/* Right Column: Details */}
+                <div className="flex-1 min-w-0 flex flex-col justify-between h-full py-0.5">
+                  <div>
+                    <div className="flex items-center gap-1">
+                      <span className="px-1.5 py-0.5 bg-slate-900 text-white rounded text-[8px] font-black tracking-wider uppercase">
+                        {product.brand || 'NDK'}
+                      </span>
+                      <span className="text-[9px] font-bold text-amber-900 bg-amber-100 px-1 py-0.5 rounded truncate">
+                        {engineName}
+                      </span>
+                    </div>
 
-            {/* Price & Scan Directive */}
-            <div className="space-y-1">
-              <div className="text-xs font-mono font-bold text-slate-500">
-                Harga Resmi: <strong className="text-emerald-600">Rp {sellingPrice.toLocaleString('id-ID')}</strong>
+                    <h4 className="font-extrabold text-slate-900 text-xs leading-tight line-clamp-2 mt-1">
+                      {product.name}
+                    </h4>
+
+                    {product.category_name && (
+                      <p className="text-[9px] text-slate-500 font-medium truncate mt-0.5">
+                        {product.category_name}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="pt-1 border-t border-slate-100">
+                    <div className="text-[9px] text-slate-400 font-medium">Harga Resmi:</div>
+                    <div className="text-xs font-black text-emerald-600">
+                      Rp {sellingPrice.toLocaleString('id-ID')}
+                    </div>
+                    <p className="text-[8px] text-indigo-600 font-semibold mt-0.5">
+                      📱 Scan utk E-Katalog
+                    </p>
+                  </div>
+                </div>
               </div>
-              <p className="text-[10px] text-indigo-700 font-medium">
-                {codeType === 'QRCODE' 
-                  ? '📱 Scan dengan Kamera HP untuk membuka E-Katalog Produk' 
-                  : '📦 Scan Barcode dengan scanner gudang'}
-              </p>
-            </div>
+            ) : (
+              <div className="flex flex-col justify-between h-full py-1 text-center items-center">
+                <div className="w-full">
+                  <div className="flex items-center justify-center gap-1.5">
+                    <span className="px-1.5 py-0.5 bg-slate-900 text-white rounded text-[8px] font-black tracking-wider uppercase">
+                      {product.brand || 'NDK EXHAUST'}
+                    </span>
+                    <span className="text-[9px] font-bold text-amber-900 bg-amber-100 px-1 py-0.5 rounded">
+                      {engineName}
+                    </span>
+                  </div>
+                  <h4 className="font-extrabold text-slate-900 text-xs leading-tight line-clamp-1 mt-1 px-1">
+                    {product.name}
+                  </h4>
+                </div>
+
+                <div className="w-full flex flex-col items-center justify-center my-0.5">
+                  <canvas ref={canvasRef} className="max-w-[220px] h-[48px] print:hidden object-contain" />
+                  {qrDataUrl && (
+                    <img 
+                      src={qrDataUrl} 
+                      alt={product.sku || 'Barcode'} 
+                      className="hidden print:block max-w-[220px] h-[48px] object-contain mx-auto" 
+                    />
+                  )}
+                  <span className="text-[10px] font-mono font-bold text-slate-800 mt-0.5">
+                    {product.sku || product.code}
+                  </span>
+                </div>
+
+                <div className="text-[10px] font-bold text-slate-600">
+                  Harga Resmi: <strong className="text-emerald-600">Rp {sellingPrice.toLocaleString('id-ID')}</strong>
+                </div>
+              </div>
+            )}
 
           </div>
+
+          <p className="text-[11px] text-slate-500 font-medium mt-2.5 flex items-center gap-1.5 no-print">
+            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Format Cetak: <strong>50 x 30 mm</strong> (Standar Stiker Roll Thermal Gudang)</span>
+          </p>
         </div>
 
         {/* Modal Footer Actions */}

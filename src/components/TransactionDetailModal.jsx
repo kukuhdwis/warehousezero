@@ -66,11 +66,26 @@ export default function TransactionDetailModal({
   isOpen, 
   onClose, 
   transaction, 
+  currentUser,
   products = [] 
 }) {
   const [copiedInvoice, setCopiedInvoice] = React.useState(false);
 
   if (!isOpen || !transaction) return null;
+
+  // Resolve active operator name according to logged-in user account
+  const activeOperator = currentUser?.name 
+    || currentUser?.displayName 
+    || (currentUser?.email ? currentUser.email.split('@')[0] : '')
+    || (typeof window !== 'undefined' && (() => {
+        try {
+          const u = JSON.parse(localStorage.getItem('wms_user') || '{}');
+          return u?.name || u?.displayName || (u?.email ? u.email.split('@')[0] : '');
+        } catch (e) { return ''; }
+      })())
+    || transaction?.user 
+    || transaction?.performerName 
+    || 'Operator';
 
   const isRejectedReturn = Boolean(transaction.transactionType === 'TRANSFER_REJECTED_RETURN' || transaction.status === 'REJECTED_RETURN');
   const isOutboundRejected = Boolean(transaction.transferStatus === 'REJECTED');
@@ -201,12 +216,12 @@ export default function TransactionDetailModal({
       doc.setFont("helvetica", "bold");
       doc.text("No. Dokumen / Nota", 14, 43);
       doc.text("Tanggal & Waktu", 14, 49);
-      doc.text("Petugas Pelaksana", 14, 55);
+      doc.text("Petugas / Operator", 14, 55);
 
       doc.setFont("helvetica", "normal");
       doc.text(`: ${invoiceNo}`, 50, 43);
       doc.text(`: ${dateFormatted}`, 50, 49);
-      doc.text(`: ${transaction.user || transaction.performerName || 'Staff'}`, 50, 55);
+      doc.text(`: ${activeOperator}`, 50, 55);
 
       // Right-side Info: Customer / Destination
       doc.setFont("helvetica", "bold");
@@ -312,7 +327,7 @@ export default function TransactionDetailModal({
         timeZoneName: 'short'
       }).format(now);
       doc.setTextColor(110, 110, 110);
-      doc.text(`Dicetak pada: ${printTimeStr} • Dokumen sah Warehouse Zero`, 14, sigY + 5);
+      doc.text(`Dicetak pada: ${printTimeStr} oleh operator: ${activeOperator} • Dokumen sah Warehouse Zero`, 14, sigY + 5);
       doc.setTextColor(0, 0, 0);
 
       const signBoxY = sigY + 12;
@@ -337,6 +352,23 @@ export default function TransactionDetailModal({
       doc.line(14, signBoxY + 22, 56, signBoxY + 22);
       doc.line(pageWidth / 2 - 21, signBoxY + 22, pageWidth / 2 + 21, signBoxY + 22);
       doc.line(pageWidth - 56, signBoxY + 22, pageWidth - 14, signBoxY + 22);
+
+      // Signer Names underneath signature lines
+      doc.setFontSize(8);
+      if (isSale) {
+        doc.setFont("helvetica", "normal");
+        doc.text(`( ${transaction.customerName || '.....................'} )`, 35, signBoxY + 26.5, { align: 'center' });
+        doc.setFont("helvetica", "bold");
+        doc.text(`( ${activeOperator} )`, pageWidth / 2, signBoxY + 26.5, { align: 'center' });
+        doc.setFont("helvetica", "normal");
+        doc.text(`( ..................... )`, pageWidth - 35, signBoxY + 26.5, { align: 'center' });
+      } else {
+        doc.setFont("helvetica", "normal");
+        doc.text(`( ..................... )`, 35, signBoxY + 26.5, { align: 'center' });
+        doc.text(`( ..................... )`, pageWidth / 2, signBoxY + 26.5, { align: 'center' });
+        doc.setFont("helvetica", "bold");
+        doc.text(`( ${activeOperator} )`, pageWidth - 35, signBoxY + 26.5, { align: 'center' });
+      }
 
       // --- SAVE FILE (Format: YYYY-MM-DD_[NOMOR_DOKUMEN].pdf) ---
       let txDateObj = new Date();
@@ -474,6 +506,24 @@ export default function TransactionDetailModal({
                 </span>
                 <span className="font-bold text-slate-800 mt-0.5 block truncate">
                   {transaction.platformName || transaction.salesPlatform || transaction.branchName || 'Cabang'}
+                </span>
+              </div>
+
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-semibold block">
+                  Petugas Pelaksana
+                </span>
+                <span className="font-bold text-slate-800 mt-0.5 block truncate">
+                  {transaction.user || transaction.performerName || 'Staff'}
+                </span>
+              </div>
+
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-semibold block">
+                  Operator Cetak
+                </span>
+                <span className="font-bold text-indigo-700 mt-0.5 block truncate">
+                  {activeOperator}
                 </span>
               </div>
             </div>

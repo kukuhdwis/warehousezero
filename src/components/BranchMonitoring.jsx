@@ -2482,6 +2482,7 @@ export default function BranchMonitoring({
         <TransactionDetailModal
           isOpen={Boolean(selectedDetailTx)}
           transaction={selectedDetailTx}
+          currentUser={currentUser}
           onClose={() => setSelectedDetailTx(null)}
           products={products}
         />
@@ -3346,6 +3347,7 @@ export default function BranchMonitoring({
       <TransactionDetailModal
         isOpen={Boolean(selectedDetailTx)}
         transaction={selectedDetailTx}
+        currentUser={currentUser}
         onClose={() => setSelectedDetailTx(null)}
         products={products}
       />

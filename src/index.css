@@ -80,21 +80,23 @@ body {
   animation-play-state: paused;
 }
 
-/* Custom Print Styles for Barcode / Label printing */
+/* Custom Print Styles for Barcode / Label printing (50 x 30 mm) */
 @media print {
   @page {
-    size: auto;
-    margin: 5mm;
+    size: 50mm 30mm;
+    margin: 0;
   }
 
   html, body {
-    height: auto !important;
-    min-height: auto !important;
+    height: 30mm !important;
+    max-height: 30mm !important;
+    width: 50mm !important;
+    max-width: 50mm !important;
     background: #ffffff !important;
     color: #000000 !important;
     margin: 0 !important;
     padding: 0 !important;
-    overflow: visible !important;
+    overflow: hidden !important;
   }
 
   /* Completely remove background app flow when printing barcode modal */
@@ -110,38 +112,45 @@ body {
   #barcode-modal-portal {
     position: static !important;
     display: block !important;
-    width: 100% !important;
-    height: auto !important;
-    min-height: auto !important;
-    margin: 0 auto !important;
+    width: 50mm !important;
+    height: 30mm !important;
+    max-width: 50mm !important;
+    max-height: 30mm !important;
+    margin: 0 !important;
     padding: 0 !important;
     background: transparent !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     box-shadow: none !important;
     border: none !important;
+    overflow: hidden !important;
   }
 
   #barcode-modal-portal .modal-content-card {
     position: static !important;
     box-shadow: none !important;
     border: none !important;
-    margin: 0 auto !important;
+    margin: 0 !important;
     padding: 0 !important;
-    max-width: 100% !important;
-    width: auto !important;
+    max-width: 50mm !important;
+    max-height: 30mm !important;
+    width: 50mm !important;
+    height: 30mm !important;
     background: transparent !important;
-    overflow: visible !important;
+    overflow: hidden !important;
   }
 
-  /* Printable barcode area card */
+  /* Printable barcode area card (50 x 30 mm) */
   #printable-barcode-area {
     display: block !important;
     position: static !important;
-    margin: 0 auto !important;
+    margin: 0 !important;
     padding: 0 !important;
-    max-width: 85mm !important;
-    width: 100% !important;
+    max-width: 50mm !important;
+    max-height: 30mm !important;
+    width: 50mm !important;
+    height: 30mm !important;
+    overflow: hidden !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
     page-break-before: avoid !important;
@@ -152,11 +161,18 @@ body {
 
   #printable-barcode-area > div {
     background: #ffffff !important;
-    border: 1.5pt dashed #6366f1 !important;
-    border-radius: 12px !important;
+    border: none !important;
+    border-radius: 0 !important;
+    width: 50mm !important;
+    height: 30mm !important;
+    max-width: 50mm !important;
+    max-height: 30mm !important;
+    box-sizing: border-box !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
-    margin: 0 auto !important;
+    margin: 0 !important;
+    padding: 1.5mm !important;
+    overflow: hidden !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }

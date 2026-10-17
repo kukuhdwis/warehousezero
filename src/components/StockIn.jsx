@@ -95,6 +95,12 @@ export default function StockIn({
   const [deliveryNoteNumber, setDeliveryNoteNumber] = useState('');
   const [notes, setNotes] = useState('');
   const [user, setUser] = useState(currentUser?.name || (isBranchStaff ? 'Staff Cabang' : 'Staff Gudang Pusat'));
+
+  React.useEffect(() => {
+    if (currentUser?.name) {
+      setUser(currentUser.name);
+    }
+  }, [currentUser]);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [successModalData, setSuccessModalData] = useState(null);
   const [confirmingTransferId, setConfirmingTransferId] = useState(null);
@@ -1438,6 +1444,7 @@ const parseScannedSKU = (text) => {
       <TransactionSuccessModal
         isOpen={Boolean(successModalData)}
         transaction={successModalData}
+        currentUser={currentUser}
         onClose={() => setSuccessModalData(null)}
       />
 
