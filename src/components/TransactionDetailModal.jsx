@@ -73,8 +73,18 @@ export default function TransactionDetailModal({
 
   if (!isOpen || !transaction) return null;
 
-  // Resolve active operator name according to logged-in user account
-  const activeOperator = currentUser?.name 
+  // 1. Petugas yang melakukan input transaksi (sesuai data transaksi yang dicatat di database)
+  const transactionOperator = transaction?.user 
+    || transaction?.performerName 
+    || transaction?.operator 
+    || transaction?.staffName 
+    || transaction?.cashierName 
+    || currentUser?.name 
+    || currentUser?.displayName 
+    || 'Petugas';
+
+  // 2. Petugas/Operator yang saat ini sedang login / mencetak dokumen
+  const printOperator = currentUser?.name 
     || currentUser?.displayName 
     || (currentUser?.email ? currentUser.email.split('@')[0] : '')
     || (typeof window !== 'undefined' && (() => {
@@ -83,9 +93,7 @@ export default function TransactionDetailModal({
           return u?.name || u?.displayName || (u?.email ? u.email.split('@')[0] : '');
         } catch (e) { return ''; }
       })())
-    || transaction?.user 
-    || transaction?.performerName 
-    || 'Operator';
+    || transactionOperator;
 
   const isRejectedReturn = Boolean(transaction.transactionType === 'TRANSFER_REJECTED_RETURN' || transaction.status === 'REJECTED_RETURN');
   const isOutboundRejected = Boolean(transaction.transferStatus === 'REJECTED');
@@ -221,7 +229,7 @@ export default function TransactionDetailModal({
       doc.setFont("helvetica", "normal");
       doc.text(`: ${invoiceNo}`, 50, 43);
       doc.text(`: ${dateFormatted}`, 50, 49);
-      doc.text(`: ${activeOperator}`, 50, 55);
+      doc.text(`: ${transactionOperator}`, 50, 55);
 
       // Right-side Info: Customer / Destination
       doc.setFont("helvetica", "bold");
@@ -327,7 +335,7 @@ export default function TransactionDetailModal({
         timeZoneName: 'short'
       }).format(now);
       doc.setTextColor(110, 110, 110);
-      doc.text(`Dicetak pada: ${printTimeStr} oleh operator: ${activeOperator} • Dokumen sah Warehouse Zero`, 14, sigY + 5);
+      doc.text(`Dicetak pada: ${printTimeStr} oleh operator: ${printOperator} • Dokumen sah Warehouse Zero`, 14, sigY + 5);
       doc.setTextColor(0, 0, 0);
 
       const signBoxY = sigY + 12;
@@ -353,13 +361,13 @@ export default function TransactionDetailModal({
       doc.line(pageWidth / 2 - 21, signBoxY + 22, pageWidth / 2 + 21, signBoxY + 22);
       doc.line(pageWidth - 56, signBoxY + 22, pageWidth - 14, signBoxY + 22);
 
-      // Signer Names underneath signature lines
+      // Signer Names underneath signature lines (Petugas yang memproses/menginput transaksi)
       doc.setFontSize(8);
       if (isSale) {
         doc.setFont("helvetica", "normal");
         doc.text(`( ${transaction.customerName || '.....................'} )`, 35, signBoxY + 26.5, { align: 'center' });
         doc.setFont("helvetica", "bold");
-        doc.text(`( ${activeOperator} )`, pageWidth / 2, signBoxY + 26.5, { align: 'center' });
+        doc.text(`( ${transactionOperator} )`, pageWidth / 2, signBoxY + 26.5, { align: 'center' });
         doc.setFont("helvetica", "normal");
         doc.text(`( ..................... )`, pageWidth - 35, signBoxY + 26.5, { align: 'center' });
       } else {
@@ -367,7 +375,7 @@ export default function TransactionDetailModal({
         doc.text(`( ..................... )`, 35, signBoxY + 26.5, { align: 'center' });
         doc.text(`( ..................... )`, pageWidth / 2, signBoxY + 26.5, { align: 'center' });
         doc.setFont("helvetica", "bold");
-        doc.text(`( ${activeOperator} )`, pageWidth - 35, signBoxY + 26.5, { align: 'center' });
+        doc.text(`( ${transactionOperator} )`, pageWidth - 35, signBoxY + 26.5, { align: 'center' });
       }
 
       // --- SAVE FILE (Format: YYYY-MM-DD_[NOMOR_DOKUMEN].pdf) ---
@@ -514,7 +522,7 @@ export default function TransactionDetailModal({
                   Petugas Pelaksana
                 </span>
                 <span className="font-bold text-slate-800 mt-0.5 block truncate">
-                  {transaction.user || transaction.performerName || 'Staff'}
+                  {transactionOperator}
                 </span>
               </div>
 
@@ -523,7 +531,7 @@ export default function TransactionDetailModal({
                   Operator Cetak
                 </span>
                 <span className="font-bold text-indigo-700 mt-0.5 block truncate">
-                  {activeOperator}
+                  {printOperator}
                 </span>
               </div>
             </div>

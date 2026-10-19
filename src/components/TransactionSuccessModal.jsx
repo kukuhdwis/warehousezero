@@ -29,8 +29,18 @@ export default function TransactionSuccessModal({
 }) {
   if (!isOpen || !transaction) return null;
 
-  // Resolve active operator name according to logged-in user account
-  const activeOperator = currentUser?.name 
+  // 1. Petugas yang melakukan input transaksi (sesuai data transaksi yang dicatat)
+  const transactionOperator = transaction?.user 
+    || transaction?.performerName 
+    || transaction?.operator 
+    || transaction?.staffName 
+    || transaction?.cashierName 
+    || currentUser?.name 
+    || currentUser?.displayName 
+    || 'Operator';
+
+  // 2. Petugas yang saat ini mencetak
+  const printOperator = currentUser?.name 
     || currentUser?.displayName 
     || (currentUser?.email ? currentUser.email.split('@')[0] : '')
     || (typeof window !== 'undefined' && (() => {
@@ -39,9 +49,7 @@ export default function TransactionSuccessModal({
           return u?.name || u?.displayName || (u?.email ? u.email.split('@')[0] : '');
         } catch (e) { return ''; }
       })())
-    || transaction?.user 
-    || transaction?.performerName 
-    || 'Operator';
+    || transactionOperator;
 
   const isInbound = transaction.type === 'IN';
   const isBundling = Boolean(transaction.isBundling || transaction.transactionType === 'CUSTOM_BUNDLING');
@@ -110,7 +118,7 @@ export default function TransactionSuccessModal({
         doc.setFont("helvetica", "normal");
         doc.text(`: ${invoiceNo}`, pageWidth - 45, 33);
         doc.text(`: ${txDate}`, pageWidth - 45, 39);
-        doc.text(`: ${activeOperator}`, pageWidth - 45, 45);
+        doc.text(`: ${transactionOperator}`, pageWidth - 45, 45);
 
         // --- TABLE ---
         const tableColumn = ["No", "SKU", "Nama Barang", "Qty", "Jumlah (Rp)", "Keterangan"];
@@ -195,7 +203,7 @@ export default function TransactionSuccessModal({
         doc.setFontSize(7.5);
         doc.setFont("helvetica", "italic");
         doc.setTextColor(110, 110, 110);
-        doc.text(`Dicetak pada: ${printTimeStr} oleh operator: ${activeOperator}`, 14, finalY + 11.5);
+        doc.text(`Dicetak pada: ${printTimeStr} oleh operator: ${printOperator}`, 14, finalY + 11.5);
         doc.setTextColor(0, 0, 0);
 
         doc.setLineWidth(0.4);
@@ -222,7 +230,7 @@ export default function TransactionSuccessModal({
         doc.text(`( ${transaction.customerName || '.....................'} )`, 35, finalY + 61, { align: 'center' });
         doc.text(`( ..................... )`, pageWidth / 2, finalY + 61, { align: 'center' });
         doc.setFont("helvetica", "bold");
-        doc.text(`( ${activeOperator} )`, pageWidth - 35, finalY + 61, { align: 'center' });
+        doc.text(`( ${transactionOperator} )`, pageWidth - 35, finalY + 61, { align: 'center' });
 
         // --- SAVE (Format: YYYY-MM-DD_[NOMOR_DOKUMEN].pdf) ---
         let txDateObj = new Date();
@@ -374,7 +382,7 @@ export default function TransactionSuccessModal({
               <div>
                 <span className="text-[10px] text-slate-400 block font-bold uppercase">Petugas / Operator</span>
                 <span className="font-bold text-slate-800 truncate block mt-0.5">
-                  {activeOperator}
+                  {transactionOperator}
                 </span>
               </div>
             </div>
