@@ -86,3 +86,7 @@ skills-lock.json
 # Raw duplicate asset folders
 NDK asset/
 public/NDK asset/
+
+# Agent implementations log
+.implementations/
+

@@ -1,4 +1,4 @@
-import { functions, isFirebaseConfigured } from './firebase';
+import { functions, isFirebaseConfigured } from './firebase.js';
 import { httpsCallable } from 'firebase/functions';
 
 /**

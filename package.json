@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "node ./scripts/verify_imports.js && vite build",
     "check-imports": "node ./scripts/verify_imports.js",
+    "test:e2e": "node ./scripts/test_e2e_journeys.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

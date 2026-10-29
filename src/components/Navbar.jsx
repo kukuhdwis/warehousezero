@@ -81,10 +81,25 @@ export default function Navbar({
     if (onNavigate) {
       if (notif.type === 'STOCK_REQUEST_SUBMITTED') {
         if (currentUser?.role === 'ADMIN' || currentUser?.role === 'STAFF_PUSAT' || currentUser?.role === 'PUSAT') {
-          onNavigate('stock-out', { type: 'STOCK_REQUEST_SUBMITTED', metaId: notif.metaId, notif });
+          onNavigate('stock-out', { 
+            type: 'STOCK_REQUEST_SUBMITTED', 
+            metaId: notif.metaId,
+            metaIds: notif.metaIds || (notif.metaId ? [notif.metaId] : []),
+            batchId: notif.batchId,
+            branchId: notif.branchId,
+            branchName: notif.branchName,
+            items: notif.items,
+            notif 
+          });
         }
       } else if (notif.type === 'STOCK_TRANSFER_INCOMING' || notif.type === 'STOCK_REQUEST_APPROVED') {
-        onNavigate('stock-in', { type: notif.type, metaId: notif.metaId, notif });
+        onNavigate('stock-in', { 
+          type: notif.type, 
+          metaId: notif.metaId, 
+          metaIds: notif.metaIds || (notif.metaId ? [notif.metaId] : []),
+          items: notif.items,
+          notif 
+        });
       } else if (notif.type === 'STOCK_REQUEST_REJECTED') {
         onNavigate('stock-in', { type: notif.type, tab: 'REQUEST_STOCK', metaId: notif.metaId, notif });
       } else if (notif.type === 'STOCK_TRANSFER_RECEIVED') {
@@ -93,7 +108,16 @@ export default function Navbar({
         onNavigate('history', { type: 'STOCK_TRANSFER_REJECTED', metaId: notif.metaId, notif });
       } else if (notif.type === 'INVENTORY_REQUEST') {
         if (currentUser?.role === 'ADMIN' || currentUser?.role === 'STAFF_PUSAT' || currentUser?.role === 'PUSAT') {
-          onNavigate('products', { tab: 'APPROVAL_REQUESTS', metaId: notif.metaId });
+          onNavigate('products', { 
+            tab: 'APPROVAL_REQUESTS', 
+            metaId: notif.metaId,
+            metaIds: notif.metaIds || (notif.metaId ? [notif.metaId] : []),
+            batchId: notif.batchId,
+            branchId: notif.branchId,
+            branchName: notif.branchName,
+            items: notif.items,
+            notif
+          });
         }
       } else if (notif.type === 'INVENTORY_APPROVED' || notif.type === 'INVENTORY_REJECTED') {
         onNavigate('products', { tab: 'MY_BRANCH_INVENTORY' });

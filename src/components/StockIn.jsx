@@ -46,9 +46,10 @@ export default function StockIn({
   onRecordMovement, 
   onConfirmTransfer, 
   onRejectTransfer,
-  onRequestStock 
+  onRequestStock,
+  onClearInitialTab
 }) {
-  const isBranchStaff = currentUser?.role === 'STAFF_BRANCH';
+  const isBranchStaff = currentUser?.role === 'STAFF_BRANCH' || (currentUser?.branchId && currentUser?.branchId !== 'ALL' && currentUser?.role !== 'ADMIN' && currentUser?.role !== 'STAFF_PUSAT' && currentUser?.role !== 'PUSAT');
 
   // Alert Modal State
   const [alertModal, setAlertModal] = useState(null);
@@ -64,6 +65,9 @@ export default function StockIn({
   React.useEffect(() => {
     if (initialTab) {
       setActiveBranchTab(initialTab);
+      if (onClearInitialTab) {
+        onClearInitialTab();
+      }
     }
   }, [initialTab]);
 
@@ -283,16 +287,24 @@ const parseScannedSKU = (text) => {
       const { items, deliveryNote, totalQty, notes: noteText, user: userName } = pendingConfirmBatchInbound;
       const finalNotes = noteText && noteText.trim() ? noteText.trim() : '';
 
-      const manifestItems = items.map(item => ({
-        productId: item.productId,
-        sku: item.sku || '-',
-        productName: item.productName || item.name || '-',
-        qty: Math.max(1, Number(item.qty_in) || 1),
-        unit: item.unit || 'Pcs',
-        notes: item.notes || item.supplier || '-',
-        price: Number(item.price || item.selling_price || 0),
-        costPrice: Number(item.costPrice || item.cost_price || item.reseller_price || 0)
-      }));
+      const manifestItems = items.map(item => {
+        const prod = safeProducts.find(p => p.id === item.productId || p.sku === item.sku);
+        const itemQty = Math.max(1, Number(item.qty_in) || 1);
+        const priceVal = Number(item.price || item.selling_price || prod?.cost_price || prod?.costPrice || prod?.reseller_price || prod?.price || 0);
+        const costVal = Number(item.costPrice || item.cost_price || prod?.cost_price || 0);
+        return {
+          productId: item.productId,
+          sku: item.sku || '-',
+          productName: item.productName || item.name || '-',
+          qty: itemQty,
+          unit: item.unit || 'Pcs',
+          notes: item.notes || item.supplier || '-',
+          price: priceVal,
+          totalPrice: priceVal * itemQty,
+          costPrice: costVal
+        };
+      });
+      const inboundTotalAmount = manifestItems.reduce((acc, i) => acc + (Number(i.totalPrice) || 0), 0);
 
       await onRecordMovement({
         productId: manifestItems.length === 1 ? manifestItems[0].productId : 'MULTI-ITEM-INBOUND',
@@ -301,6 +313,8 @@ const parseScannedSKU = (text) => {
         type: 'IN',
         qty: totalQty,
         unit: 'Pcs',
+        price: manifestItems.length === 1 ? manifestItems[0].price : 0,
+        totalPrice: inboundTotalAmount,
         notes: finalNotes,
         source: items[0]?.supplier || 'PABRIK_PRODUKSI_PUSAT',
         deliveryNote: deliveryNote,
@@ -315,6 +329,8 @@ const parseScannedSKU = (text) => {
         sku: 'BATCH-INBOUND',
         type: 'IN',
         qty: totalQty,
+        price: manifestItems.length === 1 ? manifestItems[0].price : 0,
+        totalPrice: inboundTotalAmount,
         items: manifestItems,
         notes: finalNotes,
         deliveryNote: deliveryNote,
@@ -384,9 +400,13 @@ const parseScannedSKU = (text) => {
   ).sort((a, b) => new Date(b.receivedAt || b.timestamp || 0) - new Date(a.receivedAt || a.timestamp || 0));
 
   // Branch Stock Requests
-  const myStockRequests = safeStockRequests.filter(
-    r => r && (isBranchStaff ? r.branchId === currentUser?.branchId : true)
-  );
+  const myStockRequests = safeStockRequests.filter(r => {
+    if (!r) return false;
+    if (!isBranchStaff) return true;
+    const userBranch = (currentUser?.branchId || '').trim().toLowerCase();
+    const itemBranch = (r.branchId || '').trim().toLowerCase();
+    return Boolean(userBranch && itemBranch === userBranch);
+  });
 
   const selectedProduct = safeProducts.find(p => p.id === selectedProductId || p.sku === selectedProductId);
 
@@ -469,6 +489,8 @@ const parseScannedSKU = (text) => {
           sku: prod.sku,
           productName: prod.name,
           brand: prod.brand || 'Generic',
+          engine_type: prod.engine_type || prod.engineType || prod.machineCategory || prod.kategoriMesin || '',
+          car_variant: prod.car_variant || prod.carVariant || '',
           qty: 10,
           notes: ''
         }
@@ -479,7 +501,14 @@ const parseScannedSKU = (text) => {
   const handleToggleAllFilteredInRequest = () => {
     const filteredProducts = sortWithStockFirst(
       safeProducts.filter(p => 
-        p.status !== 'INACTIVE' && matchesSearch(requestSearchTerm, p.name, p.sku, p.brand)
+        p.status !== 'INACTIVE' && matchesSearch(
+          requestSearchTerm, 
+          p.name, 
+          p.sku, 
+          p.brand,
+          p.engine_type || p.engineType || p.machineCategory || p.kategoriMesin,
+          p.car_variant || p.carVariant
+        )
       ),
       p => Number(p.currentStock ?? p.stockQuantity ?? p.stock ?? 0)
     );
@@ -498,6 +527,8 @@ const parseScannedSKU = (text) => {
             sku: prod.sku,
             productName: prod.name,
             brand: prod.brand || 'Generic',
+            engine_type: prod.engine_type || prod.engineType || prod.machineCategory || prod.kategoriMesin || '',
+            car_variant: prod.car_variant || prod.carVariant || '',
             qty: 10,
             notes: ''
           });
@@ -576,6 +607,8 @@ const parseScannedSKU = (text) => {
 
     const finalNotes = notes && notes.trim() ? notes.trim() : '';
 
+    const unitPrice = Number(selectedProduct.cost_price || selectedProduct.costPrice || selectedProduct.reseller_price || selectedProduct.price || 0);
+    const subtotal = unitPrice * Number(qty);
     const txPayload = {
       productId: selectedProduct.id,
       sku: selectedProduct.sku,
@@ -583,6 +616,9 @@ const parseScannedSKU = (text) => {
       type: 'IN',
       qty: Number(qty),
       unit: 'Pcs',
+      price: unitPrice,
+      costPrice: Number(selectedProduct.cost_price || selectedProduct.costPrice || 0),
+      totalPrice: subtotal,
       notes: finalNotes,
       source: 'PABRIK_PRODUKSI_PUSAT',
       deliveryNote: deliveryNoteNumber || `SJ-PABRIK-${Date.now().toString().slice(-6)}`,
@@ -599,6 +635,8 @@ const parseScannedSKU = (text) => {
           productName: txPayload.productName || '-',
           qty: txPayload.qty,
           unit: txPayload.unit || 'Pcs',
+          price: unitPrice,
+          totalPrice: subtotal,
           notes: txPayload.notes || '-'
         }]
       });
@@ -965,15 +1003,40 @@ const parseScannedSKU = (text) => {
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
                   <div className="divide-y divide-slate-100">
                     {myStockRequests.map(req => {
-                      const isPending = req.status === 'PENDING';
+                      // Fallback lookup if legacy doc didn't store engine_type or car_variant
+                      const matchedProd = safeProducts.find(p => p.id === req.productId || (p.sku && req.sku && p.sku.toLowerCase() === req.sku.toLowerCase()));
+                      const engine = req.engine_type || req.engine || matchedProd?.engine_type || matchedProd?.engineType || matchedProd?.machineCategory || matchedProd?.kategoriMesin;
+                      const carVariant = req.car_variant || req.carVariant || matchedProd?.car_variant || matchedProd?.carVariant;
+
+                      // Check if already dispatched/received in transfers
+                      const matchedTransfer = safeTransfers.find(t => 
+                        (t.targetBranchId === req.branchId || t.to_branch_id === req.branchId) &&
+                        t.status !== 'REJECTED' && t.status !== 'CANCELLED' &&
+                        (
+                          (req.deliveryNote && t.deliveryNote === req.deliveryNote) ||
+                          t.productId === req.productId ||
+                          (t.sku && req.sku && t.sku.toLowerCase() === req.sku.toLowerCase()) ||
+                          (Array.isArray(t.items) && t.items.some(ti => ti.productId === req.productId || (ti.sku && req.sku && ti.sku.toLowerCase() === req.sku.toLowerCase()) || ti.requestId === req.id))
+                        )
+                      );
+
                       const isRejected = req.status === 'REJECTED';
-                      const isFulfilled = req.status === 'FULFILLED' || req.status === 'APPROVED';
+                      const isFulfilled = req.status === 'FULFILLED' || !!matchedTransfer || (req.status === 'APPROVED' && !!req.deliveryNote);
+                      const isApproved = req.status === 'APPROVED' && !isFulfilled;
+                      const isPending = !isRejected && !isFulfilled && !isApproved;
+
+                      const deliveryNoteDisplay = req.deliveryNote || matchedTransfer?.deliveryNote;
 
                       return (
                         <div key={req.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-3 hover:bg-slate-50/70 transition">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-bold text-slate-900 text-sm">{req.productName}</span>
+                              {engine && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80 whitespace-nowrap">
+                                  {engine}
+                                </span>
+                              )}
                               <span className="px-2 py-0.2 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700">
                                 {req.brand || 'Generic'}
                               </span>
@@ -982,18 +1045,40 @@ const parseScannedSKU = (text) => {
                                   ? 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse' 
                                   : isRejected
                                     ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                                    : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    : isApproved
+                                      ? 'bg-sky-100 text-sky-800 border border-sky-300'
+                                      : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                               }`}>
                                 {isPending 
                                   ? '⏳ Menunggu Respon Pusat' 
                                   : isRejected
                                     ? '✕ Ditolak oleh Pusat'
-                                    : `✓ Disetujui & Dikirim (${req.deliveryNote || 'Dalam Pengiriman'})`}
+                                    : isApproved
+                                      ? '✓ Disetujui Pusat (ACC) - Menyiapkan Kiriman'
+                                      : `✓ Disetujui & Dikirim (${deliveryNoteDisplay || 'Dalam Pengiriman'})`}
                               </span>
                             </div>
                             
-                            <p className="text-xs text-slate-500 mt-1">
-                              Diajukan pada: {formatDate(req.requestedAt)} • SKU: {req.sku}
+                            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                              <span>Diajukan pada: {formatDate(req.requestedAt)}</span>
+                              <span>•</span>
+                              <span className="font-mono font-semibold text-slate-600">SKU: {req.sku}</span>
+                              {carVariant && carVariant !== '-' && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-slate-700 font-sans">
+                                    Mobil: <strong className="text-slate-800 font-semibold">{carVariant}</strong>
+                                  </span>
+                                </>
+                              )}
+                              {deliveryNoteDisplay && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-indigo-600 font-mono font-medium">
+                                    SJ: {deliveryNoteDisplay}
+                                  </span>
+                                </>
+                              )}
                             </p>
 
                             {req.notes && (
@@ -1015,15 +1100,35 @@ const parseScannedSKU = (text) => {
                               </div>
                             )}
 
+                            {/* ACC / Approved Box */}
+                            {isApproved && (
+                              <div className="mt-2.5 p-3 bg-sky-50 border border-sky-200 rounded-xl text-xs text-sky-900">
+                                <p className="font-bold text-sky-800 flex items-center gap-1.5">
+                                  <CheckCircle2 className="w-4 h-4 text-sky-600 flex-shrink-0" />
+                                  Permintaan Telah Di-ACC oleh Kantor Pusat
+                                </p>
+                                <p className="text-sky-950 mt-0.5">
+                                  Gudang Pusat telah menyetujui permintaan ini dan sedang mempersiapkan barang untuk pengiriman fisik.
+                                </p>
+                                {req.approvedBy && (
+                                  <span className="text-[10px] text-sky-700 block mt-1">
+                                    Ditinjau oleh: <strong>{req.approvedBy}</strong> {req.approvedAt ? `(${formatDate(req.approvedAt)})` : ''}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
                             {/* Fulfilled Info Box */}
                             {isFulfilled && (
                               <div className="mt-2.5 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900">
                                 <p className="font-bold text-emerald-800">
                                   ✓ Telah Disetujui & Dikirimkan oleh Pusat
                                 </p>
-                                <p className="text-emerald-900 mt-0.5">
-                                  No. Surat Jalan: <strong className="font-mono font-bold">{req.deliveryNote}</strong>
-                                </p>
+                                {deliveryNoteDisplay && (
+                                  <p className="text-emerald-900 mt-0.5">
+                                    No. Surat Jalan: <strong className="font-mono font-bold">{deliveryNoteDisplay}</strong>
+                                  </p>
+                                )}
                                 <span className="text-[10px] text-emerald-700 block mt-1">
                                   Silakan cek tab <strong>Kiriman dari Pusat</strong> untuk konfirmasi penerimaan setelah paket tiba.
                                 </span>
@@ -1305,12 +1410,22 @@ const parseScannedSKU = (text) => {
                 <div className="max-h-44 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
                   {sortWithStockFirst(
                     safeProducts.filter(p => 
-                      p.status !== 'INACTIVE' && matchesSearch(requestSearchTerm, p.name, p.sku, p.brand)
+                      p.status !== 'INACTIVE' && matchesSearch(
+                        requestSearchTerm, 
+                        p.name, 
+                        p.sku, 
+                        p.brand,
+                        p.engine_type || p.engineType || p.machineCategory || p.kategoriMesin,
+                        p.car_variant || p.carVariant
+                      )
                     ),
                     p => Number(p.currentStock ?? p.stockQuantity ?? p.stock ?? 0)
                   )
                     .map(prod => {
                       const isSelected = requestItems.some(item => item.productId === prod.id);
+                      const engine = prod.engine_type || prod.engineType || prod.machineCategory || prod.kategoriMesin || 'Universal';
+                      const carVariant = prod.car_variant || prod.carVariant;
+
                       return (
                         <div
                           key={prod.id}
@@ -1327,14 +1442,27 @@ const parseScannedSKU = (text) => {
                               className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer flex-shrink-0"
                             />
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-bold text-slate-800 text-xs leading-snug">{prod.name}</span>
+                                {engine && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80 whitespace-nowrap flex-shrink-0">
+                                    {engine}
+                                  </span>
+                                )}
                                 <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap flex-shrink-0">
                                   {prod.brand || 'Generic'}
                                 </span>
                               </div>
-                              <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center gap-1 flex-wrap">
+                              <div className="text-[11px] text-slate-500 font-mono mt-1 flex items-center gap-1.5 flex-wrap leading-tight">
                                 <span className="whitespace-nowrap font-semibold text-slate-600">SKU: {prod.sku}</span>
+                                {carVariant && carVariant !== '-' && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="text-slate-700 font-sans font-medium whitespace-normal break-words">
+                                      Mobil: <strong className="text-slate-800 font-semibold">{carVariant}</strong>
+                                    </span>
+                                  </>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1359,22 +1487,43 @@ const parseScannedSKU = (text) => {
                   </div>
                 ) : (
                   <div className="max-h-56 overflow-y-auto space-y-2.5 pr-1">
-                    {requestItems.map((item, index) => (
-                      <div key={item.productId} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <span className="font-bold text-slate-800 text-xs">{item.productName}</span>
-                            <span className="ml-1.5 text-[11px] font-mono text-slate-500">({item.sku})</span>
+                    {requestItems.map((item, index) => {
+                      const engine = item.engine_type || item.engine;
+                      const carVariant = item.car_variant || item.carVariant;
+
+                      return (
+                        <div key={item.productId} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-slate-800 text-xs">{item.productName}</span>
+                                {engine && (
+                                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80 whitespace-nowrap">
+                                    {engine}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                <span>SKU: {item.sku}</span>
+                                {carVariant && carVariant !== '-' && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="text-slate-700 font-sans font-medium">
+                                      Mobil: <strong className="text-slate-800">{carVariant}</strong>
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveProductFromRequest(index)}
+                              className="text-rose-500 hover:text-rose-700 p-0.5 cursor-pointer shrink-0"
+                              title="Hapus item ini"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveProductFromRequest(index)}
-                            className="text-rose-500 hover:text-rose-700 p-0.5 cursor-pointer"
-                            title="Hapus item ini"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                           <div>
@@ -1405,7 +1554,8 @@ const parseScannedSKU = (text) => {
                           </div>
                         </div>
                       </div>
-                    ))}
+                    );
+                  })}
                   </div>
                 )}
               </div>
@@ -1445,6 +1595,8 @@ const parseScannedSKU = (text) => {
         isOpen={Boolean(successModalData)}
         transaction={successModalData}
         currentUser={currentUser}
+        products={safeProducts}
+        branches={branches}
         onClose={() => setSuccessModalData(null)}
       />
 
@@ -1520,6 +1672,8 @@ const parseScannedSKU = (text) => {
             name: item.productName,
             sku: item.sku,
             brand: item.brand,
+            engine: item.engine_type || item.engine,
+            variant: item.car_variant || item.carVariant,
             qty: item.qty,
             unit: 'Pcs'
           }))}

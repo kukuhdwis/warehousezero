@@ -1,6 +1,6 @@
 // Authentication service for NDK Warehouse WMS
 import { initializeApp, getApps } from 'firebase/app';
-import { auth, db, isFirebaseConfigured, firebaseConfig } from './firebase';
+import { auth, db, isFirebaseConfigured, firebaseConfig } from './firebase.js';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,

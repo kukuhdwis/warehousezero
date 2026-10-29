@@ -2485,6 +2485,7 @@ export default function BranchMonitoring({
           currentUser={currentUser}
           onClose={() => setSelectedDetailTx(null)}
           products={products}
+          branches={branches}
         />
 
         {/* MODAL 8: DETAIL ESTIMASI PROFIT & LAPORAN PENJUALAN */}
@@ -3350,6 +3351,7 @@ export default function BranchMonitoring({
         currentUser={currentUser}
         onClose={() => setSelectedDetailTx(null)}
         products={products}
+        branches={branches}
       />
 
     </div>

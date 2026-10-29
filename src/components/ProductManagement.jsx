@@ -208,6 +208,7 @@ export default function ProductManagement({
   onDeleteBundlesBatch,
   onImportBundlesBatch,
   initialTab,
+  onClearInitialTab,
   onCreateProduct, 
   onUpdateProduct, 
   onDeleteProduct, 
@@ -278,6 +279,9 @@ export default function ProductManagement({
   React.useEffect(() => {
     if (initialTab) {
       setActiveSubTab(initialTab);
+      if (onClearInitialTab) {
+        onClearInitialTab();
+      }
     }
   }, [initialTab]);
 
@@ -1498,6 +1502,8 @@ export default function ProductManagement({
           sku: prod.sku,
           productName: prod.name,
           brand: prod.brand || 'Generic',
+          engine_type: prod.engine_type || prod.engineType || prod.machineCategory || prod.kategoriMesin || '',
+          car_variant: prod.car_variant || prod.carVariant || '',
           price: prod.price || 0,
           unit: prod.unit || 'Pcs',
           stockQuantity: 10,
@@ -1510,7 +1516,14 @@ export default function ProductManagement({
 
   const handleToggleAllFilteredInRequest = () => {
     const filteredProducts = sortWithStockFirst(products.filter(p => 
-      p.status !== 'INACTIVE' && matchesSearch(requestSearchTerm, p.name, p.sku, p.brand)
+      p.status !== 'INACTIVE' && matchesSearch(
+        requestSearchTerm, 
+        p.name, 
+        p.sku, 
+        p.brand,
+        p.engine_type || p.engineType || p.machineCategory || p.kategoriMesin,
+        p.car_variant || p.carVariant
+      )
     ), p => Number(p.currentStock ?? p.stock ?? 0));
 
     const allSelected = filteredProducts.every(prod => requestItems.some(item => item.productId === prod.id));
@@ -1530,6 +1543,8 @@ export default function ProductManagement({
             sku: prod.sku,
             productName: prod.name,
             brand: prod.brand || 'Generic',
+            engine_type: prod.engine_type || prod.engineType || prod.machineCategory || prod.kategoriMesin || '',
+            car_variant: prod.car_variant || prod.carVariant || '',
             price: prod.price || 0,
             unit: prod.unit || 'Pcs',
             stockQuantity: 10,
@@ -1585,6 +1600,8 @@ export default function ProductManagement({
         sku: item.sku,
         productName: item.productName,
         brand: item.brand,
+        engine_type: item.engine_type || item.engine || '',
+        car_variant: item.car_variant || item.carVariant || '',
         price: item.price,
         unit: item.unit || 'Pcs',
         stockQuantity: Number(item.stockQuantity) || 1,
@@ -4650,12 +4667,22 @@ export default function ProductManagement({
                 <div className="max-h-44 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
                   {sortWithStockFirst(
                     products.filter(p => 
-                      p.status !== 'INACTIVE' && matchesSearch(requestSearchTerm, p.name, p.sku, p.brand)
+                      p.status !== 'INACTIVE' && matchesSearch(
+                        requestSearchTerm, 
+                        p.name, 
+                        p.sku, 
+                        p.brand,
+                        p.engine_type || p.engineType || p.machineCategory || p.kategoriMesin,
+                        p.car_variant || p.carVariant
+                      )
                     ),
                     p => Number(p.currentStock ?? p.stock ?? 0)
                   )
                     .map(prod => {
                       const isSelected = requestItems.some(item => item.productId === prod.id);
+                      const engine = prod.engine_type || prod.engineType || prod.machineCategory || prod.kategoriMesin || 'Universal';
+                      const carVariant = prod.car_variant || prod.carVariant;
+
                       return (
                         <div
                           key={prod.id}
@@ -4672,14 +4699,27 @@ export default function ProductManagement({
                               className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer flex-shrink-0"
                             />
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-bold text-slate-800 text-xs leading-snug">{prod.name}</span>
+                                {engine && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80 whitespace-nowrap flex-shrink-0">
+                                    {engine}
+                                  </span>
+                                )}
                                 <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap flex-shrink-0">
                                   {prod.brand || 'Generic'}
                                 </span>
                               </div>
-                              <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center gap-1 flex-wrap">
+                              <div className="text-[11px] text-slate-500 font-mono mt-1 flex items-center gap-1.5 flex-wrap leading-tight">
                                 <span className="whitespace-nowrap font-semibold text-slate-600">SKU: {prod.sku}</span>
+                                {carVariant && carVariant !== '-' && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="text-slate-700 font-sans font-medium whitespace-normal break-words">
+                                      Mobil: <strong className="text-slate-800 font-semibold">{carVariant}</strong>
+                                    </span>
+                                  </>
+                                )}
                                 <span>•</span>
                                 <span className="whitespace-nowrap text-slate-700 font-bold">Rp {(Number(prod.price) || 0).toLocaleString('id-ID')}</span>
                               </div>
@@ -4706,22 +4746,43 @@ export default function ProductManagement({
                   </div>
                 ) : (
                   <div className="max-h-56 overflow-y-auto space-y-2.5 pr-1">
-                    {requestItems.map((item) => (
-                      <div key={item.productId} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <span className="font-bold text-slate-800 text-xs">{item.productName}</span>
-                            <span className="ml-1.5 text-[11px] font-mono text-slate-500">({item.sku})</span>
+                    {requestItems.map((item) => {
+                      const engine = item.engine_type || item.engine;
+                      const carVariant = item.car_variant || item.carVariant;
+
+                      return (
+                        <div key={item.productId} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-slate-800 text-xs">{item.productName}</span>
+                                {engine && (
+                                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80 whitespace-nowrap">
+                                    {engine}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                <span>SKU: {item.sku}</span>
+                                {carVariant && carVariant !== '-' && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="text-slate-700 font-sans font-medium">
+                                      Mobil: <strong className="text-slate-800">{carVariant}</strong>
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItemFromRequest(item.productId)}
+                              className="text-rose-500 hover:text-rose-700 p-0.5 cursor-pointer shrink-0"
+                              title="Hapus item ini"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItemFromRequest(item.productId)}
-                            className="text-rose-500 hover:text-rose-700 p-0.5 cursor-pointer"
-                            title="Hapus item ini"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                           <div>
@@ -4765,7 +4826,8 @@ export default function ProductManagement({
                           </div>
                         </div>
                       </div>
-                    ))}
+                    );
+                  })}
                   </div>
                 )}
               </div>
@@ -5870,6 +5932,8 @@ export default function ProductManagement({
           name: item.productName,
           sku: item.sku,
           brand: item.brand,
+          engine: item.engine_type || item.engine,
+          variant: item.car_variant || item.carVariant,
           qty: item.stockQuantity,
           unit: item.unit || 'Pcs',
           note: item.notes || 'Stok fisik cabang',

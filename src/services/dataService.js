@@ -1,11 +1,11 @@
 import * as XLSX from "xlsx";
-import { db, isFirebaseConfigured } from "./firebase";
-import { registerUserInFirebaseAuth, syncUserPasswordInFirebaseAuth } from "./authService";
+import { db, isFirebaseConfigured } from "./firebase.js";
+import { registerUserInFirebaseAuth, syncUserPasswordInFirebaseAuth } from "./authService.js";
 import {
   callCreateSystemUser,
   callUpdateSystemUser,
   callDeleteSystemUser
-} from "./cloudFunctionsService";
+} from "./cloudFunctionsService.js";
 import {
   collection,
   getDocs,
@@ -926,9 +926,12 @@ export const requestBatchBranchInventory = async (itemsList, currentUser) => {
   const branchName = rawList[0]?.branchName || currentUser?.branchName || 'Cabang';
   const branchId = rawList[0]?.branchId || currentUser?.branchId || 'CABANG';
 
+  const batchId = `INV-REQ-${Date.now()}`;
+
   try {
     const promises = rawList.map(async (data) => {
       const newInventoryRequest = {
+        batchId: batchId,
         branchId: branchId,
         branchName: branchName,
         productId: data.productId,
@@ -966,8 +969,22 @@ export const requestBatchBranchInventory = async (itemsList, currentUser) => {
       message: `${branchName} mendaftarkan ${productCount} produk (${productPreview}) total ${totalQty} Pcs untuk diverifikasi Pusat.`,
       targetRole: 'ADMIN_AND_PUSAT',
       metaId: results[0]?.id || '',
+      metaIds: results.map(r => r.id),
+      batchId: batchId,
       branchId: branchId,
-      branchName: branchName
+      branchName: branchName,
+      items: results.map(r => ({
+        id: r.id,
+        productId: r.productId,
+        sku: r.sku,
+        productName: r.productName,
+        brand: r.brand,
+        unit: r.unit,
+        price: r.price,
+        stockQuantity: r.stockQuantity,
+        branchId: r.branchId,
+        branchName: r.branchName
+      }))
     });
 
     return results;
@@ -1120,7 +1137,7 @@ export const fetchNotifications = async (currentUser) => {
     const notifs = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
     return notifs.filter(n => {
-      if (currentUser.role === 'ADMIN' || currentUser.role === 'STAFF_PUSAT') {
+      if (currentUser.role === 'ADMIN' || currentUser.role === 'STAFF_PUSAT' || currentUser.role === 'PUSAT') {
         return n.targetRole === 'ADMIN_AND_PUSAT' || n.targetRole === 'ALL';
       }
       if (currentUser.role === 'STAFF_BRANCH') {
@@ -1192,7 +1209,7 @@ export const subscribeNotifications = (currentUser, onUpdate) => {
     return onSnapshot(q, (snapshot) => {
       const notifs = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
       const filtered = notifs.filter(n => {
-        if (currentUser.role === 'ADMIN' || currentUser.role === 'STAFF_PUSAT') {
+        if (currentUser.role === 'ADMIN' || currentUser.role === 'STAFF_PUSAT' || currentUser.role === 'PUSAT') {
           return n.targetRole === 'ADMIN_AND_PUSAT' || n.targetRole === 'ALL';
         }
         if (currentUser.role === 'STAFF_BRANCH') {
@@ -1271,8 +1288,9 @@ export const subscribeStockRequests = (currentUser, onUpdate) => {
     const q = query(collection(db, "stock_requests"), orderBy("requestedAt", "desc"), limit(100));
     return onSnapshot(q, (snapshot) => {
       const list = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      const userBranchId = (currentUser?.branchId || '').trim().toLowerCase();
       const filtered = (currentUser?.role === 'STAFF_BRANCH')
-        ? list.filter(r => r.branchId === currentUser.branchId)
+        ? list.filter(r => (r.branchId || '').trim().toLowerCase() === userBranchId)
         : list;
       onUpdate(filtered);
     }, (err) => {
@@ -1469,10 +1487,10 @@ export const createStockTransfer = async (transferData, currentUser) => {
   };
 
   try {
-    const docRef = await addDoc(collection(db, "stock_transfers"), {
+    const docRef = await addDoc(collection(db, "stock_transfers"), cleanFirestoreData({
       ...newTransfer,
       createdAt: serverTimestamp()
-    });
+    }));
 
     const created = { id: docRef.id, ...newTransfer };
 
@@ -1798,11 +1816,15 @@ export const fetchStockRequests = async (branchId = null) => {
 
 export const createStockRequest = async (requestData, currentUser) => {
   ensureFirebase();
+  const batchId = `REQ-BATCH-${Date.now()}`;
   const newReq = {
+    batchId: batchId,
     productId: requestData.productId,
     sku: requestData.sku,
     productName: requestData.productName,
     brand: requestData.brand || 'Generic',
+    engine_type: requestData.engine_type || requestData.engineType || requestData.machineCategory || requestData.kategoriMesin || '',
+    car_variant: requestData.car_variant || requestData.carVariant || '',
     qty: Number(requestData.qty) || 1,
     unit: 'Pcs',
     branchId: currentUser?.branchId || requestData.branchId,
@@ -1826,7 +1848,23 @@ export const createStockRequest = async (requestData, currentUser) => {
       title: 'Permintaan Kiriman Stok dari Cabang 📦',
       message: `${newReq.branchName} mengajukan permintaan ${newReq.qty} Pcs "${newReq.productName}".`,
       targetRole: 'ADMIN_AND_PUSAT',
-      metaId: docRef.id
+      metaId: docRef.id,
+      metaIds: [docRef.id],
+      batchId: batchId,
+      branchId: newReq.branchId,
+      branchName: newReq.branchName,
+      items: [{
+        id: docRef.id,
+        requestId: docRef.id,
+        productId: newReq.productId,
+        sku: newReq.sku,
+        productName: newReq.productName,
+        brand: newReq.brand,
+        qty: newReq.qty,
+        notes: newReq.notes,
+        branchId: newReq.branchId,
+        branchName: newReq.branchName
+      }]
     });
 
     return created;
@@ -1844,6 +1882,7 @@ export const createBatchStockRequests = async (requestItems, currentUser) => {
   const branchId = currentUser?.branchId || requestItems[0]?.branchId;
   const requestedBy = currentUser?.name || 'Staff Cabang';
   const nowIso = new Date().toISOString();
+  const batchId = `REQ-BATCH-${Date.now()}`;
   const createdList = [];
 
   try {
@@ -1852,10 +1891,13 @@ export const createBatchStockRequests = async (requestItems, currentUser) => {
     for (const item of requestItems) {
       const docRef = doc(collection(db, "stock_requests"));
       const newReq = {
+        batchId: batchId,
         productId: item.productId,
         sku: item.sku,
         productName: item.productName,
         brand: item.brand || 'Generic',
+        engine_type: item.engine_type || item.engineType || item.machineCategory || item.kategoriMesin || '',
+        car_variant: item.car_variant || item.carVariant || '',
         qty: Number(item.qty) || 1,
         unit: 'Pcs',
         branchId: branchId,
@@ -1884,7 +1926,23 @@ export const createBatchStockRequests = async (requestItems, currentUser) => {
       title: 'Permintaan Kiriman Stok dari Cabang 📦',
       message: `${branchName} mengajukan permintaan ${requestItems.length} produk (${previewSummary}).`,
       targetRole: 'ADMIN_AND_PUSAT',
-      metaId: createdList[0]?.id
+      metaId: createdList[0]?.id,
+      metaIds: createdList.map(r => r.id),
+      batchId: batchId,
+      branchId: branchId,
+      branchName: branchName,
+      items: createdList.map(r => ({
+        id: r.id,
+        requestId: r.id,
+        productId: r.productId,
+        sku: r.sku,
+        productName: r.productName,
+        brand: r.brand,
+        qty: r.qty,
+        notes: r.notes,
+        branchId: r.branchId,
+        branchName: r.branchName
+      }))
     });
 
     return createdList;
@@ -1981,6 +2039,102 @@ export const fulfillStockRequest = async (requestId, deliveryNote, currentUser) 
   }
 };
 
+export const fulfillBatchStockRequests = async (requestIds, deliveryNote, currentUser) => {
+  ensureFirebase();
+  try {
+    const list = Array.isArray(requestIds) ? requestIds : [requestIds];
+    if (list.length === 0) return { count: 0 };
+
+    const updateData = {
+      status: 'FULFILLED',
+      fulfilledBy: currentUser?.name || 'Staff Pusat',
+      fulfilledAt: new Date().toISOString(),
+      deliveryNote: deliveryNote || `SJ-HQ-${Date.now().toString().slice(-6)}`
+    };
+
+    const batch = writeBatch(db);
+    list.forEach(id => {
+      const docRef = doc(db, "stock_requests", id);
+      batch.update(docRef, updateData);
+    });
+    await batch.commit();
+
+    await createNotification({
+      type: 'STOCK_REQUEST_APPROVED',
+      title: 'Permintaan Stok Disetujui & Dikirimkan 🚚',
+      message: `Kantor Pusat telah menyetujui ${list.length} permintaan stok dan mengirimkan barang (No. Surat Jalan: ${updateData.deliveryNote}).`,
+      targetRole: 'STAFF_BRANCH',
+      metaId: list[0]
+    });
+
+    return { count: list.length, ...updateData };
+  } catch (err) {
+    console.error("Firestore error fulfilling batch stock requests:", err);
+    throw new Error(`Gagal memproses batch Permintaan Stok: ${err.message}`);
+  }
+};
+
+export const approveStockRequest = async (requestId, currentUser, notes = '') => {
+  ensureFirebase();
+  try {
+    const updateData = {
+      status: 'APPROVED',
+      approvedBy: currentUser?.name || 'Staff Pusat',
+      approvedAt: new Date().toISOString(),
+      ...(notes ? { approvalNotes: notes } : {})
+    };
+    await updateDoc(doc(db, "stock_requests", requestId), updateData);
+
+    await createNotification({
+      type: 'STOCK_REQUEST_APPROVED',
+      title: 'Permintaan Stok Telah Disetujui (ACC) ✓',
+      message: `Kantor Pusat telah MENYETUJUI (ACC) permintaan stok Anda. Barang sedang dipersiapkan untuk dikirim.`,
+      targetRole: 'STAFF_BRANCH',
+      metaId: requestId
+    });
+
+    return { id: requestId, ...updateData };
+  } catch (err) {
+    console.error("Firestore error approving stock request:", err);
+    throw new Error(`Gagal menyetujui (ACC) Permintaan Stok di Firestore: ${err.message}`);
+  }
+};
+
+export const approveBatchStockRequests = async (requestIds, currentUser, notes = '') => {
+  ensureFirebase();
+  try {
+    const list = Array.isArray(requestIds) ? requestIds : [requestIds];
+    if (list.length === 0) return { count: 0 };
+
+    const updateData = {
+      status: 'APPROVED',
+      approvedBy: currentUser?.name || 'Staff Pusat',
+      approvedAt: new Date().toISOString(),
+      ...(notes ? { approvalNotes: notes } : {})
+    };
+
+    const batch = writeBatch(db);
+    list.forEach(id => {
+      const docRef = doc(db, "stock_requests", id);
+      batch.update(docRef, updateData);
+    });
+    await batch.commit();
+
+    await createNotification({
+      type: 'STOCK_REQUEST_APPROVED',
+      title: 'Permintaan Stok Telah Disetujui (ACC) ✓',
+      message: `Kantor Pusat telah MENYETUJUI (ACC) ${list.length} permintaan stok Anda. Barang sedang dipersiapkan untuk dikirim.`,
+      targetRole: 'STAFF_BRANCH',
+      metaId: list[0]
+    });
+
+    return { count: list.length, ...updateData };
+  } catch (err) {
+    console.error("Firestore error approving batch stock requests:", err);
+    throw new Error(`Gagal menyetujui batch Permintaan Stok: ${err.message}`);
+  }
+};
+
 export const cancelStockRequest = async (requestId, user) => {
   ensureFirebase();
   try {
@@ -2055,23 +2209,52 @@ export const purgeTransactions = async (branchId, currentUser) => {
   }
 };
 
+/**
+ * Recursively removes any keys with `undefined` values from an object or array
+ * so that Firestore operations (addDoc, setDoc, updateDoc) never throw:
+ * "Unsupported field value: undefined"
+ */
+const isPlainObject = (obj) => {
+  if (obj === null || typeof obj !== 'object') return false;
+  const proto = Object.getPrototypeOf(obj);
+  return proto === null || proto === Object.prototype;
+};
+
+export const cleanFirestoreData = (data) => {
+  if (data === null || data === undefined) return null;
+  if (Array.isArray(data)) {
+    return data.filter(item => item !== undefined).map(cleanFirestoreData);
+  }
+  if (typeof data === 'object') {
+    if (!isPlainObject(data)) return data;
+    const cleaned = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined) {
+        cleaned[key] = cleanFirestoreData(value);
+      }
+    }
+    return cleaned;
+  }
+  return data;
+};
+
 export const recordStockMovement = async (movementData) => {
   ensureFirebase();
   const isIncrement = movementData.type === 'IN';
   const qtyChange = Number(movementData.qty) || 1;
   const hasMultipleItems = Boolean(movementData.items && Array.isArray(movementData.items) && movementData.items.length > 0);
 
-  const movement = {
+  const movement = cleanFirestoreData({
     ...movementData,
     qty: qtyChange,
     createdAt: new Date().toISOString()
-  };
+  });
 
   try {
-    const docRef = await addDoc(collection(db, "stock_movements"), {
+    const docRef = await addDoc(collection(db, "stock_movements"), cleanFirestoreData({
       ...movement,
       createdAt: serverTimestamp()
-    });
+    }));
 
     // Update product stock in Firestore ONLY if not skipped
     if (!movementData.skipMasterProductUpdate) {
@@ -2571,12 +2754,12 @@ export const createSparkPlanStockTransfer = async (transferData, callerUid = 'ad
 
   for (const item of calculatedItems) {
     const transferId = `TRF-${Date.now()}-${(item.sku || 'SKU').substring(0, 5)}-${Math.floor(Math.random() * 1000)}`;
-    const transferPayload = {
+    const transferPayload = cleanFirestoreData({
       id: transferId,
       productId: item.productId,
-      productName: item.productName,
+      productName: item.productName || item.name || 'Produk',
       brand: item.brand || 'Generic',
-      sku: item.sku,
+      sku: item.sku || '-',
       qty: item.qty,
       unit: item.unit || 'Pcs',
       price: item.price,
@@ -2595,7 +2778,7 @@ export const createSparkPlanStockTransfer = async (transferData, callerUid = 'ad
       shipping_notes: shippingNotes || '',
       deliveryNote: deliveryNote,
       senderName: 'Pusat'
-    };
+    });
     await setDoc(doc(db, "stock_transfers", transferId), transferPayload);
   }
 

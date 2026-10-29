@@ -4,6 +4,7 @@ import { History, Download, ArrowDownLeft, ArrowUpRight, Filter, Search, User, C
 import { exportToCSV, exportToExcel, purgeTransactions } from '../services/dataService';
 import ConfirmationModal from './ConfirmationModal';
 import TransactionDetailModal from './TransactionDetailModal';
+import { resolveItemUnitPrice } from '../utils/pricingResolver';
 
 export default function TransactionHistory({ 
   transactions = [], 
@@ -259,8 +260,9 @@ export default function TransactionHistory({
         // Multi-item transactions
         tx.items.forEach(item => {
           const itemQty = Number(item.qty || item.qty_in || 1);
-          const itemPrice = Number(item.price || 0);
-          const itemTotal = Number(item.subtotal || (itemPrice * itemQty));
+          const resolvedPrice = resolveItemUnitPrice(item, tx, products, branches);
+          const directSubtotal = Number(item.totalPrice ?? item.subtotal);
+          const itemTotal = directSubtotal > 0 ? directSubtotal : (resolvedPrice * itemQty);
           
           formattedData.push({
             'No': rowNumber++,
@@ -270,8 +272,8 @@ export default function TransactionHistory({
             'SKU': item.sku || tx.sku || '-',
             'Nama Produk': item.productName || item.product_name || item.name || tx.productName || '-',
             'Jumlah (Qty)': itemQty,
-            'Harga Satuan (Rp)': isOutboundOrSale && itemPrice > 0 ? `Rp ${itemPrice.toLocaleString('id-ID')}` : '-',
-            'Total Nilai (Rp)': isOutboundOrSale && itemTotal > 0 ? `Rp ${itemTotal.toLocaleString('id-ID')}` : '-',
+            'Harga Satuan (Rp)': resolvedPrice > 0 ? `Rp ${resolvedPrice.toLocaleString('id-ID')}` : '-',
+            'Total Nilai (Rp)': itemTotal > 0 ? `Rp ${itemTotal.toLocaleString('id-ID')}` : '-',
             'Catatan / Keterangan': tx.notes || '-',
             'Petugas': tx.user || 'Sistem',
             'Waktu Transaksi': formatTime(tx.createdAt || tx.timestamp || tx.date)
@@ -280,8 +282,8 @@ export default function TransactionHistory({
       } else {
         // Single item transaction fallback
         const qty = Number(tx.qty || 1);
-        const price = Number(tx.price || 0);
-        const total = Number(tx.totalPrice || tx.totalValue || (price * qty));
+        const resolvedPrice = resolveItemUnitPrice(tx, tx, products, branches);
+        const total = Number(tx.totalPrice || tx.totalValue || (resolvedPrice * qty));
         
         formattedData.push({
           'No': rowNumber++,
@@ -291,8 +293,8 @@ export default function TransactionHistory({
           'SKU': tx.sku || '-',
           'Nama Produk': tx.productName || '-',
           'Jumlah (Qty)': qty,
-          'Harga Satuan (Rp)': isOutboundOrSale && price > 0 ? `Rp ${price.toLocaleString('id-ID')}` : '-',
-          'Total Nilai (Rp)': isOutboundOrSale && total > 0 ? `Rp ${total.toLocaleString('id-ID')}` : '-',
+          'Harga Satuan (Rp)': resolvedPrice > 0 ? `Rp ${resolvedPrice.toLocaleString('id-ID')}` : '-',
+          'Total Nilai (Rp)': total > 0 ? `Rp ${total.toLocaleString('id-ID')}` : '-',
           'Catatan / Keterangan': tx.notes || '-',
           'Petugas': tx.user || 'Sistem',
           'Waktu Transaksi': formatTime(tx.createdAt || tx.timestamp || tx.date)
@@ -931,6 +933,7 @@ export default function TransactionHistory({
         currentUser={currentUser}
         onClose={() => setSelectedDetailTx(null)}
         products={products}
+        branches={branches}
       />
     </div>
   );

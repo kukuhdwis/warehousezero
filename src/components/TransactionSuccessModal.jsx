@@ -19,12 +19,15 @@ import {
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { drawPdfBrandHeader } from '../utils/pdfBrandHeader';
+import { resolveItemUnitPrice } from '../utils/pricingResolver';
 
 export default function TransactionSuccessModal({ 
   isOpen, 
   onClose, 
   transaction, 
   currentUser,
+  products = [],
+  branches = [],
   onNewTransaction 
 }) {
   if (!isOpen || !transaction) return null;
@@ -54,7 +57,7 @@ export default function TransactionSuccessModal({
   const isInbound = transaction.type === 'IN';
   const isBundling = Boolean(transaction.isBundling || transaction.transactionType === 'CUSTOM_BUNDLING');
   const isSale = transaction.transactionType === 'RETAIL_PCS' || transaction.transactionType === 'CUSTOM_BUNDLING';
-  const isTransfer = transaction.transactionType === 'STOCK_TRANSFER_TO_BRANCH' || transaction.targetBranchName;
+  const isTransfer = transaction.transactionType === 'STOCK_TRANSFER_TO_BRANCH' || Boolean(transaction.targetBranchName || transaction.targetBranchId);
 
   const handlePrint = () => {
     try {
@@ -121,7 +124,7 @@ export default function TransactionSuccessModal({
         doc.text(`: ${transactionOperator}`, pageWidth - 45, 45);
 
         // --- TABLE ---
-        const tableColumn = ["No", "SKU", "Nama Barang", "Qty", "Jumlah (Rp)", "Keterangan"];
+        const tableColumn = ["No", "SKU", "Nama Barang", "Qty", "Harga Satuan (Rp)", "Jumlah (Rp)", "Keterangan"];
         const tableRows = [];
         
         let totalQty = 0;
@@ -135,47 +138,52 @@ export default function TransactionSuccessModal({
                 productName: transaction.productName || 'Produk',
                 qty: Number(transaction.qty || 1),
                 unit: transaction.unit || (isBundling ? 'Paket' : 'Pcs'),
-                price: Number(transaction.price || transaction.totalPrice || 0),
+                price: Number(transaction.price || 0),
+                totalPrice: Number(transaction.totalPrice || 0),
                 notes: transaction.notes || '-'
               }]
             : [];
 
         rawItems.forEach((item, index) => {
-          let itemPrice = Number(item.totalPrice || item.subtotal || 0);
-          if (!itemPrice && item.price) {
-             itemPrice = Number(item.price) * (Number(item.qty) || 1);
-          }
-          
-          if (isTransfer || isInbound) itemPrice = 0; 
+          const itemQty = Number(item.qty || 1);
+          const unitPrice = resolveItemUnitPrice(item, transaction, products, branches);
+          const directSubtotal = Number(item.totalPrice ?? item.subtotal);
+          const itemSubtotal = directSubtotal > 0 ? directSubtotal : (unitPrice * itemQty);
           
           const rowData = [
             index + 1,
             item.sku || '-',
             item.productName || item.product_name || item.name || '-',
-            `${item.qty || 0} ${item.unit || (isBundling ? 'Paket' : 'Pcs')}`,
-            isSale ? `Rp ${itemPrice.toLocaleString('id-ID')}` : '-',
+            `${itemQty} ${item.unit || (isBundling ? 'Paket' : 'Pcs')}`,
+            unitPrice > 0 ? `Rp ${unitPrice.toLocaleString('id-ID')}` : '-',
+            itemSubtotal > 0 ? `Rp ${itemSubtotal.toLocaleString('id-ID')}` : '-',
             item.notes || '-'
           ];
           tableRows.push(rowData);
           
-          totalQty += Number(item.qty || 0);
-          totalAmount += itemPrice;
+          totalQty += itemQty;
+          totalAmount += itemSubtotal;
         });
+
+        if (Number(transaction.totalPrice) > 0 && totalAmount === 0) {
+          totalAmount = Number(transaction.totalPrice);
+        }
 
         autoTable(doc, {
           head: [tableColumn],
           body: tableRows,
           startY: 58,
           theme: 'grid',
-          styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0], lineColor: [0,0,0], lineWidth: 0.1 },
-          headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', lineColor: [0,0,0], lineWidth: 0.1 },
+          styles: { fontSize: 8.5, cellPadding: 2.8, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.1 },
+          headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', lineColor: [0, 0, 0], lineWidth: 0.1 },
           columnStyles: {
-            0: { cellWidth: 10, halign: 'center' },
-            1: { cellWidth: 25 },
+            0: { cellWidth: 8, halign: 'center' },
+            1: { cellWidth: 26 },
             2: { cellWidth: 'auto' },
-            3: { cellWidth: 15, halign: 'center' },
-            4: { cellWidth: 25, halign: 'right' },
-            5: { cellWidth: 35 }
+            3: { cellWidth: 16, halign: 'center' },
+            4: { cellWidth: 28, halign: 'right' },
+            5: { cellWidth: 28, halign: 'right' },
+            6: { cellWidth: 25 }
           }
         });
         
@@ -185,8 +193,13 @@ export default function TransactionSuccessModal({
         doc.setFont("helvetica", "bold");
         doc.text(`Total Berat/Barang: ${totalQty} Item`, 14, finalY + 8);
         
-        if (isSale) {
-            doc.text(`Total Pembayaran: Rp ${totalAmount.toLocaleString('id-ID')}`, pageWidth - 14, finalY + 8, { align: 'right' });
+        if (totalAmount > 0) {
+          const totalLabel = isSale 
+            ? 'Total Pembayaran' 
+            : isTransfer 
+              ? 'Total Nilai Pengiriman' 
+              : 'Total Nilai Barang';
+          doc.text(`${totalLabel}: Rp ${totalAmount.toLocaleString('id-ID')}`, pageWidth - 14, finalY + 8, { align: 'right' });
         }
         
         // --- FOOTER & SIGNATURES ---
@@ -250,6 +263,32 @@ export default function TransactionSuccessModal({
         alert("Gagal mencetak PDF: " + err.message);
     }
   };
+
+  // Compute total for modal receipt card view
+  const modalItems = (transaction.items && transaction.items.length > 0)
+    ? transaction.items
+    : (transaction.productName || transaction.sku)
+      ? [{
+          sku: transaction.sku || '-',
+          productName: transaction.productName || 'Produk',
+          qty: Number(transaction.qty || 1),
+          unit: transaction.unit || (isBundling ? 'Paket' : 'Pcs'),
+          price: Number(transaction.price || 0),
+          totalPrice: Number(transaction.totalPrice || 0),
+          notes: transaction.notes || '-'
+        }]
+      : [];
+
+  let calculatedModalTotal = 0;
+  modalItems.forEach(item => {
+    const itQty = Number(item.qty || 1);
+    const unitPrice = resolveItemUnitPrice(item, transaction, products, branches);
+    const directSubtotal = Number(item.totalPrice ?? item.subtotal);
+    const itemSubtotal = directSubtotal > 0 ? directSubtotal : (unitPrice * itQty);
+    calculatedModalTotal += itemSubtotal;
+  });
+  const displayModalTotal = Number(transaction.totalPrice) > 0 ? Number(transaction.totalPrice) : calculatedModalTotal;
+
   return (
     <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in duration-200 pointer-events-auto">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-150 my-auto print-only-modal">
@@ -322,31 +361,38 @@ export default function TransactionSuccessModal({
                     </span>
                   </div>
                   <div className="bg-white p-3 rounded-xl border border-slate-200 divide-y divide-slate-100 text-xs space-y-1.5">
-                    {transaction.items.map((it, idx) => (
-                      <div key={idx} className="flex justify-between items-start sm:items-center py-2 first:pt-0 last:pb-0 gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="text-slate-800 font-bold">{it.productName || it.name}</div>
-                          <div className="text-[10px] text-slate-400 font-mono">
-                            SKU: {it.sku} {it.price ? `• @ Rp ${(Number(it.price) || 0).toLocaleString('id-ID')}` : ''}
-                          </div>
-                          {it.notes && it.notes !== '-' && (
-                            <p className="text-[10px] text-purple-700 font-medium mt-0.5">
-                              Komponen: {it.notes}
-                            </p>
-                          )}
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <span className="font-extrabold text-emerald-900 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 text-xs">
-                            {it.qty} {it.unit || (isBundling ? 'Paket' : 'Pcs')}
-                          </span>
-                          {(it.totalPrice || it.subtotal || it.price) ? (
-                            <div className="text-[11px] font-bold text-slate-700 mt-0.5">
-                              Rp {(Number(it.totalPrice || it.subtotal || (Number(it.price) * Number(it.qty)))).toLocaleString('id-ID')}
+                    {transaction.items.map((it, idx) => {
+                      const itQty = Number(it.qty || 1);
+                      const unitPrice = resolveItemUnitPrice(it, transaction, products, branches);
+                      const directSubtotal = Number(it.totalPrice ?? it.subtotal);
+                      const itemSubtotal = directSubtotal > 0 ? directSubtotal : (unitPrice * itQty);
+
+                      return (
+                        <div key={idx} className="flex justify-between items-start sm:items-center py-2 first:pt-0 last:pb-0 gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-slate-800 font-bold">{it.productName || it.name}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              SKU: {it.sku} {unitPrice > 0 ? `• @ Rp ${unitPrice.toLocaleString('id-ID')}` : ''}
                             </div>
-                          ) : null}
+                            {it.notes && it.notes !== '-' && (
+                              <p className="text-[10px] text-purple-700 font-medium mt-0.5">
+                                Komponen: {it.notes}
+                              </p>
+                            )}
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <span className="font-extrabold text-emerald-900 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 text-xs">
+                              {itQty} {it.unit || (isBundling ? 'Paket' : 'Pcs')}
+                            </span>
+                            {itemSubtotal > 0 && (
+                              <div className="text-[11px] font-bold text-slate-700 mt-0.5">
+                                Rp {itemSubtotal.toLocaleString('id-ID')}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ) : (
@@ -354,16 +400,28 @@ export default function TransactionSuccessModal({
                   <div>
                     <h4 className="font-extrabold text-slate-900 text-sm">{transaction.productName}</h4>
                     {transaction.sku && (
-                      <p className="text-xs font-mono text-slate-400">SKU: {transaction.sku}</p>
+                      <p className="text-xs font-mono text-slate-400">
+                        SKU: {transaction.sku}
+                        {resolveItemUnitPrice(transaction, transaction, products, branches) > 0 
+                          ? ` • @ Rp ${resolveItemUnitPrice(transaction, transaction, products, branches).toLocaleString('id-ID')}` 
+                          : ''}
+                      </p>
                     )}
                   </div>
-                  <span className={`px-3 py-1.5 rounded-xl font-black text-sm ${
-                    isInbound 
-                      ? 'bg-emerald-100 text-emerald-800' 
-                      : 'bg-rose-100 text-rose-800'
-                  }`}>
-                    {isInbound ? `+${transaction.qty} Pcs` : `-${transaction.qty} Pcs`}
-                  </span>
+                  <div className="text-right">
+                    <span className={`px-3 py-1.5 rounded-xl font-black text-sm block ${
+                      isInbound 
+                        ? 'bg-emerald-100 text-emerald-800' 
+                        : 'bg-rose-100 text-rose-800'
+                    }`}>
+                      {isInbound ? `+${transaction.qty} Pcs` : `-${transaction.qty} Pcs`}
+                    </span>
+                    {displayModalTotal > 0 && (
+                      <span className="text-[11px] font-bold text-slate-700 mt-1 block">
+                        Rp {displayModalTotal.toLocaleString('id-ID')}
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -387,12 +445,14 @@ export default function TransactionSuccessModal({
               </div>
             </div>
 
-            {/* Total Payment if Sale */}
-            {isSale && transaction.totalPrice !== undefined && (
+            {/* Total Payment / Total Value */}
+            {displayModalTotal > 0 && (
               <div className="pt-2.5 border-t border-dashed border-slate-300 flex items-center justify-between bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-200">
-                <span className="text-xs font-bold text-emerald-900">Total Pembayaran:</span>
+                <span className="text-xs font-bold text-emerald-900">
+                  {isSale ? 'Total Pembayaran:' : isTransfer ? 'Total Nilai Pengiriman:' : 'Total Nilai Barang:'}
+                </span>
                 <span className="text-base font-black text-emerald-800">
-                  Rp {(Number(transaction.totalPrice) || 0).toLocaleString('id-ID')}
+                  Rp {displayModalTotal.toLocaleString('id-ID')}
                 </span>
               </div>
             )}

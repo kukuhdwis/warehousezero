@@ -147,16 +147,29 @@ export default function ConfirmationModal({
                 {itemsList.map((item, index) => (
                   <div key={index} className="p-3 flex items-center justify-between gap-3 text-xs hover:bg-white/80 transition">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-bold text-slate-900 truncate">{item.name}</span>
+                        {(item.engine || item.engine_type) && (
+                          <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80 whitespace-nowrap">
+                            {item.engine || item.engine_type}
+                          </span>
+                        )}
                         {item.brand && (
                           <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 shrink-0">
                             {item.brand}
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-500 font-mono mt-0.5">
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-mono mt-0.5 flex-wrap">
                         {item.sku && <span>SKU: {item.sku}</span>}
+                        {(item.variant || item.car_variant) && (item.variant || item.car_variant) !== '-' && (
+                          <>
+                            <span>•</span>
+                            <span className="font-sans font-medium text-slate-700">
+                              Mobil: <strong className="text-slate-800">{item.variant || item.car_variant}</strong>
+                            </span>
+                          </>
+                        )}
                         {item.note && <span className="text-slate-600 italic">({item.note})</span>}
                       </div>
                     </div>

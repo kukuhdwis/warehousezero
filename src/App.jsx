@@ -72,6 +72,9 @@ import {
   rejectStockRequest,
   rejectBatchStockRequests,
   fulfillStockRequest,
+  fulfillBatchStockRequests,
+  approveStockRequest,
+  approveBatchStockRequests,
   playNotificationSound,
 
   fetchBundles,
@@ -700,18 +703,46 @@ export default function App() {
     };
     await recordStockMovement(dataWithBranch);
 
-    // If this is a Central Transfer to a Branch, check if there is a pending stock request matching this branch and product, and mark as fulfilled
+    // If this is a Central Transfer to a Branch, fulfill all matching stock requests
     if (movementData.transactionType === 'STOCK_TRANSFER_TO_BRANCH') {
       const deliveryNoteNo = movementData.deliveryNote || `SJ-HQ-${Date.now().toString().slice(-6)}`;
+      const targetBId = movementData.targetBranchId;
 
-      // Check if there is a pending stock request matching this branch and product, and mark as fulfilled
-      const matchedReq = stockRequests.find(
-        r => r.status === 'PENDING' && 
-             r.branchId === movementData.targetBranchId && 
-             (r.productId === movementData.productId || r.sku === movementData.sku)
-      );
-      if (matchedReq) {
-        await fulfillStockRequest(matchedReq.id, deliveryNoteNo, currentUser);
+      const transferItems = Array.isArray(movementData.items) && movementData.items.length > 0
+        ? movementData.items
+        : [movementData];
+
+      // 1. Explicit requestIds attached to transferred items
+      const explicitRequestIds = transferItems
+        .map(it => it.requestId)
+        .filter(Boolean);
+
+      // 2. Also match any pending/approved requests from that branch by productId or SKU
+      const transferredProductIds = new Set(transferItems.map(it => it.productId).filter(Boolean));
+      const transferredSkus = new Set(transferItems.map(it => (it.sku || '').trim().toLowerCase()).filter(Boolean));
+
+      const matchedPendingRequestIds = stockRequests
+        .filter(r => {
+          if (!r) return false;
+          const status = (r.status || '').toUpperCase();
+          if (status !== 'PENDING' && status !== 'APPROVED') return false;
+          if (explicitRequestIds.includes(r.id)) return false;
+          if (r.branchId !== targetBId) return false;
+
+          const matchesPid = r.productId && transferredProductIds.has(r.productId);
+          const matchesSku = r.sku && transferredSkus.has(r.sku.trim().toLowerCase());
+          return matchesPid || matchesSku;
+        })
+        .map(r => r.id);
+
+      const allFulfilledIds = [...new Set([...explicitRequestIds, ...matchedPendingRequestIds])];
+
+      if (allFulfilledIds.length > 0) {
+        try {
+          await fulfillBatchStockRequests(allFulfilledIds, deliveryNoteNo, currentUser);
+        } catch (e) {
+          console.warn("Failed to fulfill batch stock requests in handleRecordMovement:", e);
+        }
       }
     }
   };
@@ -723,6 +754,22 @@ export default function App() {
     const count = list.length;
     const firstItem = typeof list[0] === 'object' ? list[0] : transfers.find(t => t.id === list[0]);
     const deliveryNote = firstItem?.deliveryNote || '-';
+
+    // Also auto-fulfill any matching stock requests tied to this deliveryNote
+    if (deliveryNote && deliveryNote !== '-') {
+      const matchingReqs = stockRequests.filter(r => 
+        r.deliveryNote === deliveryNote && 
+        (r.status === 'PENDING' || r.status === 'APPROVED' || r.status === 'IN_TRANSIT')
+      );
+      if (matchingReqs.length > 0) {
+        try {
+          await fulfillBatchStockRequests(matchingReqs.map(r => r.id), deliveryNote, currentUser);
+        } catch (e) {
+          console.warn("Could not auto-close stock requests on transfer receipt confirmation:", e);
+        }
+      }
+    }
+
     setGlobalSuccessPopup({
       title: "Paket Kiriman Berhasil Diterima! 📦",
       message: `${count} produk kiriman dari Kantor Pusat telah diverifikasi dan resmi aktif di inventaris cabang Anda.`,
@@ -775,6 +822,29 @@ export default function App() {
         { label: "Rincian Barang", value: isArray && count > 1 ? `${firstItem?.productName || 'Produk'} (+${count - 1} lainnya)` : `${firstItem?.qty || 1} Pcs "${firstItem?.productName || 'Produk'}"` },
         { label: "Status", value: "⏳ Menunggu Respon Pusat" },
         ...(firstItem?.notes ? [{ label: "Catatan", value: firstItem.notes }] : [])
+      ]
+    });
+    return result;
+  };
+
+  // Handler for Central Warehouse Approving (ACC) Stock Request (Supports Single ID or Array of IDs)
+  const handleApproveStockRequest = async (requestIdOrList, notes = '') => {
+    const isArray = Array.isArray(requestIdOrList);
+    let result;
+    if (isArray) {
+      result = await approveBatchStockRequests(requestIdOrList, currentUser, notes);
+    } else {
+      result = await approveStockRequest(requestIdOrList, currentUser, notes);
+    }
+
+    const count = isArray ? requestIdOrList.length : 1;
+    setGlobalSuccessPopup({
+      title: "Permintaan Stok Telah Disetujui (ACC)! ✓",
+      message: `${count} permintaan stok cabang telah disetujui (ACC) dan statusnya kini resmi aktif untuk proses pengiriman.`,
+      details: [
+        { label: "Jumlah Permintaan", value: `${count} Produk`, highlight: true },
+        { label: "Status Baru", value: "✓ Disetujui (ACC)" },
+        ...(notes ? [{ label: "Catatan", value: notes }] : [])
       ]
     });
     return result;
@@ -912,27 +982,74 @@ export default function App() {
         setProductsInitialTab(null);
       }
     } else if (tab === 'stock-out' && contextData) {
-      let matchedRequest = null;
-      if (contextData.metaId) {
-        matchedRequest = stockRequests.find(r => r.id === contextData.metaId);
-      }
-      if (matchedRequest) {
-        setOutboundInitialRequestData({
-          id: matchedRequest.id,
-          requestId: matchedRequest.id,
-          targetBranchId: matchedRequest.branchId,
-          branchId: matchedRequest.branchId,
-          branchName: matchedRequest.branchName,
-          targetBranchName: matchedRequest.branchName,
-          productId: matchedRequest.productId,
-          productName: matchedRequest.productName,
-          qty: matchedRequest.qty,
-          notes: matchedRequest.notes
-        });
-      } else if (contextData.notif) {
-        setOutboundInitialRequestData({
-          notes: contextData.notif.message
-        });
+      if (contextData.type === 'STOCK_REQUEST_SUBMITTED' || contextData.notif?.type === 'STOCK_REQUEST_SUBMITTED') {
+        const notifObj = contextData.notif || {};
+        const targetIds = contextData.metaIds || notifObj.metaIds || 
+          (contextData.metaId ? [contextData.metaId] : (notifObj.metaId ? [notifObj.metaId] : []));
+        const targetBatchId = contextData.batchId || notifObj.batchId;
+        const targetBranchId = contextData.branchId || notifObj.branchId;
+        const targetBranchName = contextData.branchName || notifObj.branchName;
+        const snapshotItems = contextData.items || notifObj.items;
+
+        let matchedRequests = [];
+
+        // 1. Match by metaIds
+        if (Array.isArray(targetIds) && targetIds.length > 0) {
+          matchedRequests = stockRequests.filter(r => targetIds.includes(r.id));
+        }
+
+        // 2. Match by batchId
+        if (targetBatchId) {
+          const batchMatches = stockRequests.filter(r => r.batchId === targetBatchId);
+          if (batchMatches.length > 0) {
+            const map = new Map();
+            matchedRequests.forEach(r => map.set(r.id, r));
+            batchMatches.forEach(r => map.set(r.id, r));
+            matchedRequests = Array.from(map.values());
+          }
+        }
+
+        // 3. Fallback: If live stockRequests listener hasn't received the docs yet, use snapshot items from notification
+        if (matchedRequests.length === 0 && Array.isArray(snapshotItems) && snapshotItems.length > 0) {
+          matchedRequests = snapshotItems;
+        }
+
+        // 4. Fallback: match by single metaId in stockRequests
+        if (matchedRequests.length === 0 && targetIds.length > 0) {
+          const single = stockRequests.find(r => targetIds.includes(r.id));
+          if (single) matchedRequests = [single];
+        }
+
+        // 5. Fallback: match any pending requests from the target branch
+        if (matchedRequests.length === 0 && targetBranchId) {
+          matchedRequests = stockRequests.filter(r => 
+            (r.branchId === targetBranchId || r.branchName === targetBranchName) && 
+            (r.status || '').toUpperCase() === 'PENDING'
+          );
+        }
+
+        if (matchedRequests.length > 0) {
+          const formatted = matchedRequests.map(r => ({
+            id: r.id,
+            requestId: r.id || r.requestId,
+            targetBranchId: r.branchId || targetBranchId,
+            branchId: r.branchId || targetBranchId,
+            branchName: r.branchName || targetBranchName || 'Cabang',
+            targetBranchName: r.branchName || targetBranchName || 'Cabang',
+            productId: r.productId,
+            sku: r.sku,
+            productName: r.productName,
+            brand: r.brand,
+            qty: Number(r.qty) || 1,
+            notes: r.notes || ''
+          }));
+          setOutboundInitialRequestData(formatted);
+        } else if (contextData.notif) {
+          setOutboundInitialRequestData({
+            notes: contextData.notif.message,
+            branchId: targetBranchId
+          });
+        }
       }
     } else if (tab === 'stock-in') {
       if (contextData?.tab) {
@@ -1037,6 +1154,7 @@ export default function App() {
                   onDeleteBundlesBatch={handleDeleteBundlesBatch}
                   onImportBundlesBatch={handleImportBundlesBatch}
                   initialTab={productsInitialTab}
+                  onClearInitialTab={() => setProductsInitialTab(null)}
                   onCreateProduct={handleCreateProduct}
                   onUpdateProduct={handleUpdateProduct}
                   onDeleteProduct={handleDeleteProduct}
@@ -1066,6 +1184,7 @@ export default function App() {
                   onConfirmTransfer={handleConfirmTransfer}
                   onRejectTransfer={handleRejectTransfer}
                   onRequestStock={handleRequestStock}
+                  onClearInitialTab={() => setInboundInitialTab(null)}
                 />
               )}
               {activeTab === 'stock-out' && (
@@ -1075,9 +1194,11 @@ export default function App() {
                   branches={branches}
                   bundles={bundles}
                   stockRequests={stockRequests}
+                  transfers={transfers}
                   initialRequestData={outboundInitialRequestData}
                   onClearInitialRequest={() => setOutboundInitialRequestData(null)}
                   onRecordMovement={handleRecordMovement}
+                  onApproveStockRequest={handleApproveStockRequest}
                   onRejectStockRequest={handleRejectStockRequest}
                 />
               )}
@@ -1293,6 +1414,12 @@ export default function App() {
               { 
                 tab: liveToastNotif.type === 'INVENTORY_REQUEST' ? 'APPROVAL_REQUESTS' : undefined,
                 type: liveToastNotif.type,
+                metaId: liveToastNotif.metaId,
+                metaIds: liveToastNotif.metaIds || (liveToastNotif.metaId ? [liveToastNotif.metaId] : []),
+                batchId: liveToastNotif.batchId,
+                branchId: liveToastNotif.branchId,
+                branchName: liveToastNotif.branchName,
+                items: liveToastNotif.items,
                 notif: liveToastNotif
               }
             );

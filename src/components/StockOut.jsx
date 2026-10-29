@@ -36,8 +36,8 @@ import BundleSearchPicker from './BundleSearchPicker';
 import CustomAlertModal from './CustomAlertModal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { callCreateStockTransfer } from '../services/cloudFunctionsService';
-import { createSparkPlanStockTransfer } from '../services/dataService';
+import { createSparkPlanStockTransfer, fulfillBatchStockRequests } from '../services/dataService';
+import { resolveProductPriceForBranch } from '../utils/pricingResolver';
 
 
 export default function StockOut({ 
@@ -46,12 +46,14 @@ export default function StockOut({
   branches = [], 
   bundles = [],
   stockRequests = [],
+  transfers = [],
   initialRequestData = null,
   onClearInitialRequest,
   onRecordMovement,
+  onApproveStockRequest,
   onRejectStockRequest 
 }) {
-  const isBranchStaff = currentUser?.role === 'STAFF_BRANCH';
+  const isBranchStaff = currentUser?.role === 'STAFF_BRANCH' || (currentUser?.branchId && currentUser?.branchId !== 'ALL' && currentUser?.role !== 'ADMIN' && currentUser?.role !== 'STAFF_PUSAT' && currentUser?.role !== 'PUSAT');
 
   // Outbound Mode:
   // For Pusat: 'STOCK_TRANSFER_TO_BRANCH' (Kirim ke Cabang) | 'RETAIL_PCS' (Penjualan Toko Pusat) | 'CUSTOM_BUNDLING' (Bundling Toko Pusat)
@@ -119,7 +121,12 @@ export default function StockOut({
 
   // Safe pending requests from branches for Pusat/Admin
   const pendingStockRequests = (!isBranchStaff && Array.isArray(stockRequests))
-    ? stockRequests.filter(r => r && r.status === 'PENDING')
+    ? stockRequests.filter(r => {
+        if (!r) return false;
+        const status = (r.status || '').toUpperCase();
+        // Only show requests that are strictly PENDING (not yet APPROVED, FULFILLED, REJECTED, or CANCELLED)
+        return status === 'PENDING';
+      })
     : [];
 
   // Group pending requests by branch
@@ -207,13 +214,16 @@ export default function StockOut({
 
     const finalQty = maxStock > 0 ? Math.min(maxStock, reqQty) : reqQty;
 
+    const targetBranch = branches.find(b => b.id === req.branchId);
+    const branchPrice = resolveProductPriceForBranch(targetProduct, targetBranch);
+
     const newItem = {
       requestId: req.id,
       productId: targetProduct ? targetProduct.id : req.productId,
       sku: targetProduct?.sku || req.sku || '-',
       productName: targetProduct?.name || req.productName || 'Produk',
       brand: targetProduct?.brand || req.brand || 'Generic',
-      price: Number(targetProduct?.price) || 0,
+      price: branchPrice > 0 ? branchPrice : (Number(targetProduct?.price) || 0),
       currentStock: maxStock,
       qty: finalQty,
       reqNotes: req.notes || ''
@@ -261,10 +271,22 @@ export default function StockOut({
     setTransferCart([]);
   };
 
-  // Handle incoming initialRequestData (e.g. from notification click)
+  // Handle incoming initialRequestData (e.g. from notification click or navigation)
   useEffect(() => {
     if (initialRequestData) {
-      handleToggleRequestFulfillment(initialRequestData);
+      const items = Array.isArray(initialRequestData) 
+        ? initialRequestData 
+        : (initialRequestData.productId || initialRequestData.id || initialRequestData.requestId ? [initialRequestData] : []);
+
+      if (items.length > 0) {
+        if (items[0].branchId) {
+          setRequestBranchFilter(items[0].branchId);
+        }
+        handleAcceptAllRequests(items);
+      }
+      if (onClearInitialRequest) {
+        onClearInitialRequest();
+      }
     }
   }, [initialRequestData]);
 
@@ -284,7 +306,7 @@ export default function StockOut({
     if (!requestsToAccept || requestsToAccept.length === 0) return;
 
     // Verify all requests belong to the same branch
-    const uniqueBranchIds = [...new Set(requestsToAccept.map(r => r.branchId))];
+    const uniqueBranchIds = [...new Set(requestsToAccept.map(r => r.branchId).filter(Boolean))];
     if (uniqueBranchIds.length > 1) {
       showAlert(
         "Pilih Cabang Terlebih Dahulu ⚠️",
@@ -294,22 +316,18 @@ export default function StockOut({
       return;
     }
 
-    const targetBId = uniqueBranchIds[0];
-    if (targetBranchId && targetBranchId !== targetBId && transferCart.length > 0) {
-      const currentBranchObj = branches.find(b => b.id === targetBranchId);
-      showAlert(
-        "Cabang Berbeda ⚠️",
-        `List kiriman saat ini untuk "${currentBranchObj?.name || 'Cabang Lain'}". Selesaikan atau kosongkan list terlebih dahulu sebelum memproses cabang ini.`,
-        "WARNING"
-      );
-      return;
-    }
+    const targetBId = uniqueBranchIds[0] || targetBranchId || branches[0]?.id;
+    const isDifferentBranch = targetBranchId && targetBId && targetBranchId !== targetBId && transferCart.length > 0;
 
     setOutboundMode('STOCK_TRANSFER_TO_BRANCH');
     setTargetBranchId(targetBId);
+    if (targetBId) {
+      setRequestBranchFilter(targetBId);
+    }
 
     const newItems = [];
-    const allNotes = [...transferCart.map(i => i.reqNotes)];
+    const allNotes = isDifferentBranch ? [] : [...transferCart.map(i => i.reqNotes)];
+    const targetBranch = branches.find(b => b.id === targetBId);
 
     requestsToAccept.forEach(req => {
       const targetProduct = products.find(p => 
@@ -317,28 +335,33 @@ export default function StockOut({
         (req.sku && p.sku && p.sku.toLowerCase() === req.sku.toLowerCase()) ||
         (req.productName && p.name && p.name.trim().toLowerCase() === req.productName.trim().toLowerCase())
       );
-      const maxStock = Number(targetProduct?.currentStock) || 0;
+      const maxStock = targetProduct ? Number(targetProduct.currentStock ?? targetProduct.stockQuantity ?? targetProduct.stock ?? 0) : 0;
       const reqQty = Number(req.qty) || 1;
       const finalQty = maxStock > 0 ? Math.min(maxStock, reqQty) : reqQty;
 
+      const branchPrice = targetProduct 
+        ? resolveProductPriceForBranch(targetProduct, targetBranch)
+        : (Number(req.price) || 0);
+
       newItems.push({
-        requestId: req.id,
+        requestId: req.id || req.requestId,
         productId: targetProduct ? targetProduct.id : req.productId,
         sku: targetProduct?.sku || req.sku || '-',
         productName: targetProduct?.name || req.productName || 'Produk',
         brand: targetProduct?.brand || req.brand || 'Generic',
-        price: Number(targetProduct?.price) || 0,
+        price: branchPrice > 0 ? branchPrice : (Number(targetProduct?.price) || 0),
         currentStock: maxStock,
         qty: finalQty,
-        reqNotes: req.notes || ''
+        reqNotes: req.notes || req.reqNotes || ''
       });
 
-      if (req.notes) allNotes.push(req.notes);
+      if (req.notes || req.reqNotes) allNotes.push(req.notes || req.reqNotes);
     });
 
     setTransferCart(prev => {
+      const baseCart = isDifferentBranch ? [] : prev;
       const map = new Map();
-      prev.forEach(item => map.set(item.productId, item));
+      baseCart.forEach(item => map.set(item.productId, item));
       newItems.forEach(item => map.set(item.productId, item));
       return Array.from(map.values());
     });
@@ -440,6 +463,8 @@ export default function StockOut({
         showAlert("Stok Produk Habis 📦", `Stok produk "${product.name}" di gudang pusat habis (0 Pcs).`, "WARNING");
         return;
       }
+      const targetBranch = branches.find(b => b.id === targetBranchId);
+      const branchPrice = resolveProductPriceForBranch(product, targetBranch);
       setTransferCart([
         ...transferCart,
         {
@@ -447,7 +472,7 @@ export default function StockOut({
           sku: product.sku,
           productName: product.name,
           brand: product.brand || 'Generic',
-          price: product.price || 0,
+          price: branchPrice > 0 ? branchPrice : (product.price || 0),
           currentStock: maxStock,
           qty: 1
         }
@@ -817,7 +842,11 @@ const parseScannedSKU = (text) => {
 
       const targetBranch = branches.find(b => b.id === targetBranchId);
       const targetBranchName = targetBranch?.name || 'Cabang Tujuan';
+      const targetBranchType = (targetBranch?.tipe || targetBranch?.branchType || '').toUpperCase();
       const sjNo = invoiceNumber || `SJ-HQ-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      const unitPrice = resolveProductPriceForBranch(selectedProduct, targetBranch);
+      const subtotalPrice = unitPrice * Number(qty);
 
       const finalNotes = notes && notes.trim() ? notes.trim() : '';
       const payload = {
@@ -827,11 +856,15 @@ const parseScannedSKU = (text) => {
         type: 'OUT',
         qty: Number(qty),
         unit: 'Pcs',
+        price: unitPrice,
+        totalPrice: subtotalPrice,
+        costPrice: Number(selectedProduct.cost_price || selectedProduct.costPrice || 0),
         notes: finalNotes,
         user: user || currentUser?.name || 'Staff',
         transactionType: 'STOCK_TRANSFER_TO_BRANCH',
         targetBranchId: targetBranchId,
         targetBranchName: targetBranchName,
+        targetBranchType: targetBranchType,
         deliveryNote: sjNo
       };
 
@@ -903,7 +936,7 @@ const parseScannedSKU = (text) => {
       sku: salesCart.length === 1 ? salesCart[0].sku : 'MULTI-ITEM',
       productName: salesCart.length === 1 ? salesCart[0].productName : `[PENJUALAN] ${salesCart.length} Jenis Barang`,
       type: 'OUT',
-      branchId: isBranchStaff ? currentUser?.branchId : undefined,
+      branchId: isBranchStaff ? currentUser?.branchId : (currentUser?.branchId || 'ALL'),
       qty: totalPcs,
       unit: 'Pcs',
       notes: finalNotes,
@@ -939,7 +972,21 @@ const parseScannedSKU = (text) => {
     }
     const targetBranch = branches.find(b => b.id === targetBranchId);
     const targetBranchName = targetBranch?.name || 'Cabang Tujuan';
+    const targetBranchType = (targetBranch?.tipe || targetBranch?.branchType || '').toUpperCase();
     const sjNo = invoiceNumber || `SJ-HQ-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const resolvedBatchItems = transferCart.map(item => {
+      const prod = products.find(p => p.id === item.productId || p.sku === item.sku);
+      const unitPrice = item.price > 0 ? item.price : resolveProductPriceForBranch(prod || item, targetBranch);
+      const itemQty = Number(item.qty) || 1;
+      return {
+        ...item,
+        price: unitPrice,
+        totalPrice: unitPrice * itemQty,
+        costPrice: Number(item.costPrice ?? prod?.cost_price ?? prod?.costPrice ?? 0)
+      };
+    });
+    const batchTotalAmount = resolvedBatchItems.reduce((acc, i) => acc + (Number(i.totalPrice) || 0), 0);
 
     const payload = {
       productId: 'BATCH-TRANSFER',
@@ -948,14 +995,18 @@ const parseScannedSKU = (text) => {
       type: 'OUT',
       qty: transferCart.reduce((acc, i) => acc + Number(i.qty), 0),
       unit: 'Pcs',
+      price: resolvedBatchItems.length === 1 ? resolvedBatchItems[0].price : 0,
+      totalPrice: batchTotalAmount,
       notes: notes && notes.trim() ? notes.trim() : '',
       user: user || currentUser?.name || 'Staff',
       transactionType: 'STOCK_TRANSFER_TO_BRANCH',
       targetBranchId: targetBranchId,
       targetBranchName: targetBranchName,
+      targetBranchType: targetBranchType,
       deliveryNote: sjNo,
       isBatchTransfer: true,
-      batchItems: transferCart
+      batchItems: resolvedBatchItems,
+      items: resolvedBatchItems
     };
 
     setPendingConfirm(payload);
@@ -981,16 +1032,35 @@ const parseScannedSKU = (text) => {
           shippingNotes: pendingConfirm.notes ? `${pendingConfirm.notes} | SJ: ${deliveryNote}` : `SJ: ${deliveryNote}`
         }, currentUser?.uid || 'admin');
 
+        // 2. Fulfill any stock requests attached to these items directly in Firestore
+        const explicitReqIds = items.map(i => i.requestId).filter(Boolean);
+        if (explicitReqIds.length > 0) {
+          try {
+            await fulfillBatchStockRequests(explicitReqIds, deliveryNote, currentUser);
+          } catch (e) {
+            console.warn("Could not fulfill explicit request IDs in handleExecuteConfirmed:", e);
+          }
+        }
+
         // 3. Catat di Audit Log Frontend (onRecordMovement)
-        const transferItems = items.map(i => ({
-          productId: i.productId,
-          productName: i.productName || i.name || 'Produk',
-          sku: i.sku || '-',
-          qty: Number(i.qty) || 1,
-          unit: i.unit || 'Pcs',
-          price: Number(i.price || 0),
-          costPrice: Number(i.costPrice || 0)
-        }));
+        const targetBranch = branches.find(b => b.id === pendingConfirm.targetBranchId);
+        const transferItems = items.map(i => {
+          const prod = products.find(p => p.id === i.productId || p.sku === i.sku);
+          const unitPrice = i.price > 0 ? Number(i.price) : resolveProductPriceForBranch(prod || i, targetBranch);
+          const iQty = Number(i.qty) || 1;
+          return {
+            productId: i.productId,
+            productName: i.productName || i.name || 'Produk',
+            sku: i.sku || '-',
+            qty: iQty,
+            unit: i.unit || 'Pcs',
+            price: unitPrice,
+            totalPrice: unitPrice * iQty,
+            ...(i.requestId ? { requestId: i.requestId } : {}),
+            costPrice: Number(i.costPrice ?? prod?.cost_price ?? prod?.costPrice ?? 0)
+          };
+        });
+        const transferTotalAmount = transferItems.reduce((acc, i) => acc + (Number(i.totalPrice) || 0), 0);
 
         await onRecordMovement({
           productId: transferItems.length === 1 ? transferItems[0].productId : 'BATCH-TRANSFER',
@@ -1000,12 +1070,15 @@ const parseScannedSKU = (text) => {
           transactionType: 'STOCK_TRANSFER_TO_BRANCH',
           targetBranchId: pendingConfirm.targetBranchId,
           targetBranchName: pendingConfirm.targetBranchName,
+          targetBranchType: targetBranch?.tipe || targetBranch?.branchType || '',
           deliveryNote: deliveryNote,
           invoiceNumber: deliveryNote,
           notes: pendingConfirm.notes,
           user: pendingConfirm.user,
           qty: transferItems.reduce((acc, i) => acc + i.qty, 0),
           unit: 'Pcs',
+          price: transferItems.length === 1 ? transferItems[0].price : 0,
+          totalPrice: transferTotalAmount,
           isMultiItem: true,
           items: transferItems,
           skipMasterProductUpdate: isBranchStaff
@@ -1037,9 +1110,10 @@ const parseScannedSKU = (text) => {
       // Trigger Success Receipt Modal
       setSuccessModalData({
         ...pendingConfirm,
+        totalPrice: pendingConfirm.totalPrice || (pendingConfirm.transactionType === 'STOCK_TRANSFER_TO_BRANCH' ? transferTotalAmount : 0),
         items: pendingConfirm.isBatchTransfer 
-          ? pendingConfirm.batchItems 
-          : (pendingConfirm.isBundling ? (pendingConfirm.bundles || [pendingConfirm]) : (pendingConfirm.items || [pendingConfirm]))
+          ? (pendingConfirm.batchItems || transferItems)
+          : (pendingConfirm.isBundling ? (pendingConfirm.bundles || [pendingConfirm]) : (transferItems || pendingConfirm.items || [pendingConfirm]))
       });
 
       // Reset form states
@@ -1182,7 +1256,7 @@ const parseScannedSKU = (text) => {
       })),
       bundleItems: allComponentsCombined,
       type: 'OUT',
-      branchId: isBranchStaff ? currentUser?.branchId : undefined,
+      branchId: isBranchStaff ? currentUser?.branchId : (currentUser?.branchId || 'ALL'),
       qty: totalBundleSets,
       unit: 'Paket',
       notes: finalNotes,
@@ -1322,15 +1396,32 @@ const parseScannedSKU = (text) => {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {/* Terima Seluruh */}
+                  {/* ACC / Setujui Seluruh Request */}
+                  {onApproveStockRequest && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const ids = displayedStockRequests.map(r => r.id);
+                        await onApproveStockRequest(ids, "Disetujui langsung oleh Operator Pusat (ACC)");
+                        showAlert("Permintaan Disetujui (ACC)! ✓", `${ids.length} permintaan stok dari cabang telah disetujui (ACC).`, "INFO");
+                      }}
+                      className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+                      title="Setujui (ACC) seluruh permintaan cabang ini"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>✓ ACC Seluruh ({displayedStockRequests.length})</span>
+                    </button>
+                  )}
+
+                  {/* Terima Seluruh & Buat Pengiriman */}
                   <button
                     type="button"
                     onClick={() => handleAcceptAllRequests(displayedStockRequests)}
                     className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
-                    title="Masukkan seluruh barang permintaan cabang ini ke dalam list pengiriman"
+                    title="Masukkan seluruh barang permintaan cabang ini ke dalam list pengiriman dan buat Surat Jalan"
                   >
                     <CheckCheck className="w-3.5 h-3.5" />
-                    <span>✓ Terima Seluruh ({displayedStockRequests.length})</span>
+                    <span>🚚 Kirim Semua ({displayedStockRequests.length})</span>
                   </button>
 
                   {/* Tolak Sisa (Muncul jika ada sebagian yang sudah dipilih dan ada yang belum) */}
@@ -1368,6 +1459,10 @@ const parseScannedSKU = (text) => {
                 (item.productId && req.productId && item.productId === req.productId) || 
                 (item.sku && req.sku && item.sku.toLowerCase() === req.sku.toLowerCase())
               );
+              const matchedProd = products.find(p => p.id === req.productId || (p.sku && req.sku && p.sku.toLowerCase() === req.sku.toLowerCase()));
+              const engine = req.engine_type || req.engine || matchedProd?.engine_type || matchedProd?.engineType || matchedProd?.machineCategory || matchedProd?.kategoriMesin;
+              const carVariant = req.car_variant || req.carVariant || matchedProd?.car_variant || matchedProd?.carVariant;
+
               return (
                 <div 
                   key={req.id} 
@@ -1412,9 +1507,28 @@ const parseScannedSKU = (text) => {
                       </div>
                     </div>
 
-                    <h4 className="font-bold text-sm mt-2 line-clamp-1">{req.productName}</h4>
-                    <div className="flex items-center gap-2 mt-1 text-xs">
+                    <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                      <h4 className="font-bold text-sm line-clamp-1">{req.productName}</h4>
+                      {engine && (
+                        <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                          isCurrentlySelected 
+                            ? 'bg-amber-400 text-slate-900' 
+                            : 'bg-amber-50 text-amber-800 border border-amber-200/80'
+                        }`}>
+                          {engine}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-1 text-xs flex-wrap">
                       <span>SKU: <strong className="font-mono">{req.sku}</strong></span>
+                      {carVariant && carVariant !== '-' && (
+                        <>
+                          <span>•</span>
+                          <span className={isCurrentlySelected ? 'text-indigo-100' : 'text-slate-600'}>
+                            Mobil: <strong className={isCurrentlySelected ? 'text-white' : 'text-slate-800'}>{carVariant}</strong>
+                          </span>
+                        </>
+                      )}
                       <span>•</span>
                       <span className={`font-extrabold ${isCurrentlySelected ? 'text-amber-200' : 'text-slate-900'}`}>
                         Diminta: {req.qty} Pcs
@@ -1427,11 +1541,11 @@ const parseScannedSKU = (text) => {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 pt-1">
+                  <div className="flex items-center gap-1.5 pt-1">
                     <button
                       type="button"
                       onClick={() => handleOpenRejectModal(req)}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                      className={`px-2.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer shrink-0 ${
                         isCurrentlySelected
                           ? 'bg-indigo-800 text-rose-300 hover:bg-rose-900'
                           : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'
@@ -1441,6 +1555,25 @@ const parseScannedSKU = (text) => {
                       <X className="w-3.5 h-3.5" />
                       <span>Tolak</span>
                     </button>
+
+                    {onApproveStockRequest && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await onApproveStockRequest(req.id, "Disetujui langsung oleh Operator Pusat (ACC)");
+                          showAlert("Permintaan Disetujui (ACC)! ✓", `Permintaan stok "${req.productName}" telah disetujui (ACC).`, "INFO");
+                        }}
+                        className={`px-2.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer shrink-0 ${
+                          isCurrentlySelected
+                            ? 'bg-sky-700 text-white hover:bg-sky-800'
+                            : 'bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200'
+                        }`}
+                        title="Setujui (ACC) permohonan ini secara langsung"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>ACC</span>
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -1452,7 +1585,7 @@ const parseScannedSKU = (text) => {
                       }`}
                     >
                       <Truck className="w-3.5 h-3.5" />
-                      <span>{isCurrentlySelected ? '✓ Sedang Diproses (Klik Batal)' : '🚚 Respon & Kirimkan'}</span>
+                      <span>{isCurrentlySelected ? '✓ Dalam List Kiriman' : '🚚 Kirimkan'}</span>
                     </button>
                   </div>
                 </div>
@@ -2728,6 +2861,8 @@ const parseScannedSKU = (text) => {
         isOpen={Boolean(successModalData)}
         transaction={successModalData}
         currentUser={currentUser}
+        products={products}
+        branches={branches}
         onClose={() => setSuccessModalData(null)}
       />
 

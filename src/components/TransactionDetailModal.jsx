@@ -23,6 +23,7 @@ import {
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { drawPdfBrandHeader } from '../utils/pdfBrandHeader';
+import { resolveItemUnitPrice } from '../utils/pricingResolver';
 
 export const getCleanNotes = (rawNotes) => {
   if (!rawNotes || typeof rawNotes !== 'string') return '';
@@ -67,7 +68,8 @@ export default function TransactionDetailModal({
   onClose, 
   transaction, 
   currentUser,
-  products = [] 
+  products = [],
+  branches = [] 
 }) {
   const [copiedInvoice, setCopiedInvoice] = React.useState(false);
 
@@ -156,28 +158,36 @@ export default function TransactionDetailModal({
   }
 
   const normalizedItems = rawItems.length > 0 
-    ? rawItems.map(it => ({
-        sku: it.sku || '-',
-        productName: it.productName || it.product_name || it.name || 'Produk',
-        qty: Number(it.qty || it.quantity || 1),
-        unit: it.unit || (isBundling ? 'Paket' : 'Pcs'),
-        price: Number(it.price || it.selling_price || it.sellingPrice || 0),
-        costPrice: Number(it.costPrice || it.cost_price || it.reseller_price || 0),
-        notes: '-'
-      }))
+    ? rawItems.map(it => {
+        const itemQty = Number(it.qty || it.quantity || 1);
+        const resolvedPrice = resolveItemUnitPrice(it, transaction, products, branches);
+        const directSubtotal = Number(it.totalPrice ?? it.subtotal);
+        const resolvedSubtotal = directSubtotal > 0 ? directSubtotal : (resolvedPrice * itemQty);
+        return {
+          sku: it.sku || '-',
+          productName: it.productName || it.product_name || it.name || 'Produk',
+          qty: itemQty,
+          unit: it.unit || (isBundling ? 'Paket' : 'Pcs'),
+          price: resolvedPrice,
+          subtotal: resolvedSubtotal,
+          costPrice: Number(it.costPrice || it.cost_price || it.reseller_price || 0),
+          notes: it.notes || '-'
+        };
+      })
     : [{
         sku: transaction.sku || '-',
         productName: transaction.productName || 'Produk',
         qty: Number(transaction.qty || 1),
         unit: transaction.unit || (isBundling ? 'Paket' : 'Pcs'),
-        price: Number(transaction.price || (transaction.totalPrice ? (transaction.totalPrice / (Number(transaction.qty) || 1)) : 0)),
+        price: resolveItemUnitPrice(transaction, transaction, products, branches),
+        subtotal: Number(transaction.totalPrice || 0) || (resolveItemUnitPrice(transaction, transaction, products, branches) * Number(transaction.qty || 1)),
         costPrice: Number(transaction.costPrice || 0),
         notes: '-'
       }];
 
   const totalCalculatedQty = normalizedItems.reduce((acc, it) => acc + it.qty, 0);
-  const totalCalculatedAmount = normalizedItems.reduce((acc, it) => acc + (it.price * it.qty), 0);
-  const displayTotalAmount = Number(transaction.totalPrice || totalCalculatedAmount);
+  const totalCalculatedAmount = normalizedItems.reduce((acc, it) => acc + (it.subtotal || (it.price * it.qty)), 0);
+  const displayTotalAmount = Number(transaction.totalPrice) > 0 ? Number(transaction.totalPrice) : totalCalculatedAmount;
 
   // Copy invoice number to clipboard
   const handleCopyInvoice = () => {
@@ -266,14 +276,15 @@ export default function TransactionDetailModal({
       const tableColumn = ["No", "SKU", "Nama Produk & Spesifikasi", "Qty", "Satuan", "Harga Satuan (Rp)", "Total Nilai (Rp)"];
       const tableRows = normalizedItems.map((it, idx) => {
         const nameWithDetails = (it.notes && it.notes !== '-') ? `${it.productName}\n(Komponen: ${it.notes})` : it.productName;
+        const subtotal = it.subtotal || (it.price * it.qty);
         return [
           idx + 1,
           it.sku,
           nameWithDetails,
           it.qty,
           it.unit,
-          isSale && it.price > 0 ? `Rp ${it.price.toLocaleString('id-ID')}` : '-',
-          isSale && it.price > 0 ? `Rp ${(it.price * it.qty).toLocaleString('id-ID')}` : '-'
+          it.price > 0 ? `Rp ${it.price.toLocaleString('id-ID')}` : '-',
+          subtotal > 0 ? `Rp ${subtotal.toLocaleString('id-ID')}` : '-'
         ];
       });
 
@@ -302,10 +313,15 @@ export default function TransactionDetailModal({
       doc.setFont("helvetica", "bold");
       doc.text(`Total Kuantitas Fisik: ${totalCalculatedQty} Pcs (${normalizedItems.length} SKU)`, 14, finalY + 8);
 
-      if (isSale && displayTotalAmount > 0) {
+      if (displayTotalAmount > 0) {
+        const totalPdfLabel = isSale 
+          ? 'TOTAL PEMBAYARAN' 
+          : isTransfer 
+            ? 'TOTAL NILAI PENGIRIMAN' 
+            : 'TOTAL NILAI BARANG';
         doc.setFontSize(10);
         doc.setTextColor(16, 115, 60);
-        doc.text(`TOTAL PEMBAYARAN: Rp ${displayTotalAmount.toLocaleString('id-ID')}`, pageWidth - 14, finalY + 8, { align: 'right' });
+        doc.text(`${totalPdfLabel}: Rp ${displayTotalAmount.toLocaleString('id-ID')}`, pageWidth - 14, finalY + 8, { align: 'right' });
         doc.setTextColor(0, 0, 0);
       }
 
@@ -577,7 +593,7 @@ export default function TransactionDetailModal({
                     </span>
                     {item.price > 0 && (
                       <div className="text-[11px] font-bold text-emerald-700 mt-0.5">
-                        Rp {(item.price * item.qty).toLocaleString('id-ID')}
+                        Rp {(item.subtotal || (item.price * item.qty)).toLocaleString('id-ID')}
                       </div>
                     )}
                   </div>
@@ -586,12 +602,16 @@ export default function TransactionDetailModal({
             </div>
           </div>
 
-          {/* TOTAL PAYMENT (IF SALE) */}
-          {isSale && displayTotalAmount > 0 && (
+          {/* TOTAL TRANSACTION VALUE / PAYMENT */}
+          {displayTotalAmount > 0 && (
             <div className="bg-emerald-50/80 p-4 rounded-xl border border-emerald-200 flex items-center justify-between text-emerald-950 shadow-2xs">
               <div>
-                <span className="text-[11px] font-semibold text-emerald-700 uppercase block">Total Nilai Transaksi</span>
-                <span className="text-xs text-emerald-600">Lunas / Terbayar</span>
+                <span className="text-[11px] font-semibold text-emerald-700 uppercase block">
+                  {isSale ? 'Total Nilai Transaksi' : isTransfer ? 'Total Nilai Pengiriman' : 'Total Nilai Barang Masuk'}
+                </span>
+                <span className="text-xs text-emerald-600">
+                  {isSale ? 'Lunas / Terbayar' : isTransfer ? 'Surat Jalan Tercatat' : 'Inbound Tercatat'}
+                </span>
               </div>
               <span className="text-lg sm:text-xl font-extrabold text-emerald-700">
                 Rp {displayTotalAmount.toLocaleString('id-ID')}
